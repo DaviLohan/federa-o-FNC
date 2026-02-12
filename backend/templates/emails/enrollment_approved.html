@@ -1,0 +1,21 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+<h2>✅ Inscrição Aprovada!</h2>
+
+<p>Ótimas notícias, <strong>{{ team_name }}</strong>!</p>
+
+<p>Sua inscrição no campeonato <strong>{{ championship_name }}</strong> foi aprovada pela administração.</p>
+
+<div class="info-box">
+    <p><strong>Time:</strong> {{ team_name }}</p>
+    <p><strong>Campeonato:</strong> {{ championship_name }}</p>
+    <p><strong>Status:</strong> ✅ Aprovado</p>
+</div>
+
+<p>Você está oficialmente inscrito no campeonato! Em breve, as partidas serão agendadas e você receberá notificações sobre seus jogos.</p>
+
+<a href="{{ site_url }}/championships/{{ championship_id }}" class="button">Ver Campeonato</a>
+
+<p>Boa sorte e bons jogos! 🏆</p>
+{% endblock %}

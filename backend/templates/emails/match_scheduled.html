@@ -1,0 +1,22 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+<h2>📅 Partida Agendada</h2>
+
+<p>Uma nova partida foi agendada para o seu time!</p>
+
+<div class="info-box">
+    <p><strong>Adversário:</strong> {{ opponent }}</p>
+    <p><strong>Data/Hora:</strong> {{ date }}</p>
+    <p><strong>Campeonato:</strong> {{ championship }}</p>
+    {% if round_number %}
+    <p><strong>Rodada:</strong> #{{ round_number }}</p>
+    {% endif %}
+</div>
+
+<p>⚠️ <strong>Importante:</strong> Confirme sua presença com até 24 horas de antecedência para evitar Walk-Over.</p>
+
+<a href="{{ site_url }}/matches/{{ match_id }}" class="button">Ver Detalhes da Partida</a>
+
+<p>Boa sorte! ⚽</p>
+{% endblock %}

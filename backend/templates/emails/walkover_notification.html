@@ -1,0 +1,24 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+<h2>⚠️ Walk-Over (WO) Declarado</h2>
+
+<p>Um Walk-Over foi declarado em uma de suas partidas.</p>
+
+<div class="info-box">
+    <p><strong>Partida:</strong> {{ home_team }} vs {{ away_team }}</p>
+    <p><strong>Time ausente:</strong> {{ wo_team }}</p>
+    <p><strong>Resultado:</strong> {{ score }}</p>
+    <p><strong>Motivo:</strong> {{ reason }}</p>
+</div>
+
+{% if is_winner %}
+<p>✅ Seu time venceu por WO (3x0).</p>
+{% else %}
+<p>❌ Seu time perdeu por WO. Lembre-se de sempre confirmar presença nas partidas para evitar penalidades.</p>
+
+<p><strong>⚠️ Atenção:</strong> Múltiplos Walk-Overs podem resultar em suspensão do time.</p>
+{% endif %}
+
+<a href="{{ site_url }}/matches/{{ match_id }}" class="button">Ver Detalhes</a>
+{% endblock %}

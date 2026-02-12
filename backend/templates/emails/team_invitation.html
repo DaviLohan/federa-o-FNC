@@ -1,0 +1,22 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+<h2>🎮 Você foi convidado para um time!</h2>
+
+<p>Olá!</p>
+
+<p><strong>{{ inviter_name }}</strong> convidou você para se juntar ao time <strong>{{ team_name }}</strong> na plataforma IMPERIUM.</p>
+
+<div class="info-box">
+    <p><strong>Time:</strong> {{ team_name }}</p>
+    <p><strong>Convidado por:</strong> {{ inviter_name }}</p>
+</div>
+
+<p>Para aceitar o convite e começar a jogar:</p>
+
+<a href="{{ invitation_url }}" class="button">Aceitar Convite</a>
+
+<p>Se você não reconhece este convite, pode ignorar este email com segurança.</p>
+
+<p>Bons jogos! ⚽</p>
+{% endblock %}

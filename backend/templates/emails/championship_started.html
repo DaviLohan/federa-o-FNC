@@ -1,0 +1,18 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+<h2>🚀 Campeonato Iniciado!</h2>
+
+<p>O campeonato <strong>{{ championship_name }}</strong> foi oficialmente iniciado!</p>
+
+<div class="info-box">
+    <p><strong>Campeonato:</strong> {{ championship_name }}</p>
+    <p><strong>Status:</strong> Em Andamento</p>
+</div>
+
+<p>Todas as partidas foram geradas e agendadas. Você receberá notificações sobre cada uma de suas partidas.</p>
+
+<a href="{{ site_url }}/championships/{{ championship_id }}" class="button">Ver Tabela e Partidas</a>
+
+<p>Boa sorte e bons jogos! 🏆⚽</p>
+{% endblock %}

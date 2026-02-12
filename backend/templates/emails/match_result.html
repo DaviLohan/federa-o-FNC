@@ -1,0 +1,46 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+{% if is_winner %}
+<h2>🎉 Vitória!</h2>
+
+<p>Parabéns! Seu time venceu a partida!</p>
+
+<div class="info-box">
+    <p><strong>Resultado:</strong> {{ score }}</p>
+    <p><strong>Adversário:</strong> {{ opponent }}</p>
+    <p><strong>Campeonato:</strong> {{ championship }}</p>
+</div>
+
+<p>Continue assim e leve seu time à glória! 🏆</p>
+
+{% elif is_draw %}
+<h2>⚖️ Empate</h2>
+
+<p>A partida terminou empatada.</p>
+
+<div class="info-box">
+    <p><strong>Resultado:</strong> {{ score }}</p>
+    <p><strong>Adversário:</strong> {{ opponent }}</p>
+    <p><strong>Campeonato:</strong> {{ championship }}</p>
+</div>
+
+<p>Foi uma partida equilibrada. Na próxima pode ser diferente!</p>
+
+{% else %}
+<h2>😔 Derrota</h2>
+
+<p>Infelizmente seu time perdeu esta partida.</p>
+
+<div class="info-box">
+    <p><strong>Resultado:</strong> {{ score }}</p>
+    <p><strong>Adversário:</strong> {{ opponent }}</p>
+    <p><strong>Campeonato:</strong> {{ championship }}</p>
+</div>
+
+<p>Não desanime! Analise o jogo, treine e volte mais forte! 💪</p>
+
+{% endif %}
+
+<a href="{{ site_url }}/matches/{{ match_id }}" class="button">Ver Estatísticas</a>
+{% endblock %}

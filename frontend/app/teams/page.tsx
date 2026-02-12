@@ -1,0 +1,333 @@
+'use client';
+
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { teamsAPI } from '@/lib/api';
+import { Button, Card, Input, Badge, Table, ImageUpload, useToast, PageHeader, FilterBar, SkeletonGrid, EmptyState, Select } from '@/components/shared/ui';
+import { RosterManagementModal } from '@/components/teams/RosterManagementModal';
+import { TeamCard } from '@/components/teams/TeamCard';
+import { useAuthStore } from '@/lib/auth-store';
+import { usePermissions } from '@/lib/hooks';
+import type { Team } from '@/types';
+import { Users, Search } from 'lucide-react';
+
+export default function TeamsPage() {
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+  const user = useAuthStore((state) => state.user);
+  const { canViewTeamRoster, isTeamOwner } = usePermissions();
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
+  const [managingTeam, setManagingTeam] = useState<Team | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  // Fetch teams
+  const { data: teamsData, isLoading } = useQuery({
+    queryKey: ['teams'],
+    queryFn: () => teamsAPI.getAll(),
+  });
+
+  // Create team mutation
+  const createMutation = useMutation({
+    mutationFn: (data: Partial<Team>) => teamsAPI.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+      setShowCreateModal(false);
+      showToast('Time criado com sucesso!', 'success');
+    },
+    onError: (error: any) => {
+      showToast(error.response?.data?.error || 'Erro ao criar time', 'error');
+    },
+  });
+
+  // Update team mutation
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data, file }: { id: number; data: Partial<Team>; file?: File | null }) => {
+      if (file) {
+        const formData = new FormData();
+        Object.entries(data).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            formData.append(key, value.toString());
+          }
+        });
+        formData.append('logo', file);
+        return teamsAPI.updateWithFile(id, formData);
+      }
+      return teamsAPI.update(id, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+      setEditingTeam(null);
+      showToast('Time atualizado com sucesso!', 'success');
+    },
+    onError: (error: any) => {
+      showToast(error.response?.data?.error || 'Erro ao atualizar time', 'error');
+    },
+  });
+
+  // Delete team mutation
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => teamsAPI.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+      showToast('Time excluído com sucesso!', 'success');
+    },
+    onError: (error: any) => {
+      showToast(error.response?.data?.error || 'Erro ao excluir time', 'error');
+    },
+  });
+
+  const teams = teamsData?.results || [];
+  
+  // Filter teams based on search and status
+  const filteredTeams = teams.filter((team) => {
+    const matchesSearch = !searchQuery || 
+      team.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      team.abbreviation.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      team.owner.full_name.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || 
+      (statusFilter === 'active' && team.is_active) ||
+      (statusFilter === 'inactive' && !team.is_active);
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <PageHeader 
+        title="Times"
+        subtitle="Gerencie seus times e jogadores"
+        icon={<Users className="w-8 h-8" />}
+        actions={
+          <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+            + Criar Time
+          </Button>
+        }
+      />
+
+      {/* Filters */}
+      <FilterBar onReset={() => {
+        setSearchQuery('');
+        setStatusFilter('all');
+      }}>
+        {/* Search */}
+        <div className="flex-1 min-w-[200px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+            <Input
+              label=""
+              placeholder="Buscar times..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
+
+        {/* Status Filter */}
+        <div className="w-full sm:w-48">
+          <Select
+            label=""
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            options={[
+              { value: 'all', label: 'Todos' },
+              { value: 'active', label: 'Ativos' },
+              { value: 'inactive', label: 'Inativos' },
+            ]}
+          />
+        </div>
+      </FilterBar>
+
+      {/* Teams Grid */}
+      {isLoading ? (
+        <SkeletonGrid count={6} />
+      ) : filteredTeams.length === 0 ? (
+        <EmptyState
+          icon="👥"
+          title={searchQuery || statusFilter !== 'all' ? 'Nenhum time encontrado' : 'Nenhum time cadastrado'}
+          description={
+            searchQuery || statusFilter !== 'all' 
+              ? 'Tente ajustar os filtros de busca.'
+              : 'Comece criando seu primeiro time!'
+          }
+          action={
+            !searchQuery && statusFilter === 'all' ? (
+              <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+                + Criar Primeiro Time
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <div className="grid-cards">
+          {filteredTeams.map((team) => (
+            <TeamCard 
+              key={team.id} 
+              team={team}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Create/Edit Modal */}
+      {(showCreateModal || editingTeam) && (
+        <TeamModal
+          team={editingTeam}
+          onClose={() => {
+            setShowCreateModal(false);
+            setEditingTeam(null);
+          }}
+          onSubmit={(data, file) => {
+            if (editingTeam) {
+              updateMutation.mutate({ id: editingTeam.id, data, file });
+            } else {
+              createMutation.mutate(data);
+            }
+          }}
+          isLoading={createMutation.isPending || updateMutation.isPending}
+        />
+      )}
+
+      {/* Roster Management Modal */}
+      {managingTeam && (
+        <RosterManagementModal
+          team={managingTeam}
+          onClose={() => setManagingTeam(null)}
+          readOnly={!isTeamOwner(managingTeam)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Team Modal Component
+interface TeamModalProps {
+  team: Team | null;
+  onClose: () => void;
+  onSubmit: (data: Partial<Team>, file?: File | null) => void;
+  isLoading: boolean;
+}
+
+function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
+  const [formData, setFormData] = useState({
+    name: team?.name || '',
+    abbreviation: team?.abbreviation || '',
+    description: team?.description || '',
+    foundation_date: team?.foundation_date || new Date().toISOString().split('T')[0],
+  });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(formData, logoFile);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+      <Card className="max-w-2xl w-full form-card-premium">
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-text">
+              {team ? 'Editar Time' : 'Criar Novo Time'}
+            </h2>
+            <p className="text-muted mt-1">
+              {team ? 'Atualize as informações do time' : 'Preencha os dados do novo time'}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-muted hover:text-text transition-colors text-2xl leading-none"
+          >
+            ×
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Logo Upload */}
+          <ImageUpload
+            label="Logo do Time"
+            value={team?.logo}
+            onChange={(file) => setLogoFile(file)}
+            previewClassName="w-24 h-24"
+            helpText="PNG, JPG ou WEBP até 5MB"
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2">
+              <Input
+                label="Nome do Time"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="Ex: Thunder FC"
+                required
+              />
+            </div>
+            <Input
+              label="Abreviação"
+              name="abbreviation"
+              value={formData.abbreviation}
+              onChange={handleChange}
+              placeholder="Ex: THU"
+              maxLength={5}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-muted mb-2">
+              Descrição
+            </label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              rows={4}
+              className="w-full px-4 py-3 bg-surface2 border border-border rounded-xl text-text placeholder-muted focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-all resize-none"
+              placeholder="Descreva seu time..."
+            />
+          </div>
+
+          <Input
+            label="Data de Fundação"
+            name="foundation_date"
+            type="date"
+            value={formData.foundation_date}
+            onChange={handleChange}
+            required
+          />
+
+          <div className="flex space-x-3 pt-4">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onClose}
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              className="flex-1"
+              loading={isLoading}
+            >
+              {team ? 'Salvar Alterações' : 'Criar Time'}
+            </Button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  );
+}
