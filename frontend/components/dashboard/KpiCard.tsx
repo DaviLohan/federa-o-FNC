@@ -74,7 +74,7 @@ export function KpiCard({
         {loading ? (
           <div className="h-10 w-24 animate-pulse rounded bg-surface2" />
         ) : (
-          <h3 className="font-mono text-4xl font-bold text-text">
+          <h3 className="font-mono text-3xl font-bold text-text md:text-4xl">
             {value}
           </h3>
         )}

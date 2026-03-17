@@ -6,6 +6,7 @@ import { teamsAPI } from '@/lib/api';
 import { Card, Button } from '@/components/shared/ui';
 import { MembersTab } from './MembersTab';
 import { InvitePlayerTab } from './InvitePlayerTab';
+import { TacticalBoard } from './TacticalBoard';
 import type { Team } from '@/types';
 
 interface RosterManagementModalProps {
@@ -14,8 +15,10 @@ interface RosterManagementModalProps {
   readOnly?: boolean;
 }
 
+type ActiveTab = 'members' | 'invite' | 'lineup';
+
 export function RosterManagementModal({ team, onClose, readOnly = false }: RosterManagementModalProps) {
-  const [activeTab, setActiveTab] = useState<'members' | 'invite'>('members');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('members');
   const queryClient = useQueryClient();
 
   // Fetch team members
@@ -26,6 +29,13 @@ export function RosterManagementModal({ team, onClose, readOnly = false }: Roste
 
   const membersList = Array.isArray(members) ? members : [];
   const isAtLimit = membersList.length >= 15;
+
+  // Tabs disponíveis
+  const tabs: { id: ActiveTab; label: string; hidden?: boolean }[] = [
+    { id: 'members', label: 'Membros Atuais' },
+    { id: 'invite', label: 'Convidar Jogador', hidden: readOnly },
+    { id: 'lineup', label: 'Campo Tático', hidden: readOnly },
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 overflow-y-auto py-8">
@@ -58,35 +68,25 @@ export function RosterManagementModal({ team, onClose, readOnly = false }: Roste
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 border-b border-border">
-          <button
-            onClick={() => setActiveTab('members')}
-            className={`px-4 py-2 font-medium transition-colors relative ${
-              activeTab === 'members'
-                ? 'text-brand'
-                : 'text-muted hover:text-text'
-            }`}
-          >
-            Membros Atuais
-            {activeTab === 'members' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand" />
-            )}
-          </button>
-          {!readOnly && (
-            <button
-              onClick={() => setActiveTab('invite')}
-              className={`px-4 py-2 font-medium transition-colors relative ${
-                activeTab === 'invite'
-                  ? 'text-brand'
-                  : 'text-muted hover:text-text'
-              }`}
-            >
-              Convidar Jogador
-              {activeTab === 'invite' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand" />
-              )}
-            </button>
-          )}
+        <div className="flex gap-2 mb-6 border-b border-border overflow-x-auto">
+          {tabs
+            .filter((t) => !t.hidden)
+            .map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 font-medium transition-colors relative whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'text-brand'
+                    : 'text-muted hover:text-text'
+                }`}
+              >
+                {tab.label}
+                {activeTab === tab.id && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand" />
+                )}
+              </button>
+            ))}
         </div>
 
         {/* Tab Content */}
@@ -102,6 +102,7 @@ export function RosterManagementModal({ team, onClose, readOnly = false }: Roste
               }}
             />
           )}
+
           {activeTab === 'invite' && !readOnly && (
             <InvitePlayerTab
               teamId={team.id}
@@ -110,6 +111,13 @@ export function RosterManagementModal({ team, onClose, readOnly = false }: Roste
                 setActiveTab('members');
                 queryClient.invalidateQueries({ queryKey: ['team-members', team.id] });
               }}
+            />
+          )}
+
+          {activeTab === 'lineup' && !readOnly && (
+            <TacticalBoard
+              team={team}
+              members={membersList}
             />
           )}
         </div>
@@ -124,3 +132,4 @@ export function RosterManagementModal({ team, onClose, readOnly = false }: Roste
     </div>
   );
 }
+

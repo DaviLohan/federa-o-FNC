@@ -42,7 +42,25 @@ export function InvitePlayerTab({ teamId, isAtLimit, onInviteSent }: InvitePlaye
       onInviteSent();
     },
     onError: (error: any) => {
-      const errorMsg = error.response?.data?.error || error.response?.data?.message || 'Erro ao enviar convite';
+      const data = error.response?.data;
+      let errorMsg = 'Erro ao enviar convite';
+      if (data) {
+        if (typeof data === 'string') {
+          errorMsg = data;
+        } else if (data.error) {
+          errorMsg = data.error;
+        } else if (data.message) {
+          errorMsg = data.message;
+        } else if (data.non_field_errors?.length) {
+          errorMsg = data.non_field_errors[0];
+        } else {
+          const firstKey = Object.keys(data)[0];
+          if (firstKey) {
+            const firstVal = data[firstKey];
+            errorMsg = Array.isArray(firstVal) ? firstVal[0] : String(firstVal);
+          }
+        }
+      }
       showToast(errorMsg, 'error');
     },
   });
@@ -131,15 +149,15 @@ export function InvitePlayerTab({ teamId, isAtLimit, onInviteSent }: InvitePlaye
               setSelectedPlayer(null);
             }}
             disabled={isAtLimit}
-            className={`flex-1 px-4 py-3 rounded-lg border transition-colors ${
+            className={`flex-1 px-4 py-3 rounded-xl border transition-all text-left ${
               method === 'search'
-                ? 'bg-brand border-brand text-white'
-                : 'bg-surface border-border text-text hover:bg-surface-dark'
+                ? 'bg-gold/10 border-gold text-gold shadow-[0_0_12px_rgba(214,161,30,0.15)]'
+                : 'bg-surface2 border-border text-muted hover:border-gold/40 hover:text-text'
             } ${isAtLimit ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <div className="text-2xl mb-1">🔍</div>
-            <div className="font-semibold">Buscar</div>
-            <div className="text-xs opacity-80">Por nome ou gamer tag</div>
+            <div className="font-semibold text-sm">Buscar Jogador</div>
+            <div className="text-xs opacity-70 mt-0.5">Por nome ou gamer tag</div>
           </button>
 
           <button
@@ -150,15 +168,15 @@ export function InvitePlayerTab({ teamId, isAtLimit, onInviteSent }: InvitePlaye
               setPlayerId('');
             }}
             disabled={isAtLimit}
-            className={`flex-1 px-4 py-3 rounded-lg border transition-colors ${
+            className={`flex-1 px-4 py-3 rounded-xl border transition-all text-left ${
               method === 'id'
-                ? 'bg-brand border-brand text-white'
-                : 'bg-surface border-border text-text hover:bg-surface-dark'
+                ? 'bg-gold/10 border-gold text-gold shadow-[0_0_12px_rgba(214,161,30,0.15)]'
+                : 'bg-surface2 border-border text-muted hover:border-gold/40 hover:text-text'
             } ${isAtLimit ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <div className="text-2xl mb-1">🔢</div>
-            <div className="font-semibold">ID Direto</div>
-            <div className="text-xs opacity-80">Inserir Player ID</div>
+            <div className="font-semibold text-sm">ID Direto</div>
+            <div className="text-xs opacity-70 mt-0.5">Inserir Player ID</div>
           </button>
         </div>
       </div>
@@ -173,43 +191,44 @@ export function InvitePlayerTab({ teamId, isAtLimit, onInviteSent }: InvitePlaye
           
           {/* Selected Player Preview */}
           {selectedPlayer && (
-            <div className="mt-4 bg-surface-dark rounded-lg p-4 border border-brand/50">
+            <div className="mt-4 bg-gold/5 rounded-xl p-4 border border-gold/30">
               <div className="flex items-center gap-4">
                 {selectedPlayer.avatar ? (
                   <img
                     src={selectedPlayer.avatar}
                     alt={selectedPlayer.player_name}
-                    className="w-16 h-16 rounded-full object-cover border-2 border-brand"
+                    className="w-14 h-14 rounded-full object-cover border-2 border-gold/40"
                   />
                 ) : (
-                  <div className="w-16 h-16 rounded-full bg-surface flex items-center justify-center text-3xl">
+                  <div className="w-14 h-14 rounded-full bg-surface2 border border-border flex items-center justify-center text-2xl">
                     {getPositionEmoji(selectedPlayer.primary_position)}
                   </div>
                 )}
-                <div className="flex-1">
-                  <div className="font-semibold text-text text-lg">
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-text">
                     {selectedPlayer.player_name}
                   </div>
                   <div className="text-sm text-muted">
                     @{selectedPlayer.gamer_tag}
                   </div>
-                  <div className="flex items-center gap-2 mt-1 text-xs text-muted2">
+                  <div className="flex items-center gap-2 mt-1 text-xs text-muted2 flex-wrap">
                     <span>
                       {getPositionEmoji(selectedPlayer.primary_position)}{' '}
                       {selectedPlayer.primary_position}
                     </span>
-                    <span>•</span>
+                    <span className="text-border">•</span>
                     <span>
                       {getCountryFlag(selectedPlayer.country)} {selectedPlayer.country}
                     </span>
-                    <span>•</span>
-                    <span>ID: {selectedPlayer.id}</span>
+                    <span className="text-border">•</span>
+                    <span className="font-mono">ID: {selectedPlayer.id}</span>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedPlayer(null)}
-                  className="text-muted hover:text-text transition-colors"
+                  className="text-muted hover:text-text transition-colors p-1 rounded-lg hover:bg-surface2 flex-shrink-0"
+                  title="Remover seleção"
                 >
                   ✕
                 </button>
@@ -239,8 +258,9 @@ export function InvitePlayerTab({ teamId, isAtLimit, onInviteSent }: InvitePlaye
       {/* Message Field */}
       {!isAtLimit && (
         <div>
-          <label htmlFor="message" className="block text-sm font-medium text-text mb-2">
-            Mensagem (Opcional)
+          <label htmlFor="message" className="block text-sm font-medium text-muted mb-2">
+            Mensagem para o jogador
+            <span className="text-muted2 font-normal ml-1">(opcional)</span>
           </label>
           <textarea
             id="message"
@@ -248,15 +268,15 @@ export function InvitePlayerTab({ teamId, isAtLimit, onInviteSent }: InvitePlaye
             onChange={(e) => setMessage(e.target.value)}
             maxLength={500}
             rows={4}
-            placeholder="Adicione uma mensagem personalizada ao convite..."
+            placeholder="Ex: Oi! Estamos montando um time competitivo para o próximo campeonato. Seria ótimo ter você no elenco!"
             disabled={isAtLimit}
-            className="w-full px-4 py-3 bg-surface border border-border rounded-lg text-text placeholder-muted2 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent resize-none"
+            className="w-full px-4 py-3 bg-surface2 border border-border rounded-xl text-text placeholder-muted2 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-all resize-none"
           />
-          <div className="flex justify-between items-center mt-1">
+          <div className="flex justify-between items-center mt-1.5">
             <p className="text-xs text-muted2">
-              Uma mensagem pessoal pode aumentar as chances do jogador aceitar o convite
+              Uma mensagem personalizada aumenta as chances do convite ser aceito
             </p>
-            <p className="text-xs text-muted2">
+            <p className={`text-xs font-mono tabular-nums ${message.length > 450 ? 'text-warning' : 'text-muted2'}`}>
               {message.length}/500
             </p>
           </div>
@@ -279,6 +299,7 @@ export function InvitePlayerTab({ teamId, isAtLimit, onInviteSent }: InvitePlaye
         </Button>
         <Button
           type="submit"
+          variant="primary"
           disabled={
             inviteMutation.isPending ||
             isAtLimit ||

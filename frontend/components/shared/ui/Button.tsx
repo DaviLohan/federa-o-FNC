@@ -50,7 +50,7 @@ export function Button({
           {variant === 'primary' && (
             <span className="absolute inset-0 opacity-40 animate-glow bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,.15),transparent_55%)]" />
           )}
-          <span className="relative z-10">{children}</span>
+          <span className="relative z-10 inline-flex items-center gap-2 whitespace-nowrap">{children}</span>
           {variant === 'ghost' && (
             <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gold group-hover:w-full transition-all duration-300" />
           )}

@@ -149,42 +149,42 @@ export function ContestationModal({ match, teamId, isOpen, onClose }: Contestati
         {/* Match Info */}
         <div className="bg-panel2 rounded-xl p-4">
           <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center mb-3">
-            {/* Home Team */}
-            <div className="flex items-center justify-end gap-3">
-              <div className="text-right">
-                <h3 className="font-bold text-text truncate">{match.home_team.name}</h3>
-                <p className="text-sm text-muted2">{match.home_team.abbreviation}</p>
-              </div>
-              {match.home_team.logo && (
-                <img
-                  src={match.home_team.logo}
-                  alt={match.home_team.name}
-                  className="w-12 h-12 rounded-lg object-cover"
-                />
-              )}
-            </div>
+             {/* Home Team */}
+             <div className="flex items-center justify-end gap-3">
+               <div className="text-right">
+                 <h3 className="font-bold text-text truncate">{match.home_team.name}</h3>
+                 <p className="text-sm text-muted2">{match.home_team.abbreviation}</p>
+               </div>
+               {match.home_team.logo && (
+                 <img
+                   src={match.home_team.logo}
+                   alt={match.home_team.name}
+                   className="w-12 h-12 rounded-lg object-cover"
+                 />
+               )}
+             </div>
 
-            {/* Score */}
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-text">{match.home_score}</span>
-              <span className="text-xl font-bold text-muted2">×</span>
-              <span className="text-2xl font-bold text-text">{match.away_score}</span>
-            </div>
+             {/* Score */}
+             <div className="flex items-center gap-2">
+               <span className="text-2xl font-bold text-text">{match.home_score}</span>
+               <span className="text-xl font-bold text-muted2">×</span>
+               <span className="text-2xl font-bold text-text">{match.away_score}</span>
+             </div>
 
-            {/* Away Team */}
-            <div className="flex items-center justify-start gap-3">
-              {match.away_team.logo && (
-                <img
-                  src={match.away_team.logo}
-                  alt={match.away_team.name}
-                  className="w-12 h-12 rounded-lg object-cover"
-                />
-              )}
-              <div className="text-left">
-                <h3 className="font-bold text-text truncate">{match.away_team.name}</h3>
-                <p className="text-sm text-muted2">{match.away_team.abbreviation}</p>
-              </div>
-            </div>
+             {/* Away Team */}
+             <div className="flex items-center justify-start gap-3">
+               {match.away_team.logo && (
+                 <img
+                   src={match.away_team.logo}
+                   alt={match.away_team.name}
+                   className="w-12 h-12 rounded-lg object-cover"
+                 />
+               )}
+               <div className="text-left">
+                 <h3 className="font-bold text-text truncate">{match.away_team.name}</h3>
+                 <p className="text-sm text-muted2">{match.away_team.abbreviation}</p>
+               </div>
+             </div>
           </div>
 
           <div className="pt-3 border-t border-stroke">

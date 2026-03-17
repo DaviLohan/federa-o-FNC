@@ -8,8 +8,8 @@ interface ConfirmPresenceModalProps {
   match: {
     id: number;
     scheduled_date: string;
-    team_home: { id: number; name: string };
-    team_away: { id: number; name: string };
+    home_team: { id: number; name: string };
+    away_team: { id: number; name: string };
     championship: { id: number; name: string };
   };
   teamId: number;
@@ -123,9 +123,9 @@ export function ConfirmPresenceModal({
             <div className="mb-3 text-sm font-medium text-muted">Partida</div>
             <div className="text-center">
               <div className="flex items-center justify-center gap-3">
-                <span className="font-semibold text-text">{match.team_home.name}</span>
+                <span className="font-semibold text-text">{match.home_team.name}</span>
                 <span className="text-gold">vs</span>
-                <span className="font-semibold text-text">{match.team_away.name}</span>
+                <span className="font-semibold text-text">{match.away_team.name}</span>
               </div>
               <div className="mt-3 flex items-center justify-center gap-2 text-sm text-muted">
                 <Clock className="h-4 w-4" />

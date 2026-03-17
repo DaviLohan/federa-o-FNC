@@ -17,9 +17,11 @@ class Notification(models.Model):
     
     NOTIFICATION_TYPES = [
         ('TEAM_INVITATION', 'Convite de Time'),
+        ('TEAM_LEAVE_REQUEST', 'Pedido de Saída de Time'),
         ('MATCH_SCHEDULED', 'Partida Agendada'),
         ('MATCH_RESULT', 'Resultado de Partida'),
         ('MATCH_CONTESTED', 'Partida Contestada'),
+        ('MATCH_CALLUP', 'Convocação para Partida'),
         ('CHAMPIONSHIP_ENROLLED', 'Inscrito em Campeonato'),
         ('CHAMPIONSHIP_STARTED', 'Campeonato Iniciado'),
         ('CHAMPIONSHIP_FINISHED', 'Campeonato Finalizado'),
@@ -53,6 +55,7 @@ class Notification(models.Model):
     related_match_id = models.IntegerField(blank=True, null=True)
     related_championship_id = models.IntegerField(blank=True, null=True)
     related_invitation_id = models.IntegerField(blank=True, null=True)
+    related_leave_request_id = models.IntegerField(blank=True, null=True)
     
     is_read = models.BooleanField(default=False, verbose_name='Lida')
     read_at = models.DateTimeField(blank=True, null=True, verbose_name='Lida em')
@@ -69,4 +72,4 @@ class Notification(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.user.username} - {self.title}"
+        return f"{self.user.email} - {self.title}"

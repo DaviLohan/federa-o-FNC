@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { adminAPI, teamsAPI, usersAPI } from '@/lib/api';
+import { adminAPI, teamsAPI } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 
 /**

@@ -30,7 +30,7 @@ export function WelcomeSection({ user }: WelcomeSectionProps) {
       <div className="absolute right-0 top-0 h-64 w-64 bg-gold/10 blur-3xl" />
       <div className="absolute bottom-0 left-0 h-64 w-64 bg-warning/10 blur-3xl" />
 
-      <div className="relative flex items-center gap-4">
+      <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <div className="flex-shrink-0">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-gold via-gold to-gold2">
             <Sparkles className="h-8 w-8 text-white" />

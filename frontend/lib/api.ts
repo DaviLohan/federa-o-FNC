@@ -7,9 +7,11 @@ import type {
   User,
   PlayerProfile,
   Team,
+  TeamMembership,
   Championship,
   Enrollment,
   TeamInvitation,
+  TeamLeaveRequest,
   InvitePlayerRequest,
   PlayerSearchResult,
   Match,
@@ -20,6 +22,8 @@ import type {
   MatchReport,
   Group,
   Bracket,
+  MatchLineup,
+  SubmitLineupRequest,
 } from '@/types';
 
 // Auth API
@@ -41,9 +45,12 @@ export const authAPI = {
 export const usersAPI = {
   getMe: () =>
     apiClient.get<User>('/api/v1/users/me/'),
-  
+
   updateProfile: (id: number, data: Partial<User>) =>
     apiClient.patch<User>(`/api/v1/users/${id}/`, data),
+
+  deleteAccount: (id: number) =>
+    apiClient.delete<{ message: string }>(`/api/v1/users/${id}/`),
 };
 
 // Player Profiles API
@@ -53,9 +60,6 @@ export const playerProfilesAPI = {
   
   update: (id: number, data: Partial<PlayerProfile>) =>
     apiClient.patch<PlayerProfile>(`/api/v1/player-profiles/${id}/`, data),
-  
-  updateWithToken: (id: number, data: Partial<PlayerProfile>, token: string) =>
-    apiClient.patchWithToken<PlayerProfile>(`/api/v1/player-profiles/${id}/`, data, token),
   
   updateWithFile: (id: number, formData: FormData) =>
     apiClient.upload<PlayerProfile>(`/api/v1/player-profiles/${id}/`, formData, 'patch'),
@@ -82,7 +86,7 @@ export const teamsAPI = {
     apiClient.delete(`/api/v1/teams/${id}/`),
   
   getMembers: (id: number) =>
-    apiClient.get(`/api/v1/teams/${id}/members/`),
+    apiClient.get<TeamMembership[]>(`/api/v1/teams/${id}/members/`),
   
   invitePlayer: (teamId: number, data: InvitePlayerRequest) =>
     apiClient.post(`/api/v1/teams/${teamId}/invite_player/`, data),
@@ -289,6 +293,35 @@ export const membershipsAPI = {
     apiClient.delete(`/api/v1/memberships/${id}/`),
 };
 
+// Leave Requests API
+export const leaveRequestsAPI = {
+  /** Lista solicitações: dono vê as do time, jogador vê as próprias */
+  getAll: (params?: { team?: number; status?: string }) =>
+    apiClient.get<TeamLeaveRequest[]>('/api/v1/leave-requests/', params),
+
+  /** Jogador cria uma solicitação de saída */
+  create: (data: { reason?: string }) =>
+    apiClient.post<TeamLeaveRequest>('/api/v1/leave-requests/', data),
+
+  /** Jogador cancela sua solicitação pendente */
+  cancel: (id: number) =>
+    apiClient.delete(`/api/v1/leave-requests/${id}/`),
+
+  /** Dono aprova a saída */
+  approve: (id: number) =>
+    apiClient.post<{ message: string; leave_request: TeamLeaveRequest }>(
+      `/api/v1/leave-requests/${id}/approve/`,
+      {}
+    ),
+
+  /** Dono recusa a saída */
+  reject: (id: number) =>
+    apiClient.post<{ message: string; leave_request: TeamLeaveRequest }>(
+      `/api/v1/leave-requests/${id}/reject/`,
+      {}
+    ),
+};
+
 // Notifications API
 export const notificationsAPI = {
   getAll: (params?: any) =>
@@ -307,6 +340,27 @@ export const notificationsAPI = {
     apiClient.delete(`/api/v1/notifications/${id}/`),
 };
 
+// Penalties API
+export const penaltiesAPI = {
+  getAll: (params?: any) =>
+    apiClient.get('/api/v1/penalties/', params),
+
+  appeal: (id: number, formData: FormData) =>
+    apiClient.upload(`/api/v1/penalties/${id}/appeal/`, formData, 'post'),
+
+  checkSuspension: (params?: any) =>
+    apiClient.get('/api/v1/penalties/check_suspension/', params),
+};
+
+// Appeals API
+export const appealsAPI = {
+  getAll: (params?: any) =>
+    apiClient.get('/api/v1/appeals/', params),
+
+  review: (id: number, data: { decision: 'approved' | 'rejected'; decision_reason: string }) =>
+    apiClient.post(`/api/v1/appeals/${id}/review/`, data),
+};
+
 // Search API
 export const searchAPI = {
   global: (query: string, limit?: number) =>
@@ -317,4 +371,22 @@ export const searchAPI = {
 export const adminAPI = {
   getStats: () =>
     apiClient.get('/api/v1/admin/stats/'),
+};
+
+// Match Lineups API — Escalação tática por partida
+export const matchLineupsAPI = {
+  /**
+   * Submete (cria ou sobrescreve) a escalação do time do usuário
+   * para uma partida específica.
+   * POST /api/v1/matches/<match_id>/lineup/
+   */
+  submit: (matchId: number, data: SubmitLineupRequest) =>
+    apiClient.post<MatchLineup>(`/api/v1/matches/${matchId}/lineup/`, data),
+
+  /**
+   * Busca a escalação existente do time do usuário para uma partida.
+   * GET /api/v1/matches/<match_id>/lineup/
+   */
+  get: (matchId: number) =>
+    apiClient.get<MatchLineup>(`/api/v1/matches/${matchId}/lineup/`),
 };

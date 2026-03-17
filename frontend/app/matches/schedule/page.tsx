@@ -1,49 +1,195 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Calendar, Clock, CheckCircle, XCircle, AlertTriangle, Users } from 'lucide-react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Calendar, Clock, CheckCircle, XCircle, AlertTriangle, Users, X } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
-import { matchesAPI, matchProposalsAPI, matchConfirmationsAPI } from '@/lib/api';
+import { matchesAPI, matchProposalsAPI, matchConfirmationsAPI, teamsAPI } from '@/lib/api';
 import { MatchCalendar } from '@/components/matches/MatchCalendar';
 import { ProposeDateModal } from '@/components/matches/ProposeDateModal';
 import { ConfirmPresenceModal } from '@/components/matches/ConfirmPresenceModal';
 
+// ─── Modal inline de recusa de proposta ──────────────────────────────────────
+
+function RejectProposalModal({
+  proposalId,
+  onConfirm,
+  onClose,
+}: {
+  proposalId: number;
+  onConfirm: (id: number, reason: string) => void;
+  onClose: () => void;
+}) {
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!reason.trim()) {
+      setError('O motivo da recusa é obrigatório.');
+      return;
+    }
+    onConfirm(proposalId, reason.trim());
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="bg-surface1 border border-border rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-error/10">
+              <XCircle className="w-5 h-5 text-error" />
+            </div>
+            <h2 className="font-bold text-text">Recusar Proposta</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-muted hover:text-text hover:bg-surface2 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-text mb-1.5">
+              Motivo da recusa <span className="text-error">*</span>
+            </label>
+            <textarea
+              value={reason}
+              onChange={(e) => { setReason(e.target.value); setError(''); }}
+              placeholder="Explique por que está recusando esta proposta de data..."
+              rows={4}
+              className="w-full bg-surface2 border border-border rounded-xl px-4 py-3 text-text placeholder-muted text-sm resize-none focus:outline-none focus:border-gold/50 transition-colors"
+            />
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 bg-error/10 border border-error/30 rounded-xl px-4 py-2.5 text-error text-sm">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 rounded-xl border border-border text-muted hover:text-text hover:bg-surface2 transition-colors text-sm font-medium"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2.5 rounded-xl bg-error text-white font-semibold text-sm hover:bg-error/90 transition-colors"
+            >
+              Confirmar Recusa
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Página principal ─────────────────────────────────────────────────────────
+
 export default function MatchSchedulePage() {
   const user = useAuthStore((state) => state.user);
-  const [matches, setMatches] = useState<any[]>([]);
-  const [proposals, setProposals] = useState<any[]>([]);
-  const [confirmations, setConfirmations] = useState<any[]>([]);
+  const queryClient = useQueryClient();
   const [selectedMatch, setSelectedMatch] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [proposeModalOpen, setProposeModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [rejectProposalTarget, setRejectProposalTarget] = useState<number | null>(null);
   const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed'>('all');
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  // ── Queries ────────────────────────────────────────────────────────────────
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      // Buscar partidas
-      const matchesResponse = await matchesAPI.getAll({ page_size: 100 });
-      setMatches((matchesResponse as any).results || []);
+  const { data: myTeamData } = useQuery({
+    queryKey: ['my-team'],
+    queryFn: () => teamsAPI.getMyTeam(),
+    // 404 é esperado para usuários sem time — não propaga erro
+    retry: false,
+  });
+  const myTeamId: number | null = (myTeamData as any)?.id ?? null;
 
-      // Buscar propostas
-      const proposalsResponse = await matchProposalsAPI.getAll({ page_size: 100 });
-      setProposals((proposalsResponse as any).results || []);
+  const { data: matchesData, isLoading: matchesLoading } = useQuery({
+    queryKey: ['matches', 'schedule'],
+    queryFn: () => matchesAPI.getAll({ page_size: 100 }),
+  });
 
-      // Buscar confirmações
-      const confirmationsResponse = await matchConfirmationsAPI.getAll({ page_size: 100 });
-      setConfirmations((confirmationsResponse as any).results || []);
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error);
-    } finally {
-      setIsLoading(false);
-    }
+  const { data: proposalsData, isLoading: proposalsLoading } = useQuery({
+    queryKey: ['proposals'],
+    queryFn: () => matchProposalsAPI.getAll({ page_size: 100 }),
+  });
+
+  const { data: confirmationsData, isLoading: confirmationsLoading } = useQuery({
+    queryKey: ['confirmations'],
+    queryFn: () => matchConfirmationsAPI.getAll({ page_size: 100 }),
+  });
+
+  const isLoading = matchesLoading || proposalsLoading || confirmationsLoading;
+
+  const matches: any[] = (matchesData as any)?.results ?? [];
+  const proposals: any[] = (proposalsData as any)?.results ?? [];
+  const confirmations: any[] = (confirmationsData as any)?.results ?? [];
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+
+  const invalidateSchedule = () => {
+    queryClient.invalidateQueries({ queryKey: ['proposals'] });
+    queryClient.invalidateQueries({ queryKey: ['confirmations'] });
+    queryClient.invalidateQueries({ queryKey: ['matches', 'schedule'] });
   };
+
+  const acceptProposalMutation = useMutation({
+    mutationFn: (proposalId: number) =>
+      matchProposalsAPI.respond(proposalId, { action: 'accept' }),
+    onSuccess: invalidateSchedule,
+  });
+
+  const rejectProposalMutation = useMutation({
+    mutationFn: ({ proposalId, reason }: { proposalId: number; reason: string }) =>
+      matchProposalsAPI.respond(proposalId, { action: 'reject', rejection_reason: reason }),
+    onSuccess: invalidateSchedule,
+  });
+
+  // ── Derivações ─────────────────────────────────────────────────────────────
+
+  const getMatchConfirmation = (matchId: number, teamId: number | null) => {
+    if (!teamId) return undefined;
+    return confirmations.find((c) => c.match === matchId && c.team === teamId);
+  };
+
+  const getMatchProposals = (matchId: number) =>
+    proposals.filter((p) => p.match === matchId && p.status === 'PENDING');
+
+  const myMatches = myTeamId
+    ? matches.filter(
+        (match) =>
+          match.home_team?.id === myTeamId || match.away_team?.id === myTeamId
+      )
+    : [];
+
+  const filteredMatches = myMatches.filter((match) => {
+    if (filter === 'pending') {
+      return match.status === 'PENDING' || match.status === 'SCHEDULED';
+    }
+    if (filter === 'confirmed') {
+      const confirmation = getMatchConfirmation(match.id, myTeamId);
+      return confirmation?.status === 'CONFIRMED';
+    }
+    return true;
+  });
+
+  const pendingConfirmations = myMatches.filter((match) => {
+    const confirmation = getMatchConfirmation(match.id, myTeamId);
+    return !confirmation || confirmation.status === 'PENDING';
+  }).length;
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleSelectMatch = (match: any) => {
     setSelectedMatch(match);
@@ -65,67 +211,7 @@ export default function MatchSchedulePage() {
     setConfirmModalOpen(true);
   };
 
-  const getMatchConfirmation = (matchId: number, teamId: number) => {
-    return confirmations.find(
-      (c) => c.match === matchId && c.team === teamId
-    );
-  };
-
-  const getMatchProposals = (matchId: number) => {
-    return proposals.filter((p) => p.match === matchId && p.status === 'PENDING');
-  };
-
-  const handleAcceptProposal = async (proposalId: number) => {
-    try {
-      await matchProposalsAPI.respond(proposalId, { action: 'accept' });
-      loadData();
-    } catch (error) {
-      console.error('Erro ao aceitar proposta:', error);
-    }
-  };
-
-  const handleRejectProposal = async (proposalId: number, reason: string) => {
-    try {
-      await matchProposalsAPI.respond(proposalId, { 
-        action: 'reject',
-        rejection_reason: reason 
-      });
-      loadData();
-    } catch (error) {
-      console.error('Erro ao rejeitar proposta:', error);
-    }
-  };
-
-  // Filtrar partidas
-  const getMyTeamMatches = () => {
-    const userTeamId = user?.player_profile?.current_team_id || user?.team_owner_profile?.team_id;
-    if (!userTeamId) return [];
-
-    return matches.filter(
-      (match) =>
-        match.team_home.id === userTeamId || match.team_away.id === userTeamId
-    );
-  };
-
-  const myMatches = getMyTeamMatches();
-
-  const filteredMatches = myMatches.filter((match) => {
-    if (filter === 'pending') {
-      return match.status === 'PENDING' || match.status === 'SCHEDULED';
-    }
-    if (filter === 'confirmed') {
-      const userTeamId = user?.player_profile?.current_team_id || user?.team_owner_profile?.team_id;
-      const confirmation = getMatchConfirmation(match.id, userTeamId);
-      return confirmation?.status === 'CONFIRMED';
-    }
-    return true;
-  });
-
-  const pendingConfirmations = myMatches.filter((match) => {
-    const userTeamId = user?.player_profile?.current_team_id || user?.team_owner_profile?.team_id;
-    const confirmation = getMatchConfirmation(match.id, userTeamId);
-    return !confirmation || confirmation.status === 'PENDING';
-  }).length;
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   if (isLoading) {
     return (
@@ -143,7 +229,7 @@ export default function MatchSchedulePage() {
       {/* Header */}
       <div className="border-b border-border bg-surface1">
         <div className="container mx-auto max-w-7xl px-4 py-8">
-          <div className="flex items-start justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <div className="rounded-xl bg-gradient-to-br from-gold to-gold2 p-3">
@@ -175,6 +261,13 @@ export default function MatchSchedulePage() {
 
       {/* Content */}
       <div className="container mx-auto max-w-7xl px-4 py-8">
+        {!myTeamId && (
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-warning text-sm">
+            <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+            <span>Você não está associado a nenhum time. Entre em um time para ver suas partidas.</span>
+          </div>
+        )}
+
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Calendar - 2/3 width */}
           <div className="lg:col-span-2">
@@ -191,55 +284,38 @@ export default function MatchSchedulePage() {
             <div className="rounded-xl border border-border bg-surface1 p-4">
               <h3 className="mb-3 font-semibold text-text">Filtros</h3>
               <div className="space-y-2">
-                <button
-                  onClick={() => setFilter('all')}
-                  className={`w-full rounded-lg px-4 py-2 text-left text-sm font-medium transition-colors ${
-                    filter === 'all'
-                      ? 'bg-gold text-white'
-                      : 'text-muted hover:bg-surface2 hover:text-text'
-                  }`}
-                >
-                  Todas as Partidas
-                </button>
-                <button
-                  onClick={() => setFilter('pending')}
-                  className={`w-full rounded-lg px-4 py-2 text-left text-sm font-medium transition-colors ${
-                    filter === 'pending'
-                      ? 'bg-gold text-white'
-                      : 'text-muted hover:bg-surface2 hover:text-text'
-                  }`}
-                >
-                  Pendentes
-                </button>
-                <button
-                  onClick={() => setFilter('confirmed')}
-                  className={`w-full rounded-lg px-4 py-2 text-left text-sm font-medium transition-colors ${
-                    filter === 'confirmed'
-                      ? 'bg-gold text-white'
-                      : 'text-muted hover:bg-surface2 hover:text-text'
-                  }`}
-                >
-                  Confirmadas
-                </button>
+                {(['all', 'pending', 'confirmed'] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`w-full rounded-lg px-4 py-2 text-left text-sm font-medium transition-colors ${
+                      filter === f
+                        ? 'bg-gold text-white'
+                        : 'text-muted hover:bg-surface2 hover:text-text'
+                    }`}
+                  >
+                    {f === 'all' ? 'Todas as Partidas' : f === 'pending' ? 'Pendentes' : 'Confirmadas'}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Selected Match/Date Info */}
+            {/* Selected Match Info */}
             {selectedMatch && (
               <div className="rounded-xl border border-border bg-surface1 p-4">
                 <h3 className="mb-3 font-semibold text-text">Detalhes da Partida</h3>
-                
+
                 <div className="mb-4 rounded-lg bg-surface2 p-3">
                   <div className="flex items-center justify-center gap-3 mb-2">
                     <span className="font-semibold text-text">
-                      {selectedMatch.team_home.name}
+                      {selectedMatch.home_team?.name}
                     </span>
                     <span className="text-gold">vs</span>
                     <span className="font-semibold text-text">
-                      {selectedMatch.team_away.name}
+                      {selectedMatch.away_team?.name}
                     </span>
                   </div>
-                  
+
                   {selectedMatch.scheduled_date && (
                     <div className="flex items-center justify-center gap-2 text-xs text-muted">
                       <Clock className="h-3 w-3" />
@@ -263,9 +339,7 @@ export default function MatchSchedulePage() {
                   {selectedMatch.status === 'SCHEDULED' && (
                     <div className="flex items-center gap-2 rounded-lg bg-blue-500/10 px-3 py-2">
                       <CheckCircle className="h-4 w-4 text-blue-500" />
-                      <span className="text-sm font-medium text-blue-500">
-                        Agendada
-                      </span>
+                      <span className="text-sm font-medium text-blue-500">Agendada</span>
                     </div>
                   )}
                 </div>
@@ -275,7 +349,10 @@ export default function MatchSchedulePage() {
                   <div className="mb-4 space-y-2">
                     <h4 className="text-sm font-medium text-muted">Propostas Pendentes</h4>
                     {getMatchProposals(selectedMatch.id).map((proposal: any) => (
-                      <div key={proposal.id} className="rounded-lg border border-border bg-surface2 p-3">
+                      <div
+                        key={proposal.id}
+                        className="rounded-lg border border-border bg-surface2 p-3"
+                      >
                         <div className="mb-2 text-xs text-muted">
                           Proposta de: {proposal.proposed_by_team_name}
                         </div>
@@ -284,17 +361,16 @@ export default function MatchSchedulePage() {
                         </div>
                         <div className="flex gap-2">
                           <button
-                            onClick={() => handleAcceptProposal(proposal.id)}
-                            className="flex-1 rounded bg-green-500 px-3 py-1 text-xs font-medium text-white hover:bg-green-600"
+                            onClick={() => acceptProposalMutation.mutate(proposal.id)}
+                            disabled={acceptProposalMutation.isPending}
+                            className="flex-1 rounded bg-green-500 px-3 py-1 text-xs font-medium text-white hover:bg-green-600 transition-colors disabled:opacity-50"
                           >
                             Aceitar
                           </button>
                           <button
-                            onClick={() => {
-                              const reason = prompt('Motivo da recusa:');
-                              if (reason) handleRejectProposal(proposal.id, reason);
-                            }}
-                            className="flex-1 rounded bg-red-500 px-3 py-1 text-xs font-medium text-white hover:bg-red-600"
+                            onClick={() => setRejectProposalTarget(proposal.id)}
+                            disabled={rejectProposalMutation.isPending}
+                            className="flex-1 rounded bg-red-500 px-3 py-1 text-xs font-medium text-white hover:bg-red-600 transition-colors disabled:opacity-50"
                           >
                             Recusar
                           </button>
@@ -314,7 +390,7 @@ export default function MatchSchedulePage() {
                       Propor Nova Data
                     </button>
                   )}
-                  
+
                   {selectedMatch.status === 'SCHEDULED' && (
                     <button
                       onClick={() => handleConfirmPresence(selectedMatch)}
@@ -338,8 +414,7 @@ export default function MatchSchedulePage() {
                     day: 'numeric',
                   })}
                 </p>
-                
-                {/* Matches on this date */}
+
                 <div className="mt-4 space-y-2">
                   {filteredMatches
                     .filter((match) => {
@@ -358,7 +433,7 @@ export default function MatchSchedulePage() {
                         className="w-full rounded-lg bg-surface2 p-3 text-left transition-colors hover:bg-gold/10"
                       >
                         <div className="text-sm font-medium text-text">
-                          {match.team_home.name} vs {match.team_away.name}
+                          {match.home_team?.name} vs {match.away_team?.name}
                         </div>
                         <div className="text-xs text-muted">
                           {new Date(match.scheduled_date).toLocaleTimeString('pt-BR', {
@@ -392,30 +467,32 @@ export default function MatchSchedulePage() {
             isOpen={proposeModalOpen}
             onClose={() => setProposeModalOpen(false)}
             onSuccess={() => {
-              loadData();
+              invalidateSchedule();
               setProposeModalOpen(false);
             }}
           />
-          
+
           <ConfirmPresenceModal
             match={selectedMatch}
-            teamId={user?.player_profile?.current_team_id || user?.team_owner_profile?.team_id || 0}
-            confirmationId={getMatchConfirmation(
-              selectedMatch.id,
-              user?.player_profile?.current_team_id || user?.team_owner_profile?.team_id || 0
-            )?.id}
-            confirmationStatus={getMatchConfirmation(
-              selectedMatch.id,
-              user?.player_profile?.current_team_id || user?.team_owner_profile?.team_id || 0
-            )?.status}
+            teamId={myTeamId ?? 0}
+            confirmationId={getMatchConfirmation(selectedMatch.id, myTeamId)?.id}
+            confirmationStatus={getMatchConfirmation(selectedMatch.id, myTeamId)?.status}
             isOpen={confirmModalOpen}
             onClose={() => setConfirmModalOpen(false)}
             onSuccess={() => {
-              loadData();
+              invalidateSchedule();
               setConfirmModalOpen(false);
             }}
           />
         </>
+      )}
+
+      {rejectProposalTarget !== null && (
+        <RejectProposalModal
+          proposalId={rejectProposalTarget}
+          onConfirm={(id, reason) => rejectProposalMutation.mutate({ proposalId: id, reason })}
+          onClose={() => setRejectProposalTarget(null)}
+        />
       )}
     </div>
   );

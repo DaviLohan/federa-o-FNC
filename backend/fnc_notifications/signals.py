@@ -3,7 +3,7 @@ Django signals para criar notificações automáticas.
 """
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from fnc_teams.models import TeamInvitation
+from fnc_teams.models import TeamInvitation, TeamLeaveRequest
 from fnc_championships.models import Championship, ChampionshipEnrollment
 from fnc_matches.models import Match, Contestation
 from .services import NotificationService
@@ -27,6 +27,45 @@ def handle_team_invitation(sender, instance, created, **kwargs):
         notification = NotificationService.notify_invitation_accepted(instance)
         if notification:
             send_email_for_notification(notification)
+    elif instance.status in ('DECLINED', 'CANCELLED'):
+        # Convite recusado ou cancelado - notificar dono do time
+        notification = NotificationService.notify_invitation_declined(instance)
+        if notification:
+            send_email_for_notification(notification)
+
+
+# ========== TEAM LEAVE REQUESTS ==========
+
+@receiver(post_save, sender=TeamLeaveRequest)
+def handle_team_leave_request(sender, instance, created, **kwargs):
+    """
+    Cria notificação quando jogador faz ou tem resolvida uma solicitação de saída.
+    """
+    if created:
+        # Nova solicitação — notificar dono do time
+        notification = NotificationService.notify_leave_request_submitted(instance)
+        if notification:
+            send_email_for_notification(notification)
+    elif instance.status in ('APPROVED', 'REJECTED') and hasattr(instance, '_old_status'):
+        # Resolução — notificar o jogador
+        notification = NotificationService.notify_leave_request_resolved(instance)
+        if notification:
+            send_email_for_notification(notification)
+
+
+@receiver(pre_save, sender=TeamLeaveRequest)
+def track_leave_request_status_change(sender, instance, **kwargs):
+    """
+    Rastreia mudanças de status da solicitação de saída.
+    """
+    if instance.pk:
+        try:
+            old_instance = TeamLeaveRequest.objects.get(pk=instance.pk)
+            instance._old_status = old_instance.status
+        except TeamLeaveRequest.DoesNotExist:
+            instance._old_status = None
+    else:
+        instance._old_status = None
 
 
 # ========== CHAMPIONSHIP ENROLLMENTS ==========

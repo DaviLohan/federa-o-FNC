@@ -7,13 +7,13 @@ import { Badge } from '@/components/shared/ui/Badge';
 interface MatchCardProps {
   match: {
     id: number;
-    team_a: {
+    home_team: {
       id: number;
       name: string;
       abbreviation: string;
       logo_url?: string;
     };
-    team_b: {
+    away_team: {
       id: number;
       name: string;
       abbreviation: string;
@@ -25,19 +25,22 @@ interface MatchCardProps {
     };
     scheduled_date: string;
     scheduled_time?: string;
-    status: 'SCHEDULED' | 'LIVE' | 'FINISHED' | 'CONTESTED';
-    score_a?: number;
-    score_b?: number;
+    status: 'PENDING' | 'SCHEDULED' | 'LIVE' | 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED' | 'CONTESTED';
+    home_score?: number;
+    away_score?: number;
   };
   showActions?: boolean;
   compact?: boolean;
 }
 
-const statusConfig = {
-  SCHEDULED: { label: 'Agendada', variant: 'pending' as const },
-  LIVE: { label: 'Ao Vivo', variant: 'success' as const },
-  FINISHED: { label: 'Finalizada', variant: 'finished' as const },
-  CONTESTED: { label: 'Contestada', variant: 'warning' as const },
+const statusConfig: Record<string, { label: string; variant: 'pending' | 'success' | 'finished' | 'warning' | 'default' }> = {
+  PENDING: { label: 'Pendente', variant: 'pending' },
+  SCHEDULED: { label: 'Agendada', variant: 'pending' },
+  LIVE: { label: 'Ao Vivo', variant: 'success' },
+  IN_PROGRESS: { label: 'Em Andamento', variant: 'success' },
+  FINISHED: { label: 'Finalizada', variant: 'finished' },
+  CANCELLED: { label: 'Cancelada', variant: 'default' },
+  CONTESTED: { label: 'Contestada', variant: 'warning' },
 };
 
 export function MatchCard({ match, showActions = false, compact = false }: MatchCardProps) {
@@ -70,15 +73,15 @@ export function MatchCard({ match, showActions = false, compact = false }: Match
 
         {/* Teams */}
         <div className="mb-4 flex items-center justify-between gap-4">
-          {/* Team A */}
+          {/* Team Home */}
           <div className="flex-1 text-center">
             <div className="mb-2 text-lg font-bold text-text">
-              {match.team_a.name}
+              {match.home_team.name}
             </div>
-            <div className="text-sm text-muted">({match.team_a.abbreviation})</div>
-            {match.status === 'FINISHED' && match.score_a !== undefined && (
+            <div className="text-sm text-muted">({match.home_team.abbreviation})</div>
+            {match.status === 'FINISHED' && match.home_score !== undefined && (
               <div className="mt-2 text-2xl font-mono font-bold text-gold">
-                {match.score_a}
+                {match.home_score}
               </div>
             )}
           </div>
@@ -86,15 +89,15 @@ export function MatchCard({ match, showActions = false, compact = false }: Match
           {/* VS */}
           <div className="text-lg font-bold text-muted">vs</div>
 
-          {/* Team B */}
+          {/* Team Away */}
           <div className="flex-1 text-center">
             <div className="mb-2 text-lg font-bold text-text">
-              {match.team_b.name}
+              {match.away_team.name}
             </div>
-            <div className="text-sm text-muted">({match.team_b.abbreviation})</div>
-            {match.status === 'FINISHED' && match.score_b !== undefined && (
+            <div className="text-sm text-muted">({match.away_team.abbreviation})</div>
+            {match.status === 'FINISHED' && match.away_score !== undefined && (
               <div className="mt-2 text-2xl font-mono font-bold text-warning">
-                {match.score_b}
+                {match.away_score}
               </div>
             )}
           </div>

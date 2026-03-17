@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/lib/auth-store';
 import { authAPI, playerProfilesAPI } from '@/lib/api';
+import { apiClient } from '@/lib/api-client';
+import type { User } from '@/types';
 import { Button } from '@/components/shared/ui/Button';
 import { Input } from '@/components/shared/ui/Input';
 import { Select } from '@/components/shared/ui/Select';
@@ -107,7 +109,12 @@ export default function RegisterPage() {
       
       const response = await authAPI.register(registerData);
 
+      // Setar o token imediatamente para as requisições seguintes usarem o método padrão
+      apiClient.setToken(response.token);
+
       // Passo 2: Atualizar perfil de jogador (sempre obrigatório)
+      let finalUser: User = response.user;
+
       if (response.user.player_profile) {
         const profileData = {
           player_name: formData.player_name,
@@ -122,19 +129,24 @@ export default function RegisterPage() {
         };
         
         try {
-          await playerProfilesAPI.updateWithToken(
+          await playerProfilesAPI.update(
             response.user.player_profile.id, 
             profileData,
-            response.token
           );
+
+          // Buscar user atualizado para o store ter os dados do perfil preenchidos
+          try {
+            finalUser = await apiClient.get<User>('/api/v1/users/me/');
+          } catch (fetchErr) {
+            // Se falhar, usa o user do registro — não é crítico
+          }
         } catch (profileErr: any) {
-          console.error('Erro ao atualizar perfil:', profileErr);
           showToast('Conta criada, mas houve um problema ao salvar o perfil. Você pode editá-lo depois.', 'warning');
         }
       }
       
-      // Fazer login após tudo estar completo
-      login(response.token, response.user);
+      // Fazer login com o user mais atualizado disponível
+      login(response.token, finalUser);
 
       showToast('Conta criada com sucesso! Bem-vindo ao IMPERIUM!', 'success');
       router.push('/dashboard');

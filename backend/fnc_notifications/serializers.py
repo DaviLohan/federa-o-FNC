@@ -17,6 +17,7 @@ class NotificationSerializer(serializers.ModelSerializer):
             'related_match_id',
             'related_championship_id',
             'related_invitation_id',
+            'related_leave_request_id',
             'is_read',
             'read_at',
             'created_at',

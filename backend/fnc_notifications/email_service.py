@@ -206,20 +206,24 @@ def send_email_for_notification(notification):
     
     # Mapear tipo de notificação para método de email
     email_methods = {
-        Notification.NotificationType.TEAM_INVITATION: lambda n: EmailService.send_team_invitation_email(
+        'TEAM_INVITATION': lambda n: EmailService.send_team_invitation_email(
             user_email=n.user.email,
             team_name=n.related_team.name if n.related_team else 'Time',
-            inviter_name='Administrador',  # TODO: Pegar do related_user
+            inviter_name=(
+                n.related_invitation.invited_by.get_full_name()
+                if n.related_invitation and n.related_invitation.invited_by
+                else (n.related_team.owner.get_full_name() if n.related_team else 'Administrador')
+            ),
             invitation_url=f'{settings.SITE_URL}{n.action_url}' if n.action_url else ''
         ),
         
-        Notification.NotificationType.ENROLLMENT_APPROVED: lambda n: EmailService.send_enrollment_approved_email(
+        'CHAMPIONSHIP_ENROLLED': lambda n: EmailService.send_enrollment_approved_email(
             team_emails=[n.user.email],
             team_name=n.related_team.name if n.related_team else 'Seu time',
             championship_name=n.related_championship.name if n.related_championship else 'Campeonato'
         ),
         
-        Notification.NotificationType.MATCH_SCHEDULED: lambda n: EmailService.send_match_scheduled_email(
+        'MATCH_SCHEDULED': lambda n: EmailService.send_match_scheduled_email(
             team_emails=[n.user.email],
             match_info={
                 'opponent': 'Adversário',  # TODO: Extrair do match

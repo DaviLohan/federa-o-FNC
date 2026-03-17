@@ -5,8 +5,8 @@ export function usePendingInvitations() {
   return useQuery({
     queryKey: ['invitations', 'pending'],
     queryFn: () => invitationsAPI.getMyInvitations(),
-    refetchInterval: 30000, // Atualizar a cada 30 segundos
-    staleTime: 0, // Sempre considerar dados "stale"
+    refetchInterval: 30000,
+    staleTime: 30000, // Em sincronia com o intervalo — evita refetch duplo em cada mount
   });
 }
 

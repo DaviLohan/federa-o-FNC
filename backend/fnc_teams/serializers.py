@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Team, TeamMembership, TeamInvitation, Formation, FormationPosition
+from .models import Team, TeamMembership, TeamInvitation, TeamLeaveRequest, Formation, FormationPosition
 from users.serializers import UserSerializer, PlayerProfileListSerializer
 
 
@@ -38,12 +38,23 @@ class TeamSerializer(serializers.ModelSerializer):
         if Team.objects.filter(name=value).exclude(pk=self.instance.pk if self.instance else None).exists():
             raise serializers.ValidationError('Já existe um time com este nome.')
         return value
-    
+
     def validate_abbreviation(self, value):
         """Valida a sigla."""
         if len(value) > 5:
             raise serializers.ValidationError('A sigla deve ter no máximo 5 caracteres.')
         return value.upper()
+
+    def validate(self, data):
+        """Valida que o usuário ainda não possui um time ativo como dono."""
+        request = self.context.get('request')
+        # Apenas na criação (não na edição)
+        if request and not self.instance:
+            if Team.objects.filter(owner=request.user, is_active=True).exists():
+                raise serializers.ValidationError(
+                    'Você já possui um time ativo. Um usuário só pode ser dono de 1 time.'
+                )
+        return data
 
 
 class TeamListSerializer(serializers.ModelSerializer):
@@ -137,17 +148,17 @@ class TeamInvitationSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'invited_by', 'created_at', 'responded_at']
     
     def validate(self, data):
-        """Valida se não existe convite pendente."""
+        """Valida se não existe convite pendente e se o jogador não está em outro time."""
         team = data.get('team_id')
         player = data.get('player_id')
-        
+
         if TeamInvitation.objects.filter(
             team_id=team,
             player_id=player,
             status='PENDING'
         ).exists():
             raise serializers.ValidationError('Já existe um convite pendente para este jogador.')
-        
+
         # Valida se o jogador já não está no time
         if TeamMembership.objects.filter(
             team_id=team,
@@ -155,7 +166,16 @@ class TeamInvitationSerializer(serializers.ModelSerializer):
             is_active=True
         ).exists():
             raise serializers.ValidationError('Este jogador já é membro do time.')
-        
+
+        # Valida se o jogador já pertence a QUALQUER outro time ativo
+        if TeamMembership.objects.filter(
+            player_id=player,
+            is_active=True
+        ).exists():
+            raise serializers.ValidationError(
+                'Este jogador já pertence a outro time. Um jogador só pode fazer parte de 1 time.'
+            )
+
         return data
 
 
@@ -311,3 +331,33 @@ class TeamDetailSerializer(serializers.ModelSerializer):
             is_active=True
         ).select_related('player', 'player__user')
         return TeamMembershipSerializer(memberships, many=True).data
+
+
+class TeamLeaveRequestSerializer(serializers.ModelSerializer):
+    """
+    Serializer para solicitações de saída de time.
+    """
+    player = PlayerProfileListSerializer(read_only=True)
+    team = TeamListSerializer(read_only=True)
+    resolved_by_name = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = TeamLeaveRequest
+        fields = [
+            'id',
+            'team',
+            'player',
+            'reason',
+            'status',
+            'status_display',
+            'created_at',
+            'resolved_at',
+            'resolved_by_name',
+        ]
+        read_only_fields = ['id', 'status', 'created_at', 'resolved_at', 'resolved_by_name']
+
+    def get_resolved_by_name(self, obj):
+        if obj.resolved_by:
+            return obj.resolved_by.get_full_name() or obj.resolved_by.email
+        return None

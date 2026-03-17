@@ -1,7 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { Check, Trash2, Clock } from 'lucide-react';
 import Link from 'next/link';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { leaveRequestsAPI } from '@/lib/api';
 
 interface NotificationItemProps {
   notification: {
@@ -12,6 +15,7 @@ interface NotificationItemProps {
     is_read: boolean;
     created_at: string;
     action_url?: string;
+    related_leave_request_id?: number | null;
   };
   onMarkAsRead: (id: number) => void;
   onDelete: (id: number) => void;
@@ -24,10 +28,36 @@ export function NotificationItem({
   onDelete,
   onClose,
 }: NotificationItemProps) {
+  const queryClient = useQueryClient();
+  const [actionDone, setActionDone] = useState(false);
+
+  const approveMutation = useMutation({
+    mutationFn: (id: number) => leaveRequestsAPI.approve(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['leave-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['team-members'] });
+      setActionDone(true);
+      if (!notification.is_read) onMarkAsRead(notification.id);
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (id: number) => leaveRequestsAPI.reject(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['leave-requests'] });
+      setActionDone(true);
+      if (!notification.is_read) onMarkAsRead(notification.id);
+    },
+  });
+
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'TEAM_INVITATION':
         return '📧';
+      case 'TEAM_LEAVE_REQUEST':
+        return '🚪';
       case 'INVITATION_ACCEPTED':
         return '✅';
       case 'INVITATION_DECLINED':
@@ -61,6 +91,8 @@ export function NotificationItem({
     switch (type) {
       case 'TEAM_INVITATION':
         return 'Convite de Equipe';
+      case 'TEAM_LEAVE_REQUEST':
+        return 'Pedido de Saída';
       case 'INVITATION_ACCEPTED':
         return 'Convite Aceito';
       case 'INVITATION_DECLINED':
@@ -122,6 +154,12 @@ export function NotificationItem({
     });
   };
 
+  const isLeaveRequest =
+    notification.notification_type === 'TEAM_LEAVE_REQUEST' &&
+    !!notification.related_leave_request_id;
+
+  const isActionable = isLeaveRequest && !actionDone;
+
   return (
     <div
       className={`group relative border-b border-border px-6 py-4 transition-all hover:bg-surface2 ${
@@ -160,6 +198,30 @@ export function NotificationItem({
             {notification.message}
           </p>
 
+          {/* Ações inline para TEAM_LEAVE_REQUEST */}
+          {isActionable && (
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => approveMutation.mutate(notification.related_leave_request_id!)}
+                disabled={approveMutation.isPending || rejectMutation.isPending}
+                className="px-3 py-1 rounded-lg text-xs font-semibold bg-gold/10 text-gold border border-gold/30 hover:bg-gold/20 transition-colors disabled:opacity-50"
+              >
+                {approveMutation.isPending ? 'Aprovando...' : 'Aprovar saída'}
+              </button>
+              <button
+                onClick={() => rejectMutation.mutate(notification.related_leave_request_id!)}
+                disabled={approveMutation.isPending || rejectMutation.isPending}
+                className="px-3 py-1 rounded-lg text-xs font-semibold bg-surface2 text-muted border border-border hover:text-text hover:bg-surface1 transition-colors disabled:opacity-50"
+              >
+                {rejectMutation.isPending ? 'Recusando...' : 'Recusar'}
+              </button>
+            </div>
+          )}
+
+          {actionDone && isLeaveRequest && (
+            <p className="text-xs text-gold mb-2">Ação realizada.</p>
+          )}
+
           {/* Footer */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs text-muted/70">
@@ -187,7 +249,7 @@ export function NotificationItem({
         </div>
 
         {/* Actions */}
-        <div className="flex flex-col gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="flex flex-col gap-2 opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
           {!notification.is_read && (
             <button
               onClick={() => onMarkAsRead(notification.id)}

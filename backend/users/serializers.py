@@ -33,6 +33,7 @@ class UserSerializer(serializers.ModelSerializer):
 class UserCreateSerializer(serializers.ModelSerializer):
     """
     Serializer para criação de usuário com senha.
+    Se o email pertencer a um usuário desativado, reativa a conta com os novos dados.
     """
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirm = serializers.CharField(write_only=True, min_length=8)
@@ -48,7 +49,24 @@ class UserCreateSerializer(serializers.ModelSerializer):
             'platform',
             'user_type'
         ]
+        extra_kwargs = {
+            # Remove o UniqueValidator automático do DRF para o campo email.
+            # A unicidade é verificada manualmente em validate_email(),
+            # permitindo reativar contas desativadas com o mesmo email.
+            'email': {'validators': []},
+        }
     
+    def validate_email(self, value):
+        """
+        Permite reuso de email de conta desativada.
+        Bloqueia apenas emails de contas ativas.
+        """
+        normalized = User.objects.normalize_email(value)
+        existing = User.objects.filter(email__iexact=normalized).first()
+        if existing and existing.is_active:
+            raise serializers.ValidationError('usuário com este email já existe.')
+        return value
+
     def validate(self, data):
         """Valida se as senhas conferem."""
         if data['password'] != data['password_confirm']:
@@ -58,9 +76,37 @@ class UserCreateSerializer(serializers.ModelSerializer):
         return data
     
     def create(self, validated_data):
-        """Cria o usuário com senha encriptada."""
+        """
+        Cria o usuário ou reativa uma conta desativada com os novos dados.
+        """
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
+        email = validated_data['email']
+
+        # Verificar se existe conta desativada com este email
+        existing_user = User.objects.filter(email__iexact=email).first()
+
+        if existing_user and not existing_user.is_active:
+            # Reativar conta com os novos dados
+            for field, value in validated_data.items():
+                setattr(existing_user, field, value)
+            existing_user.set_password(password)
+            existing_user.is_active = True
+            existing_user.save()
+
+            # Reativar perfil de jogador se existir
+            if hasattr(existing_user, 'player_profile'):
+                existing_user.player_profile.is_active = True
+                existing_user.player_profile.save()
+
+            # Reativar perfil de dono de time se existir
+            if hasattr(existing_user, 'team_owner_profile'):
+                existing_user.team_owner_profile.is_active = True
+                existing_user.team_owner_profile.save()
+
+            return existing_user
+
+        # Criar usuário novo normalmente
         user = User.objects.create_user(**validated_data)
         user.set_password(password)
         user.save()
@@ -71,7 +117,6 @@ class UserCreateSerializer(serializers.ModelSerializer):
         elif user.user_type == 'TEAM_OWNER':
             TeamOwnerProfile.objects.create(user=user)
         elif user.user_type == 'SUPERVISOR':
-            # Supervisores não precisam de perfil específico
             pass
         
         return user
@@ -139,6 +184,7 @@ class PlayerProfileListSerializer(serializers.ModelSerializer):
     Serializer simplificado para listagem de jogadores.
     """
     user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
     primary_position_display = serializers.CharField(
         source='get_primary_position_display',
         read_only=True
@@ -151,6 +197,7 @@ class PlayerProfileListSerializer(serializers.ModelSerializer):
             'player_name',
             'gamer_tag',
             'user_email',
+            'user_id',
             'avatar',
             'primary_position',
             'primary_position_display',

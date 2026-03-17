@@ -1,23 +1,51 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth-store';
 import { useSidebar } from '@/hooks/useSidebar';
 import { GlobalSearch } from '@/components/layout/GlobalSearch';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
-import { Menu } from 'lucide-react';
+import { Menu, ChevronDown } from 'lucide-react';
 import React, { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+
+// Mapa de rotas → títulos exibidos no topo
+const PAGE_TITLES: Record<string, string> = {
+  '/dashboard': 'Dashboard',
+  '/teams': 'Times',
+  '/championships': 'Campeonatos',
+  '/matches': 'Partidas',
+  '/matches/schedule': 'Agendamento',
+  '/statistics': 'Estatísticas',
+  '/notifications': 'Notificações',
+  '/penalties': 'Penalidades',
+  '/profile': 'Perfil',
+  '/admin': 'Administração',
+  '/invitations': 'Convites',
+};
+
+function getPageTitle(pathname: string): string {
+  // Correspondência exata primeiro
+  if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+  // Correspondência por prefixo (ex: /matches/123 → "Partidas")
+  for (const [route, title] of Object.entries(PAGE_TITLES)) {
+    if (pathname.startsWith(route + '/')) return title;
+  }
+  return 'IMPERIUM';
+}
 
 export function Topbar() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const { toggle } = useSidebar();
   const router = useRouter();
+  const pathname = usePathname();
+  const queryClient = useQueryClient();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
+    queryClient.clear(); // Limpa todo o cache do React Query para evitar dados da sessão anterior
     router.push('/');
   };
 
@@ -35,9 +63,9 @@ export function Topbar() {
           <Menu className="h-6 w-6" />
         </button>
 
-        {/* Page Title */}
-        <h1 className="hidden text-lg font-semibold text-text sm:block lg:text-xl">
-          Dashboard
+        {/* Page Title — dinâmico por rota */}
+        <h1 className="text-sm font-semibold text-text sm:text-lg lg:text-xl">
+          {getPageTitle(pathname)}
         </h1>
       </div>
 
@@ -63,19 +91,9 @@ export function Topbar() {
               {user.first_name?.[0] || ''}
               {user.last_name?.[0] || ''}
             </div>
-            <svg
+            <ChevronDown
               className={`h-4 w-4 text-muted transition-transform ${isMenuOpen ? 'rotate-180' : ''}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
+            />
           </button>
 
           {/* Dropdown Menu */}
@@ -95,15 +113,6 @@ export function Topbar() {
                     className="w-full rounded-lg px-4 py-2 text-left text-sm text-text transition-colors hover:bg-surface2"
                   >
                     👤 Meu Perfil
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      router.push('/profile');
-                    }}
-                    className="w-full rounded-lg px-4 py-2 text-left text-sm text-text transition-colors hover:bg-surface2"
-                  >
-                    ⚙️ Configurações
                   </button>
                   <div className="my-2 border-t border-border" />
                   <button

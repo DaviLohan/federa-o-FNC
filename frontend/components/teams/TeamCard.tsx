@@ -48,23 +48,23 @@ export function TeamCard({ team, onClick, className = '' }: TeamCardProps) {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="text-center p-3 rounded-xl bg-surface2 border border-border">
-          <Users className="w-5 h-5 text-gold mx-auto mb-1" />
-          <div className="text-lg font-mono font-bold text-text">{team.player_count || 0}</div>
-          <div className="text-xs text-muted">Jogadores</div>
+      <div className="grid grid-cols-3 gap-2 md:gap-3 mb-4">
+        <div className="text-center p-2 md:p-3 rounded-xl bg-surface2 border border-border">
+          <Users className="w-4 h-4 md:w-5 md:h-5 text-gold mx-auto mb-1" />
+          <div className="text-base md:text-lg font-mono font-bold text-text">{team.player_count || 0}</div>
+          <div className="text-[10px] md:text-xs text-muted">Jogadores</div>
         </div>
         
-        <div className="text-center p-3 rounded-xl bg-surface2 border border-border">
-          <Trophy className="w-5 h-5 text-warning mx-auto mb-1" />
-          <div className="text-lg font-mono font-bold text-text">-</div>
-          <div className="text-xs text-muted">Vitórias</div>
+        <div className="text-center p-2 md:p-3 rounded-xl bg-surface2 border border-border">
+          <Trophy className="w-4 h-4 md:w-5 md:h-5 text-warning mx-auto mb-1" />
+          <div className="text-base md:text-lg font-mono font-bold text-text">-</div>
+          <div className="text-[10px] md:text-xs text-muted">Vitórias</div>
         </div>
         
-        <div className="text-center p-3 rounded-xl bg-surface2 border border-border">
-          <Target className="w-5 h-5 text-gold mx-auto mb-1" />
-          <div className="text-lg font-mono font-bold text-text">-</div>
-          <div className="text-xs text-muted">Gols</div>
+        <div className="text-center p-2 md:p-3 rounded-xl bg-surface2 border border-border">
+          <Target className="w-4 h-4 md:w-5 md:h-5 text-gold mx-auto mb-1" />
+          <div className="text-base md:text-lg font-mono font-bold text-text">-</div>
+          <div className="text-[10px] md:text-xs text-muted">Gols</div>
         </div>
       </div>
 

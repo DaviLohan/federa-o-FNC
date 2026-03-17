@@ -76,7 +76,7 @@ export function StatsTab({ championshipId }: StatsTabProps) {
             <>
               {/* Top 3 Podium */}
               {topScorers.length >= 3 && (
-                <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                   {/* 2nd Place */}
                   <Card className="p-6 bg-gradient-to-br from-gray-400/20 to-gray-500/20 border-gray-400/30 mt-8">
                     <div className="text-center">

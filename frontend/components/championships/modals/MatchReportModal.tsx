@@ -152,38 +152,38 @@ export function MatchReportModal({ match, isOpen, onClose }: MatchReportModalPro
         {/* Match Info */}
         <div className="bg-panel2 rounded-xl p-4">
           <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center">
-            {/* Home Team */}
-            <div className="flex items-center justify-end gap-3">
-              <div className="text-right">
-                <h3 className="font-bold text-text truncate">{match.home_team.name}</h3>
-                <p className="text-sm text-muted2">{match.home_team.abbreviation}</p>
-              </div>
-              {match.home_team.logo && (
-                <img
-                  src={match.home_team.logo}
-                  alt={match.home_team.name}
-                  className="w-12 h-12 rounded-lg object-cover"
-                />
-              )}
-            </div>
+             {/* Home Team */}
+             <div className="flex items-center justify-end gap-3">
+               <div className="text-right">
+                 <h3 className="font-bold text-text truncate">{match.home_team.name}</h3>
+                 <p className="text-sm text-muted2">{match.home_team.abbreviation}</p>
+               </div>
+               {match.home_team.logo && (
+                 <img
+                   src={match.home_team.logo}
+                   alt={match.home_team.name}
+                   className="w-12 h-12 rounded-lg object-cover"
+                 />
+               )}
+             </div>
 
-            {/* VS */}
-            <span className="text-xl font-bold text-muted2">×</span>
+             {/* VS */}
+             <span className="text-xl font-bold text-muted2">×</span>
 
-            {/* Away Team */}
-            <div className="flex items-center justify-start gap-3">
-              {match.away_team.logo && (
-                <img
-                  src={match.away_team.logo}
-                  alt={match.away_team.name}
-                  className="w-12 h-12 rounded-lg object-cover"
-                />
-              )}
-              <div className="text-left">
-                <h3 className="font-bold text-text truncate">{match.away_team.name}</h3>
-                <p className="text-sm text-muted2">{match.away_team.abbreviation}</p>
-              </div>
-            </div>
+             {/* Away Team */}
+             <div className="flex items-center justify-start gap-3">
+               {match.away_team.logo && (
+                 <img
+                   src={match.away_team.logo}
+                   alt={match.away_team.name}
+                   className="w-12 h-12 rounded-lg object-cover"
+                 />
+               )}
+               <div className="text-left">
+                 <h3 className="font-bold text-text truncate">{match.away_team.name}</h3>
+                 <p className="text-sm text-muted2">{match.away_team.abbreviation}</p>
+               </div>
+             </div>
           </div>
         </div>
 
@@ -209,30 +209,30 @@ export function MatchReportModal({ match, isOpen, onClose }: MatchReportModalPro
                 className="text-center text-2xl font-bold"
                 error={errors.home_score}
               />
-              <p className="text-xs text-muted2 text-center mt-2">{match.home_team.abbreviation}</p>
-            </div>
+               <p className="text-xs text-muted2 text-center mt-2">{match.home_team.abbreviation}</p>
+             </div>
 
-            {/* Separator */}
-            <div className="flex items-center justify-center pt-3">
-              <span className="text-3xl font-bold text-muted2">×</span>
-            </div>
+             {/* Separator */}
+             <div className="flex items-center justify-center pt-3">
+               <span className="text-3xl font-bold text-muted2">×</span>
+             </div>
 
-            {/* Away Score */}
-            <div>
-              <Input
-                label=""
-                type="number"
-                name="away_score"
-                value={formData.away_score}
-                onChange={handleChange}
-                placeholder="0"
-                min="0"
-                max="99"
-                required
-                className="text-center text-2xl font-bold"
-                error={errors.away_score}
-              />
-              <p className="text-xs text-muted2 text-center mt-2">{match.away_team.abbreviation}</p>
+             {/* Away Score */}
+             <div>
+               <Input
+                 label=""
+                 type="number"
+                 name="away_score"
+                 value={formData.away_score}
+                 onChange={handleChange}
+                 placeholder="0"
+                 min="0"
+                 max="99"
+                 required
+                 className="text-center text-2xl font-bold"
+                 error={errors.away_score}
+               />
+               <p className="text-xs text-muted2 text-center mt-2">{match.away_team.abbreviation}</p>
             </div>
           </div>
         </div>

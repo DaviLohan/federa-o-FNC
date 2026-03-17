@@ -93,8 +93,8 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         
-        # Criar token automaticamente
-        token = Token.objects.create(user=user)
+        # Criar ou recuperar token (get_or_create para suportar reativação)
+        token, _ = Token.objects.get_or_create(user=user)
         
         # Retornar usuário com token
         user_serializer = UserDetailSerializer(user)

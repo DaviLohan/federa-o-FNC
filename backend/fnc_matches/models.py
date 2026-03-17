@@ -910,3 +910,100 @@ class PenaltyAppeal(models.Model):
     
     def __str__(self):
         return f'Recurso - {self.penalty} ({self.get_status_display()})'
+
+
+class MatchLineup(models.Model):
+    """
+    Escalação de um time para uma partida específica.
+    
+    Armazena a formação tática e os jogadores convocados pelo manager
+    (OWNER ou CAPTAIN) para aquela partida. É independente do modelo
+    Formation/FormationPosition ligado ao time — permite formações
+    ad-hoc por jogo.
+    """
+
+    # As 7 formações disponíveis no Campo Tático
+    FORMATION_CHOICES = [
+        ('4-3-3',    '4-3-3'),
+        ('4-2-3-1',  '4-2-3-1'),
+        ('4-4-2',    '4-4-2'),
+        ('5-3-2',    '5-3-2'),
+        ('4-3-2-1',  '4-3-2-1'),
+        ('4-1-2-1-2','4-1-2-1-2'),
+        ('4-3-3(4)', '4-3-3(4)'),
+    ]
+
+    match = models.ForeignKey(
+        Match,
+        on_delete=models.CASCADE,
+        related_name='lineups',
+        verbose_name='partida'
+    )
+    team = models.ForeignKey(
+        'fnc_teams.Team',
+        on_delete=models.CASCADE,
+        related_name='match_lineups',
+        verbose_name='time'
+    )
+    formation = models.CharField(
+        'formação',
+        max_length=20,
+        choices=FORMATION_CHOICES
+    )
+    submitted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='submitted_lineups',
+        verbose_name='submetido por'
+    )
+
+    created_at = models.DateTimeField('criado em', auto_now_add=True)
+    updated_at = models.DateTimeField('atualizado em', auto_now=True)
+
+    class Meta:
+        verbose_name = 'escalação da partida'
+        verbose_name_plural = 'escalações das partidas'
+        # Apenas uma escalação por time por partida
+        unique_together = [['match', 'team']]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.team} × {self.match} [{self.formation}]'
+
+
+class MatchLineupPlayer(models.Model):
+    """
+    Jogador escalado em uma MatchLineup, com sua posição e coordenadas
+    visuais no campo tático (percentuais 0-100).
+    """
+
+    lineup = models.ForeignKey(
+        MatchLineup,
+        on_delete=models.CASCADE,
+        related_name='players',
+        verbose_name='escalação'
+    )
+    player = models.ForeignKey(
+        'users.PlayerProfile',
+        on_delete=models.CASCADE,
+        related_name='lineup_appearances',
+        verbose_name='jogador'
+    )
+
+    # Label da posição (ex: 'GK', 'CB', 'ST', 'CAM')
+    position = models.CharField('posição', max_length=10)
+
+    # Coordenadas visuais no campo (0-100 %)
+    x_position = models.FloatField('posição X (%)')
+    y_position = models.FloatField('posição Y (%)')
+
+    class Meta:
+        verbose_name = 'jogador na escalação'
+        verbose_name_plural = 'jogadores na escalação'
+        # Um jogador não pode aparecer duas vezes na mesma escalação
+        unique_together = [['lineup', 'player']]
+
+    def __str__(self):
+        return f'{self.player} — {self.position} ({self.lineup})'

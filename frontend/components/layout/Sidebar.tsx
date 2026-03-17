@@ -5,14 +5,16 @@ import { usePathname } from 'next/navigation';
 import React from 'react';
 import Image from 'next/image';
 import { useSidebar } from '@/hooks/useSidebar';
-import { useAuthStore } from '@/lib/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   LayoutDashboard,
   Users,
   Trophy,
   Calendar,
+  CalendarClock,
   BarChart3,
+  Bell,
+  ShieldAlert,
   User,
   Shield,
   X,
@@ -23,20 +25,23 @@ interface NavItem {
   href: string;
   icon: React.ReactNode;
   adminOnly?: boolean;
+  exact?: boolean;
 }
 
 export function Sidebar() {
   const pathname = usePathname();
   const { isOpen, close } = useSidebar();
-  const user = useAuthStore((state) => state.user);
   const { canManageChampionships } = usePermissions();
 
   const navItems: NavItem[] = [
     { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
     { label: 'Times', href: '/teams', icon: <Users className="h-5 w-5" /> },
     { label: 'Campeonatos', href: '/championships', icon: <Trophy className="h-5 w-5" /> },
-    { label: 'Partidas', href: '/matches', icon: <Calendar className="h-5 w-5" /> },
+    { label: 'Partidas', href: '/matches', icon: <Calendar className="h-5 w-5" />, exact: true },
+    { label: 'Agendamento', href: '/matches/schedule', icon: <CalendarClock className="h-5 w-5" /> },
     { label: 'Estatísticas', href: '/statistics', icon: <BarChart3 className="h-5 w-5" /> },
+    { label: 'Notificações', href: '/notifications', icon: <Bell className="h-5 w-5" /> },
+    { label: 'Penalidades', href: '/penalties', icon: <ShieldAlert className="h-5 w-5" /> },
     { label: 'Perfil', href: '/profile', icon: <User className="h-5 w-5" /> },
   ];
 
@@ -97,7 +102,9 @@ export function Sidebar() {
         {/* Navigation */}
         <nav className="space-y-1 p-3">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            const isActive = item.exact
+              ? pathname === item.href
+              : pathname === item.href || pathname.startsWith(item.href + '/');
 
             return (
               <Link

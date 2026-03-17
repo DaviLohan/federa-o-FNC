@@ -3,22 +3,19 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamsAPI } from '@/lib/api';
-import { Button, Card, Input, Badge, Table, ImageUpload, useToast, PageHeader, FilterBar, SkeletonGrid, EmptyState, Select } from '@/components/shared/ui';
-import { RosterManagementModal } from '@/components/teams/RosterManagementModal';
-import { TeamCard } from '@/components/teams/TeamCard';
 import { useAuthStore } from '@/lib/auth-store';
-import { usePermissions } from '@/lib/hooks';
+import { useMyTeam } from '@/hooks/useMyTeam';
+import { Button, Card, Input, ImageUpload, useToast, PageHeader, FilterBar, SkeletonGrid, EmptyState, Select } from '@/components/shared/ui';
+import { TeamCard } from '@/components/teams/TeamCard';
 import type { Team } from '@/types';
 import { Users, Search } from 'lucide-react';
 
 export default function TeamsPage() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const user = useAuthStore((state) => state.user);
-  const { canViewTeamRoster, isTeamOwner } = usePermissions();
+  const { user } = useAuthStore();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
-  const [managingTeam, setManagingTeam] = useState<Team | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -28,11 +25,17 @@ export default function TeamsPage() {
     queryFn: () => teamsAPI.getAll(),
   });
 
+  // Verificar se usuário já tem time (como dono ou membro)
+  const { data: myTeam } = useMyTeam();
+  const hasTeam = !!myTeam;
+  const isOwner = user?.user_type === 'TEAM_OWNER';
+
   // Create team mutation
   const createMutation = useMutation({
     mutationFn: (data: Partial<Team>) => teamsAPI.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teams'] });
+      queryClient.invalidateQueries({ queryKey: ['my-team'] });
       setShowCreateModal(false);
       showToast('Time criado com sucesso!', 'success');
     },
@@ -94,6 +97,18 @@ export default function TeamsPage() {
     return matchesSearch && matchesStatus;
   });
 
+  const handleCreateClick = () => {
+    if (hasTeam) {
+      showToast('Você já faz parte de um time. Saia do time atual para criar um novo.', 'error');
+      return;
+    }
+    if (isOwner) {
+      showToast('Você já é dono de um time. Exclua o time atual para criar um novo.', 'error');
+      return;
+    }
+    setShowCreateModal(true);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -102,11 +117,29 @@ export default function TeamsPage() {
         subtitle="Gerencie seus times e jogadores"
         icon={<Users className="w-8 h-8" />}
         actions={
-          <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+          <Button
+            variant="primary"
+            onClick={handleCreateClick}
+            disabled={hasTeam || isOwner}
+            title={hasTeam || isOwner ? 'Você já pertence a um time' : undefined}
+          >
             + Criar Time
           </Button>
         }
       />
+
+      {/* Info: usuário já tem time */}
+      {(hasTeam || isOwner) && (
+        <div className="rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 text-sm text-muted">
+          Você já {isOwner ? 'é dono do time' : 'faz parte de um time'}{' '}
+          {myTeam ? (
+            <a href={`/teams/${myTeam.id}`} className="text-gold underline underline-offset-2">
+              {myTeam.name}
+            </a>
+          ) : null}
+          . Para criar um novo time, {isOwner ? 'exclua o time atual' : 'solicite saída do time atual'}.
+        </div>
+      )}
 
       {/* Filters */}
       <FilterBar onReset={() => {
@@ -155,7 +188,7 @@ export default function TeamsPage() {
               : 'Comece criando seu primeiro time!'
           }
           action={
-            !searchQuery && statusFilter === 'all' ? (
+            !searchQuery && statusFilter === 'all' && !hasTeam && !isOwner ? (
               <Button variant="primary" onClick={() => setShowCreateModal(true)}>
                 + Criar Primeiro Time
               </Button>
@@ -189,15 +222,6 @@ export default function TeamsPage() {
             }
           }}
           isLoading={createMutation.isPending || updateMutation.isPending}
-        />
-      )}
-
-      {/* Roster Management Modal */}
-      {managingTeam && (
-        <RosterManagementModal
-          team={managingTeam}
-          onClose={() => setManagingTeam(null)}
-          readOnly={!isTeamOwner(managingTeam)}
         />
       )}
     </div>

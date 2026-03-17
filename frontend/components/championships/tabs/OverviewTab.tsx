@@ -209,7 +209,7 @@ export function OverviewTab({ championship, enrollments }: OverviewTabProps) {
       {championship.status === 'OPEN' && (
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-gold/10 via-gold/10 to-gold2/10 border-2 border-gold/30 hover:border-gold/50 transition-all duration-300 hover:shadow-2xl hover:shadow-gold/20">
           <div className="absolute inset-0 bg-gradient-to-r from-gold/5 via-gold/5 to-gold2/5 animate-pulse-slow" />
-          <div className="relative p-8 flex items-start gap-6">
+          <div className="relative p-5 md:p-8 flex flex-col sm:flex-row items-start gap-4 md:gap-6">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-gold/30 to-gold3/30 flex items-center justify-center shrink-0 border-2 border-gold/50">
               <Users className="w-8 h-8 text-gold" />
             </div>

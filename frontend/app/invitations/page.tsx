@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { invitationsAPI } from '@/lib/api';
@@ -15,6 +16,8 @@ export default function InvitationsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+
+  const [processingId, setProcessingId] = useState<number | null>(null);
   
   const { data, isLoading } = usePendingInvitations();
   const invitations = data?.results || [];
@@ -25,11 +28,16 @@ export default function InvitationsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invitations'] });
       queryClient.invalidateQueries({ queryKey: ['teams'] });
+      queryClient.invalidateQueries({ queryKey: ['team'] });
+      queryClient.invalidateQueries({ queryKey: ['team-members'] });
+      queryClient.invalidateQueries({ queryKey: ['my-team'] });
       queryClient.invalidateQueries({ queryKey: ['user'] });
       showToast('Convite aceito! Você agora é membro do time.', 'success');
+      setProcessingId(null);
     },
     onError: (error: any) => {
       showToast(error.response?.data?.error || 'Erro ao aceitar convite', 'error');
+      setProcessingId(null);
     },
   });
 
@@ -39,20 +47,24 @@ export default function InvitationsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invitations'] });
       showToast('Convite recusado.', 'success');
+      setProcessingId(null);
     },
     onError: (error: any) => {
       showToast(error.response?.data?.error || 'Erro ao recusar convite', 'error');
+      setProcessingId(null);
     },
   });
 
   const handleAccept = (id: number, teamName: string) => {
     if (confirm(`Aceitar convite do ${teamName}?`)) {
+      setProcessingId(id);
       acceptMutation.mutate(id);
     }
   };
 
   const handleDecline = (id: number, teamName: string) => {
     if (confirm(`Recusar convite do ${teamName}?`)) {
+      setProcessingId(id);
       declineMutation.mutate(id);
     }
   };
@@ -99,7 +111,7 @@ export default function InvitationsPage() {
               invitation={invitation}
               onAccept={() => handleAccept(invitation.id, invitation.team.name)}
               onDecline={() => handleDecline(invitation.id, invitation.team.name)}
-              isProcessing={acceptMutation.isPending || declineMutation.isPending}
+              isProcessing={processingId === invitation.id}
             />
           ))}
         </div>

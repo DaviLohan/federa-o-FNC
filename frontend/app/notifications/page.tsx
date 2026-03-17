@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Bell, Check, Filter, Trash2, CheckCheck, Inbox } from 'lucide-react';
+import { Bell, Filter, CheckCheck, Inbox } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
 import { NotificationItem } from '@/components/notifications/NotificationItem';
 
@@ -26,8 +26,8 @@ export default function NotificationsPage() {
 
   // Obter tipos únicos de notificações
   const notificationTypes = Array.from(
-    new Set(notifications.map((n: any) => n.notification_type))
-  );
+    new Set(notifications.map((n: any) => n.notification_type as string))
+  ) as string[];
 
   const getTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
@@ -53,7 +53,7 @@ export default function NotificationsPage() {
       {/* Header */}
       <div className="border-b border-border bg-surface1">
         <div className="container mx-auto max-w-5xl px-4 py-8">
-          <div className="flex items-start justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <div className="rounded-xl bg-gradient-to-br from-gold to-gold2 p-3">

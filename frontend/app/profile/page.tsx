@@ -1,21 +1,28 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Badge, Button, Input, Select, ImageUpload, useToast, PageHeader } from '@/components/shared/ui';
 import { useAuthStore } from '@/lib/auth-store';
 import { usersAPI, playerProfilesAPI } from '@/lib/api';
-import { User } from 'lucide-react';
+import { User, AlertTriangle } from 'lucide-react';
 
 export default function ProfilePage() {
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const setUser = useAuthStore((state) => state.setUser);
+  const logout = useAuthStore((state) => state.logout);
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
   const [isEditingAccount, setIsEditingAccount] = useState(false);
   const [isEditingPlayer, setIsEditingPlayer] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+
+  // Delete account modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('');
 
   const [accountData, setAccountData] = useState({
     first_name: user?.first_name || '',
@@ -87,6 +94,20 @@ export default function ProfilePage() {
   });
 
   if (!user) return null;
+
+  // Delete account mutation
+  const deleteAccountMutation = useMutation({
+    mutationFn: () => usersAPI.deleteAccount(user.id),
+    onSuccess: () => {
+      showToast('Conta desativada com sucesso. Até logo!', 'success');
+      queryClient.clear();
+      logout();
+      router.push('/');
+    },
+    onError: (error: any) => {
+      showToast(error.response?.data?.error || 'Erro ao desativar conta. Tente novamente.', 'error');
+    },
+  });
 
   const positionOptions = [
     { value: 'GK', label: 'Goleiro' },
@@ -476,6 +497,99 @@ export default function ProfilePage() {
             </div>
           </div>
         </Card>
+      )}
+      {/* Danger Zone */}
+      <div className="rounded-xl border border-error/30 bg-error/5 p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-error/10">
+            <AlertTriangle className="h-5 w-5 text-error" />
+          </div>
+          <div className="flex-1">
+            <h3 className="mb-1 text-base font-semibold text-error">Zona de Perigo</h3>
+            <p className="mb-4 text-sm text-muted">
+              Desativar sua conta irá encerrar seu acesso imediatamente. Seus dados serão preservados
+              mas você não conseguirá mais entrar na plataforma.
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setDeleteConfirmEmail('');
+                setShowDeleteModal(true);
+              }}
+              className="border border-error/40 text-error hover:bg-error/10"
+            >
+              Desativar minha conta
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowDeleteModal(false)}
+          />
+
+          {/* Modal */}
+          <div className="relative w-full max-w-md rounded-2xl border border-error/30 bg-surface1 p-6 shadow-2xl">
+            {/* Header */}
+            <div className="mb-6 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-error/10">
+                <AlertTriangle className="h-5 w-5 text-error" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-text">Desativar conta</h2>
+                <p className="text-sm text-muted">Esta ação não pode ser revertida</p>
+              </div>
+            </div>
+
+            {/* Warning */}
+            <div className="mb-6 rounded-lg border border-error/20 bg-error/5 p-4 text-sm text-muted">
+              Ao confirmar, você será desconectado imediatamente e não poderá mais acessar
+              a plataforma com este email. Entre em contato com o suporte caso queira reativar.
+            </div>
+
+            {/* Confirm email input */}
+            <div className="mb-6">
+              <label className="mb-2 block text-sm text-muted">
+                Digite seu email <span className="font-semibold text-text">{user.email}</span> para confirmar:
+              </label>
+              <Input
+                label=""
+                value={deleteConfirmEmail}
+                onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+                placeholder={user.email}
+                type="email"
+                autoComplete="off"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <Button
+                variant="ghost"
+                className="flex-1"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleteAccountMutation.isPending}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="ghost"
+                className="flex-1 border border-error/40 text-error hover:bg-error/10 disabled:opacity-40"
+                disabled={deleteConfirmEmail !== user.email || deleteAccountMutation.isPending}
+                loading={deleteAccountMutation.isPending}
+                onClick={() => deleteAccountMutation.mutate()}
+              >
+                Desativar conta
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

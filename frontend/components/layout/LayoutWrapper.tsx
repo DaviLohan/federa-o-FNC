@@ -1,44 +1,46 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth-store';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 
+// Public pages that should NOT have sidebar/topbar
+const PUBLIC_PAGES = ['/', '/login', '/register'];
+
+/**
+ * Subscreve ao evento de hidratação do Zustand persist.
+ * Retorna `true` assim que o persist terminar de reidratar do localStorage.
+ * Evita o spinner de tela cheia que bloqueava toda navegação.
+ */
+function useIsHydrated(): boolean {
+  return useSyncExternalStore(
+    useCallback((onStoreChange) => useAuthStore.persist.onFinishHydration(onStoreChange), []),
+    () => useAuthStore.persist.hasHydrated(),
+    () => false, // server snapshot — SSR sempre renderiza como não-hidratado
+  );
+}
+
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
-  const [isHydrated, setIsHydrated] = useState(false);
   const pathname = usePathname();
+  const isHydrated = useIsHydrated();
   const user = useAuthStore((state) => state.user);
 
-  // Aguardar hidratação do Zustand do localStorage
-  useEffect(() => {
-    setIsHydrated(true);
-  }, []);
+  const isPublicPage = PUBLIC_PAGES.includes(pathname);
 
-  // Public pages that should NOT have sidebar/topbar
-  const publicPages = ['/', '/login', '/register'];
-  const isPublicPage = publicPages.includes(pathname);
-
-  // Mostrar loading durante hidratação para evitar flash de conteúdo
-  // IMPORTANT: This conditional return is AFTER all hooks to avoid hooks rule violation
-  if (!isHydrated) {
-    return (
-      <div className="min-h-screen bg-bg flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-gold border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-muted text-sm">Carregando...</p>
-        </div>
-      </div>
-    );
-  }
-  
-  // If it's a public page or user is not logged in, just render children
-  if (isPublicPage || !user) {
+  // Páginas públicas nunca precisam esperar hidratação
+  if (isPublicPage) {
     return <>{children}</>;
   }
-  
-  // Authenticated pages with layout
+
+  // Para páginas autenticadas: enquanto hidrata, renderiza sem layout
+  // (o useRequireAuth dentro de cada page fará redirect se necessário)
+  if (!isHydrated || !user) {
+    return <>{children}</>;
+  }
+
+  // Usuário autenticado + hidratado → layout completo
   return (
     <>
       <Sidebar />

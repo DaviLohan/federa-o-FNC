@@ -23,7 +23,7 @@ export function Card({
   if (premium) {
     return (
       <div className={`gradient-border ${hoverEffect}`}>
-        <div className={`rounded-2xl bg-surface1 border border-border/60 p-6 ${className}`}>
+        <div className={`rounded-2xl bg-surface1 border border-border/60 p-4 md:p-6 ${className}`}>
           {title && (
             <h3 className="text-xl font-bold text-text mb-4">
               {title}
@@ -36,7 +36,7 @@ export function Card({
   }
   
   return (
-    <div className={`bg-panel border border-stroke rounded-2xl p-6 ${glassEffect} ${hoverEffect} ${className}`}>
+    <div className={`bg-panel border border-stroke rounded-2xl p-4 md:p-6 ${glassEffect} ${hoverEffect} ${className}`}>
       {title && (
         <h3 className="text-xl font-bold text-text mb-4">
           {title}

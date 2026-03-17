@@ -3,15 +3,20 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.views import APIView
 from django.db import models
 from django.db.models import Q, F
 from django.utils import timezone
+from django.shortcuts import get_object_or_404
 
 from .models import (
-    Match, MatchReport, Goal, Assist, Card, Contestation, 
-    MatchProposal, MatchConfirmation, Penalty, PenaltyAppeal
+    Match, MatchReport, Goal, Assist, Card, Contestation,
+    MatchProposal, MatchConfirmation, Penalty, PenaltyAppeal,
+    MatchLineup, MatchLineupPlayer,
 )
-from fnc_teams.models import Team
+from fnc_teams.models import Team, TeamMembership
+from users.models import PlayerProfile
+from fnc_notifications.models import Notification
 from .analytics_services import PlayerStats, TeamStats, MatchStats, ChampionshipStats
 from .permissions import (
     IsMatchParticipantOrAdmin,
@@ -37,7 +42,9 @@ from .serializers import (
     PenaltySerializer,
     PenaltyAppealSerializer,
     PenaltyAppealReviewSerializer,
-    SuspensionCheckSerializer
+    SuspensionCheckSerializer,
+    MatchLineupInputSerializer,
+    MatchLineupOutputSerializer,
 )
 
 
@@ -675,10 +682,9 @@ class MatchProposalViewSet(viewsets.ModelViewSet):
             return queryset
         
         # Usuários veem apenas propostas de seus times
-        from fnc_teams.models import TeamMember
         user_teams = Team.objects.filter(
-            members__user=user,
-            members__status='ACTIVE'
+            teammembership__player__user=user,
+            teammembership__is_active=True
         )
         
         return queryset.filter(
@@ -692,11 +698,10 @@ class MatchProposalViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         # Verificar se usuário é membro do time
-        from fnc_teams.models import TeamMember
-        is_member = TeamMember.objects.filter(
+        is_member = TeamMembership.objects.filter(
             team=proposed_by_team,
-            user=user,
-            status='ACTIVE'
+            player__user=user,
+            is_active=True
         ).exists()
         
         if not is_member and not user.is_staff:
@@ -731,11 +736,10 @@ class MatchProposalViewSet(viewsets.ModelViewSet):
         
         # Verificar se usuário é do time adversário
         opponent_team = match.away_team if proposal.proposed_by_team == match.home_team else match.home_team
-        from fnc_teams.models import TeamMember
-        is_opponent_member = TeamMember.objects.filter(
+        is_opponent_member = TeamMembership.objects.filter(
             team=opponent_team,
-            user=user,
-            status='ACTIVE'
+            player__user=user,
+            is_active=True
         ).exists()
         
         if not is_opponent_member and not user.is_staff:
@@ -816,10 +820,9 @@ class MatchConfirmationViewSet(viewsets.ModelViewSet):
             return queryset
         
         # Usuários veem apenas confirmações de seus times
-        from fnc_teams.models import TeamMember
         user_teams = Team.objects.filter(
-            members__user=user,
-            members__status='ACTIVE'
+            teammembership__player__user=user,
+            teammembership__is_active=True
         )
         
         return queryset.filter(team__in=user_teams)
@@ -830,11 +833,10 @@ class MatchConfirmationViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         # Verificar se usuário é membro do time
-        from fnc_teams.models import TeamMember
-        is_member = TeamMember.objects.filter(
+        is_member = TeamMembership.objects.filter(
             team=team,
-            user=user,
-            status='ACTIVE'
+            player__user=user,
+            is_active=True
         ).exists()
         
         if not is_member and not user.is_staff:
@@ -864,11 +866,10 @@ class MatchConfirmationViewSet(viewsets.ModelViewSet):
             )
         
         # Verificar se usuário é membro do time
-        from fnc_teams.models import TeamMember
-        is_member = TeamMember.objects.filter(
+        is_member = TeamMembership.objects.filter(
             team=confirmation.team,
-            user=user,
-            status='ACTIVE'
+            player__user=user,
+            is_active=True
         ).exists()
         
         if not is_member and not user.is_staff:
@@ -901,11 +902,10 @@ class MatchConfirmationViewSet(viewsets.ModelViewSet):
             )
         
         # Verificar se usuário é membro do time
-        from fnc_teams.models import TeamMember
-        is_member = TeamMember.objects.filter(
+        is_member = TeamMembership.objects.filter(
             team=confirmation.team,
-            user=user,
-            status='ACTIVE'
+            player__user=user,
+            is_active=True
         ).exists()
         
         if not is_member and not user.is_staff:
@@ -960,12 +960,11 @@ class PenaltyViewSet(viewsets.ModelViewSet):
             return queryset
         
         # Usuários veem apenas penalidades relacionadas a seus times/perfil
-        from fnc_teams.models import TeamMember
         from users.models import PlayerProfile
         
         user_teams = Team.objects.filter(
-            members__user=user,
-            members__status='ACTIVE'
+            teammembership__player__user=user,
+            teammembership__is_active=True
         )
         
         try:
@@ -1343,3 +1342,203 @@ class StatisticsViewSet(viewsets.ViewSet):
         )
         
         return Response(stats)
+
+
+# ---------------------------------------------------------------------------
+# MatchLineupView — Escalação tática por partida
+# ---------------------------------------------------------------------------
+
+class MatchLineupView(APIView):
+    """
+    Endpoint para criar/consultar a escalação de um time em uma partida.
+
+    POST /api/v1/matches/<match_id>/lineup/
+        Payload:
+        {
+            "formation": "4-3-3",
+            "players": [
+                {"player_id": 1, "position": "GK", "x_position": 50.0, "y_position": 8.0},
+                ...  (11 jogadores no total)
+            ]
+        }
+
+        - Somente OWNER ou CAPTAIN do time participante podem submeter.
+        - Ao salvar, dispara notificação MATCH_CALLUP para cada convocado.
+        - Suporta re-submissão: sobrescreve a escalação existente do time.
+
+    GET /api/v1/matches/<match_id>/lineup/
+        Retorna a escalação do time do usuário autenticado naquela partida,
+        ou 404 se ainda não houver.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _get_match_and_membership(self, request, match_id):
+        """
+        Retorna (match, membership) ou levanta PermissionDenied/404.
+
+        O usuário deve ser OWNER ou CAPTAIN de um dos times da partida.
+        """
+        match = get_object_or_404(Match, pk=match_id)
+
+        membership = TeamMembership.objects.filter(
+            player__user=request.user,
+            team__in=[match.home_team, match.away_team],
+            role__in=[TeamMembership.Role.OWNER, TeamMembership.Role.CAPTAIN],
+            is_active=True,
+        ).select_related('team').first()
+
+        if not membership:
+            raise PermissionDenied(
+                'Apenas o dono ou capitão de um dos times participantes pode '
+                'gerenciar a escalação.'
+            )
+
+        return match, membership
+
+    def _send_callup_notifications(self, match, lineup, player_profiles):
+        """
+        Cria uma notificação MATCH_CALLUP para cada jogador convocado.
+        Ignora erros individuais para não interromper a criação da escalação.
+        """
+        # Descobre o adversário a partir do time que está escalando
+        adversario = (
+            match.away_team
+            if lineup.team == match.home_team
+            else match.home_team
+        )
+
+        notifications = []
+        for profile in player_profiles:
+            # Só notifica se o perfil tem user associado
+            if not hasattr(profile, 'user') or profile.user is None:
+                continue
+            notifications.append(Notification(
+                user=profile.user,
+                notification_type='MATCH_CALLUP',
+                title='Você foi Convocado!',
+                message=(
+                    f'O manager te escalou para o jogo contra '
+                    f'{adversario.name} na formação {lineup.formation}.'
+                ),
+                action_url=f'/matches/{match.pk}',
+                related_match_id=match.pk,
+            ))
+
+        if notifications:
+            Notification.objects.bulk_create(notifications, ignore_conflicts=True)
+
+    # ------------------------------------------------------------------
+    # POST — criar / sobrescrever escalação
+    # ------------------------------------------------------------------
+
+    def post(self, request, match_id):
+        match, membership = self._get_match_and_membership(request, match_id)
+        team = membership.team
+
+        # --- Validar payload ---
+        serializer = MatchLineupInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        formation    = serializer.validated_data['formation']
+        players_data = serializer.validated_data['players']
+
+        # --- Validar que todos os player_id pertencem ao elenco ativo ---
+        player_ids = [p['player_id'] for p in players_data]
+        active_player_ids = set(
+            TeamMembership.objects.filter(
+                team=team,
+                player__id__in=player_ids,
+                is_active=True,
+            ).values_list('player_id', flat=True)
+        )
+        invalid_ids = set(player_ids) - active_player_ids
+        if invalid_ids:
+            return Response(
+                {
+                    'error': 'Alguns jogadores não pertencem ao elenco ativo do time.',
+                    'invalid_player_ids': sorted(invalid_ids),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # --- Buscar PlayerProfile objects ---
+        profiles_by_id = {
+            p.pk: p
+            for p in PlayerProfile.objects.filter(
+                pk__in=player_ids
+            ).select_related('user')
+        }
+
+        # --- Criar ou atualizar a MatchLineup ---
+        lineup, _ = MatchLineup.objects.update_or_create(
+            match=match,
+            team=team,
+            defaults={
+                'formation': formation,
+                'submitted_by': request.user,
+            },
+        )
+
+        # Remove jogadores anteriores e recria (replace total)
+        lineup.players.all().delete()
+        MatchLineupPlayer.objects.bulk_create([
+            MatchLineupPlayer(
+                lineup=lineup,
+                player=profiles_by_id[p['player_id']],
+                position=p['position'],
+                x_position=p['x_position'],
+                y_position=p['y_position'],
+            )
+            for p in players_data
+        ])
+
+        # --- Disparar notificações de convocação ---
+        self._send_callup_notifications(
+            match=match,
+            lineup=lineup,
+            player_profiles=list(profiles_by_id.values()),
+        )
+
+        # --- Retornar escalação salva ---
+        lineup.refresh_from_db()
+        output = MatchLineupOutputSerializer(lineup)
+        return Response(output.data, status=status.HTTP_201_CREATED)
+
+    # ------------------------------------------------------------------
+    # GET — consultar escalação existente do time do usuário
+    # ------------------------------------------------------------------
+
+    def get(self, request, match_id):
+        match = get_object_or_404(Match, pk=match_id)
+
+        # Descobre o time do usuário nessa partida (qualquer role)
+        membership = TeamMembership.objects.filter(
+            player__user=request.user,
+            team__in=[match.home_team, match.away_team],
+            is_active=True,
+        ).first()
+
+        if not membership:
+            raise PermissionDenied(
+                'Você não é membro de nenhum dos times desta partida.'
+            )
+
+        lineup = MatchLineup.objects.filter(
+            match=match,
+            team=membership.team,
+        ).prefetch_related('players__player__user').first()
+
+        if not lineup:
+            return Response(
+                {'detail': 'Nenhuma escalação encontrada para este time nesta partida.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        output = MatchLineupOutputSerializer(lineup)
+        return Response(output.data, status=status.HTTP_200_OK)

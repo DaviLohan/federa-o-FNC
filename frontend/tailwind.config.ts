@@ -86,12 +86,32 @@ const config: Config = {
           "0%": { opacity: "0", transform: "translateY(10px)" }, 
           "100%": { opacity: "1", transform: "translateY(0)" } 
         },
+        gridMove: {
+          "0%": { backgroundPosition: "0px 0px" },
+          "100%": { backgroundPosition: "40px 40px" },
+        },
+        shimmerGold: {
+          "0%": { backgroundPosition: "-200% center" },
+          "100%": { backgroundPosition: "200% center" },
+        },
+        pulseGold: {
+          "0%,100%": { boxShadow: "0 0 0 0 rgba(214,161,30,0)" },
+          "50%": { boxShadow: "0 0 20px 4px rgba(214,161,30,0.35)" },
+        },
+        scanline: {
+          "0%": { transform: "translateY(-100%)" },
+          "100%": { transform: "translateY(100vh)" },
+        },
       },
       animation: {
         floaty: "floaty 4s ease-in-out infinite",
         glow: "glow 2.2s ease-in-out infinite",
         sweep: "sweep 2.5s ease-in-out infinite",
         reveal: "reveal 0.5s ease-out both",
+        gridMove: "gridMove 6s linear infinite",
+        shimmerGold: "shimmerGold 3s linear infinite",
+        pulseGold: "pulseGold 2.5s ease-in-out infinite",
+        scanline: "scanline 8s linear infinite",
       },
     },
   },

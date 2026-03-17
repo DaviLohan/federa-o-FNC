@@ -44,10 +44,27 @@ class APIClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        if (error.response?.status === 401) {
-          // Token inválido ou expirado
+        const status = error.response?.status;
+
+        // Loga apenas erros reais do servidor (5xx) em desenvolvimento.
+        // 401 e 404 são fluxos esperados — não poluem o console.
+        if (
+          process.env.NODE_ENV !== 'production' &&
+          typeof window !== 'undefined' &&
+          status !== undefined &&
+          status >= 500
+        ) {
+          const method = error.config?.method?.toUpperCase();
+          const url = error.config?.url;
+          const data = error.response?.data;
+          console.error(`[API ERROR] ${method} ${url} → ${status}`, data);
+        }
+
+        if (status === 401) {
+          // Token inválido ou expirado — redireciona para login
+          // Guard: evita loop infinito se já estiver na página de login
           this.removeToken();
-          if (typeof window !== 'undefined') {
+          if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
             window.location.href = '/login';
           }
         }
@@ -95,27 +112,15 @@ class APIClient {
     return response.data;
   }
 
-  async patchWithToken<T>(url: string, data: any, token: string): Promise<T> {
-    const response = await this.client.patch<T>(url, data, {
-      headers: {
-        Authorization: `Token ${token}`,
-      },
-    });
-    return response.data;
-  }
-
   async delete<T>(url: string): Promise<T> {
     const response = await this.client.delete<T>(url);
     return response.data;
   }
 
   // Upload method with FormData
+  // Nota: NÃO definir Content-Type manualmente — o Axios calcula o boundary automaticamente
   async upload<T>(url: string, formData: FormData, method: 'post' | 'put' | 'patch' = 'post'): Promise<T> {
-    const response = await this.client[method]<T>(url, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await this.client[method]<T>(url, formData);
     return response.data;
   }
 }

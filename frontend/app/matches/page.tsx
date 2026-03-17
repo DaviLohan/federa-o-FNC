@@ -25,13 +25,14 @@ export default function MatchesPage() {
     queryFn: () => matchesAPI.getAll(statusFilter !== 'all' ? { status: statusFilter } : {}),
   });
 
-  // Fetch teams for dropdown
+  // Fetch teams for dropdown — só busca quando o modal de criação está aberto
   const { data: teamsData } = useQuery({
     queryKey: ['teams'],
     queryFn: () => teamsAPI.getAll(),
+    enabled: showCreateModal,
   });
 
-  // Fetch championships for dropdown
+  // Fetch championships — usado tanto no filtro de listagem quanto no modal de criação
   const { data: championshipsData } = useQuery({
     queryKey: ['championships'],
     queryFn: () => championshipsAPI.getAll(),
@@ -209,9 +210,9 @@ export default function MatchesPage() {
               <>
                 <td className="px-4 py-3">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                    <span className="font-semibold text-text">{match.home_team.name}</span>
-                    <span className="text-muted">vs</span>
-                    <span className="font-semibold text-text">{match.away_team.name}</span>
+                   <span className="font-semibold text-text">{match.home_team.name}</span>
+                   <span className="text-muted">vs</span>
+                   <span className="font-semibold text-text">{match.away_team.name}</span>
                   </div>
                   {match.championship && (
                     <div className="text-xs text-muted mt-1">

@@ -1,8 +1,9 @@
 from rest_framework import serializers
 from django.utils import timezone
 from .models import (
-    Match, MatchReport, Goal, Assist, Card, Contestation, 
-    MatchProposal, MatchConfirmation, Penalty, PenaltyAppeal
+    Match, MatchReport, Goal, Assist, Card, Contestation,
+    MatchProposal, MatchConfirmation, Penalty, PenaltyAppeal,
+    MatchLineup, MatchLineupPlayer,
 )
 from fnc_teams.serializers import TeamListSerializer, FormationSerializer
 from fnc_championships.serializers import ChampionshipListSerializer
@@ -807,3 +808,73 @@ class SuspensionCheckSerializer(serializers.Serializer):
                 'Especifique apenas player_id OU team_id, não ambos.'
             )
         return attrs
+
+
+# ---------------------------------------------------------------------------
+# Serializers de Escalação de Partida (MatchLineup)
+# ---------------------------------------------------------------------------
+
+class MatchLineupPlayerInputSerializer(serializers.Serializer):
+    """
+    Entrada de um único jogador no payload de criação de escalação.
+    Recebe o ID do PlayerProfile, a posição e as coordenadas visuais.
+    """
+    player_id  = serializers.IntegerField()
+    position   = serializers.CharField(max_length=10)
+    x_position = serializers.FloatField(min_value=0.0, max_value=100.0)
+    y_position = serializers.FloatField(min_value=0.0, max_value=100.0)
+
+
+class MatchLineupInputSerializer(serializers.Serializer):
+    """
+    Payload completo do POST /api/v1/matches/<match_id>/lineup/.
+    
+    Valida:
+    - Formação deve ser uma das 7 disponíveis no TacticalBoard.
+    - Exatamente 11 jogadores devem ser informados.
+    - Nenhum player_id pode se repetir.
+    """
+    VALID_FORMATIONS = ['4-3-3', '4-2-3-1', '4-4-2', '5-3-2', '4-3-2-1', '4-1-2-1-2', '4-3-3(4)']
+
+    formation = serializers.ChoiceField(choices=[(f, f) for f in VALID_FORMATIONS])
+    players   = MatchLineupPlayerInputSerializer(many=True)
+
+    def validate_players(self, value):
+        """Garante exatamente 11 jogadores sem repetições."""
+        if len(value) != 11:
+            raise serializers.ValidationError(
+                f'A escalação deve conter exatamente 11 jogadores. Recebido: {len(value)}.'
+            )
+        ids = [p['player_id'] for p in value]
+        if len(ids) != len(set(ids)):
+            raise serializers.ValidationError(
+                'O mesmo jogador não pode ser escalado em duas posições.'
+            )
+        return value
+
+
+class MatchLineupPlayerOutputSerializer(serializers.ModelSerializer):
+    """
+    Serializer de saída de um jogador na escalação — expande o PlayerProfile.
+    """
+    player = PlayerProfileListSerializer(read_only=True)
+
+    class Meta:
+        model  = MatchLineupPlayer
+        fields = ['player', 'position', 'x_position', 'y_position']
+
+
+class MatchLineupOutputSerializer(serializers.ModelSerializer):
+    """
+    Serializer de saída completo da escalação — retornado após POST/GET.
+    """
+    team         = TeamListSerializer(read_only=True)
+    submitted_by = UserSerializer(read_only=True)
+    players      = MatchLineupPlayerOutputSerializer(many=True, read_only=True)
+
+    class Meta:
+        model  = MatchLineup
+        fields = [
+            'id', 'match', 'team', 'formation',
+            'submitted_by', 'players', 'created_at', 'updated_at',
+        ]

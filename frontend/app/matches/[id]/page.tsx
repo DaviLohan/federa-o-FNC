@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { matchesAPI } from '@/lib/api';
 import { Card, Badge, Button, Skeleton } from '@/components/shared/ui';
+import { LineupDisplay } from '@/components/matches/LineupDisplay';
 
 export default function MatchDetailsPage() {
   const params = useParams();
@@ -136,19 +137,19 @@ export default function MatchDetailsPage() {
             {/* Home Team */}
             <div className="text-center md:text-right space-y-2">
               <div className="flex items-center justify-center md:justify-end gap-3">
-                {match.home_team.logo && (
-                  <img
-                    src={match.home_team.logo}
-                    alt={match.home_team.name}
-                    className="w-16 h-16 rounded-full object-cover"
-                  />
-                )}
-                <div>
-                  <h2 className="text-2xl font-bold text-text">{match.home_team.name}</h2>
-                  <p className="text-muted text-sm">{match.home_team.abbreviation}</p>
-                </div>
-              </div>
-              {match.winner?.id === match.home_team.id && (
+                 {match.home_team.logo && (
+                   <img
+                     src={match.home_team.logo}
+                     alt={match.home_team.name}
+                     className="w-16 h-16 rounded-full object-cover"
+                   />
+                 )}
+                 <div>
+                   <h2 className="text-2xl font-bold text-text">{match.home_team.name}</h2>
+                   <p className="text-muted text-sm">{match.home_team.abbreviation}</p>
+                 </div>
+               </div>
+               {match.winner?.id === match.home_team.id && (
                 <Badge variant="success" className="inline-flex">
                   🏆 Vencedor
                 </Badge>
@@ -178,19 +179,19 @@ export default function MatchDetailsPage() {
             {/* Away Team */}
             <div className="text-center md:text-left space-y-2">
               <div className="flex items-center justify-center md:justify-start gap-3">
-                <div className="md:order-2">
-                  <h2 className="text-2xl font-bold text-text">{match.away_team.name}</h2>
-                  <p className="text-muted text-sm">{match.away_team.abbreviation}</p>
-                </div>
-                {match.away_team.logo && (
-                  <img
-                    src={match.away_team.logo}
-                    alt={match.away_team.name}
-                    className="w-16 h-16 rounded-full object-cover md:order-1"
-                  />
-                )}
-              </div>
-              {match.winner?.id === match.away_team.id && (
+                 <div className="md:order-2">
+                   <h2 className="text-2xl font-bold text-text">{match.away_team.name}</h2>
+                   <p className="text-muted text-sm">{match.away_team.abbreviation}</p>
+                 </div>
+                 {match.away_team.logo && (
+                   <img
+                     src={match.away_team.logo}
+                     alt={match.away_team.name}
+                     className="w-16 h-16 rounded-full object-cover md:order-1"
+                   />
+                 )}
+               </div>
+               {match.winner?.id === match.away_team.id && (
                 <Badge variant="success" className="inline-flex">
                   🏆 Vencedor
                 </Badge>
@@ -275,6 +276,13 @@ export default function MatchDetailsPage() {
           </Card>
         )}
       </div>
+
+      {/* Escalação Tática */}
+      {match.status !== 'CANCELLED' && (
+        <Card title="Escalação Tática">
+          <LineupDisplay matchId={match.id} />
+        </Card>
+      )}
 
       {/* Statistics Placeholder */}
       {match.status === 'FINISHED' && (

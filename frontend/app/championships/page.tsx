@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { championshipsAPI, teamsAPI } from '@/lib/api';
 import { Button, Card, Input, Badge, Table, Select, useToast, Skeleton, EmptyState, ImageUpload, PageHeader, FilterBar, SkeletonGrid } from '@/components/shared/ui';
@@ -23,14 +23,20 @@ export default function ChampionshipsPage() {
   const [enrollingChampionship, setEnrollingChampionship] = useState<Championship | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  // Debounce: só dispara fetch 400ms após o usuário parar de digitar
+  const [debouncedSearch, setDebouncedSearch] = useState<string>('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Fetch championships
   const { data: championshipsData, isLoading } = useQuery({
-    queryKey: ['championships', statusFilter, searchQuery],
+    queryKey: ['championships', statusFilter, debouncedSearch],
     queryFn: () => {
       const params: any = {};
       if (statusFilter !== 'all') params.status = statusFilter;
-      if (searchQuery) params.search = searchQuery;
+      if (debouncedSearch) params.search = debouncedSearch;
       return championshipsAPI.getAll(params);
     },
   });

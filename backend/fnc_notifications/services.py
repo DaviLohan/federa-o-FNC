@@ -124,6 +124,35 @@ class NotificationService:
         )
     
     @staticmethod
+    def notify_invitation_declined(invitation):
+        """
+        Notifica dono do time que jogador recusou ou convite foi cancelado.
+        
+        Args:
+            invitation: TeamInvitation instance
+        """
+        if invitation.status == 'DECLINED':
+            title = f'{invitation.player.user.get_full_name()} recusou o convite'
+            message = (
+                f'{invitation.player.user.get_full_name()} recusou o convite '
+                f'para jogar no {invitation.team.name}.'
+            )
+        else:
+            title = f'Convite para {invitation.player.user.get_full_name()} cancelado'
+            message = (
+                f'O convite enviado para {invitation.player.user.get_full_name()} '
+                f'no time {invitation.team.name} foi cancelado.'
+            )
+        return NotificationService.create_notification(
+            user=invitation.team.owner,
+            notification_type='TEAM_INVITATION',
+            title=title,
+            message=message,
+            action_url=f'/teams/{invitation.team.id}',
+            related_team_id=invitation.team.id,
+        )
+    
+    @staticmethod
     def notify_match_scheduled(match):
         """
         Notifica ambos os times sobre partida agendada.
@@ -166,24 +195,6 @@ class NotificationService:
             action_url=f'/matches/{match.id}',
             related_match_id=match.id,
             related_team_id=match.away_team.id,
-            related_championship_id=match.championship.id,
-        )
-        
-        # Notificar jogadores do time B
-        team_b_users = match.team_b.players.filter(
-            teammembership__is_active=True
-        ).values_list('user', flat=True)
-        
-        team_b_users_objs = User.objects.filter(id__in=team_b_users)
-        
-        NotificationService.create_bulk_notifications(
-            users=list(team_b_users_objs),
-            notification_type='MATCH_SCHEDULED',
-            title='Partida Agendada',
-            message=f'Sua partida contra {match.team_a.name} foi agendada para '
-                    f'{match.scheduled_date.strftime("%d/%m/%Y às %H:%M")}.',
-            action_url=f'/matches/{match.id}',
-            related_match_id=match.id,
             related_championship_id=match.championship.id,
         )
     
@@ -414,6 +425,55 @@ class NotificationService:
             related_championship_id=championship.id,
         )
     
+    @staticmethod
+    def notify_leave_request_submitted(leave_request):
+        """
+        Notifica o dono do time que um jogador solicitou saída.
+
+        Args:
+            leave_request: TeamLeaveRequest instance (status=PENDING)
+        """
+        player_name = leave_request.player.user.get_full_name() or leave_request.player.player_name
+        return NotificationService.create_notification(
+            user=leave_request.team.owner,
+            notification_type='TEAM_LEAVE_REQUEST',
+            title=f'{player_name} quer sair do time',
+            message=(
+                f'{player_name} solicitou saída do time {leave_request.team.name}.'
+                + (f' Motivo: {leave_request.reason}' if leave_request.reason else '')
+                + ' Você pode aprovar ou recusar na página do time.'
+            ),
+            action_url=f'/teams/{leave_request.team.id}',
+            related_team_id=leave_request.team.id,
+            related_leave_request_id=leave_request.id,
+        )
+
+    @staticmethod
+    def notify_leave_request_resolved(leave_request):
+        """
+        Notifica o jogador sobre a decisão do dono (aprovado ou recusado).
+
+        Args:
+            leave_request: TeamLeaveRequest instance (status=APPROVED|REJECTED)
+        """
+        approved = leave_request.status == 'APPROVED'
+        title = (
+            'Saída do time aprovada' if approved else 'Saída do time recusada'
+        )
+        message = (
+            f'O dono do time {leave_request.team.name} {"aprovou" if approved else "recusou"} '
+            f'sua solicitação de saída.'
+        )
+        return NotificationService.create_notification(
+            user=leave_request.player.user,
+            notification_type='TEAM_LEAVE_REQUEST',
+            title=title,
+            message=message,
+            action_url=f'/teams/{leave_request.team.id}' if not approved else '/teams',
+            related_team_id=leave_request.team.id,
+            related_leave_request_id=leave_request.id,
+        )
+
     @staticmethod
     def notify_championship_finished(championship):
         """

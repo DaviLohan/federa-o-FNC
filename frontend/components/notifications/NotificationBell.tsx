@@ -3,10 +3,64 @@
 import { useState, useRef, useEffect } from 'react';
 import { Bell, Check, X, Trash2 } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { leaveRequestsAPI } from '@/lib/api';
 import Link from 'next/link';
+
+/** Mini-botões Aprovar/Recusar para TEAM_LEAVE_REQUEST no dropdown */
+function LeaveRequestActions({
+  leaveRequestId,
+  onDone,
+}: {
+  leaveRequestId: number;
+  onDone: () => void;
+}) {
+  const queryClient = useQueryClient();
+
+  const approveMutation = useMutation({
+    mutationFn: () => leaveRequestsAPI.approve(leaveRequestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['leave-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['team-members'] });
+      onDone();
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: () => leaveRequestsAPI.reject(leaveRequestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['leave-requests'] });
+      onDone();
+    },
+  });
+
+  const busy = approveMutation.isPending || rejectMutation.isPending;
+
+  return (
+    <div className="flex gap-1.5 mt-1.5">
+      <button
+        onClick={(e) => { e.stopPropagation(); approveMutation.mutate(); }}
+        disabled={busy}
+        className="px-2 py-0.5 rounded text-[11px] font-semibold bg-gold/10 text-gold border border-gold/30 hover:bg-gold/20 transition-colors disabled:opacity-50"
+      >
+        {approveMutation.isPending ? '...' : 'Aprovar'}
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); rejectMutation.mutate(); }}
+        disabled={busy}
+        className="px-2 py-0.5 rounded text-[11px] font-semibold bg-surface2 text-muted border border-border hover:text-text transition-colors disabled:opacity-50"
+      >
+        {rejectMutation.isPending ? '...' : 'Recusar'}
+      </button>
+    </div>
+  );
+}
 
 export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
+  const [resolvedIds, setResolvedIds] = useState<Set<number>>(new Set());
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } =
     useNotifications();
@@ -27,6 +81,8 @@ export function NotificationBell() {
     switch (type) {
       case 'TEAM_INVITATION':
         return '📧';
+      case 'TEAM_LEAVE_REQUEST':
+        return '🚪';
       case 'INVITATION_ACCEPTED':
         return '✅';
       case 'INVITATION_DECLINED':
@@ -116,75 +172,97 @@ export function NotificationBell() {
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {notifications.slice(0, 10).map((notification: any) => (
-                  <div
-                    key={notification.id}
-                    className={`group relative px-4 py-3 transition-colors hover:bg-surface2 ${
-                      !notification.is_read ? 'bg-gold/5' : ''
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      {/* Icon */}
-                      <div className="text-2xl">
-                        {getNotificationIcon(notification.notification_type)}
-                      </div>
+                {notifications.slice(0, 10).map((notification: any) => {
+                  const isLeaveRequest =
+                    notification.notification_type === 'TEAM_LEAVE_REQUEST' &&
+                    notification.related_leave_request_id;
+                  const isResolved = resolvedIds.has(notification.id);
 
-                      {/* Content */}
-                      <div className="flex-1">
-                        <div className="mb-1 flex items-start justify-between gap-2">
-                          <h4 className="text-sm font-medium text-text">
-                            {notification.title}
-                          </h4>
-                          {!notification.is_read && (
-                            <div className="h-2 w-2 flex-shrink-0 rounded-full bg-gold" />
-                          )}
+                  return (
+                    <div
+                      key={notification.id}
+                      className={`group relative px-4 py-3 transition-colors hover:bg-surface2 ${
+                        !notification.is_read ? 'bg-gold/5' : ''
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        {/* Icon */}
+                        <div className="text-2xl">
+                          {getNotificationIcon(notification.notification_type)}
                         </div>
-                        <p className="mb-2 text-xs text-muted">
-                          {notification.message}
-                        </p>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted/70">
-                            {getTimeAgo(notification.created_at)}
-                          </span>
-                          {notification.action_url && (
-                            <Link
-                              href={notification.action_url}
-                              onClick={() => {
-                                if (!notification.is_read) {
-                                  markAsRead(notification.id);
-                                }
-                                setIsOpen(false);
+
+                        {/* Content */}
+                        <div className="flex-1">
+                          <div className="mb-1 flex items-start justify-between gap-2">
+                            <h4 className="text-sm font-medium text-text">
+                              {notification.title}
+                            </h4>
+                            {!notification.is_read && (
+                              <div className="h-2 w-2 flex-shrink-0 rounded-full bg-gold" />
+                            )}
+                          </div>
+                          <p className="mb-2 text-xs text-muted">
+                            {notification.message}
+                          </p>
+
+                          {/* Mini-ações para leave request */}
+                          {isLeaveRequest && !isResolved && (
+                            <LeaveRequestActions
+                              leaveRequestId={notification.related_leave_request_id}
+                              onDone={() => {
+                                setResolvedIds((prev) => new Set(prev).add(notification.id));
+                                if (!notification.is_read) markAsRead(notification.id);
                               }}
-                              className="text-xs text-gold hover:text-gold/80"
-                            >
-                              Ver detalhes →
-                            </Link>
+                            />
                           )}
-                        </div>
-                      </div>
+                          {isLeaveRequest && isResolved && (
+                            <p className="text-[11px] text-gold mt-1">Ação realizada.</p>
+                          )}
 
-                      {/* Actions */}
-                      <div className="flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                        {!notification.is_read && (
+                          <div className="flex items-center justify-between mt-1.5">
+                            <span className="text-xs text-muted/70">
+                              {getTimeAgo(notification.created_at)}
+                            </span>
+                            {notification.action_url && (
+                              <Link
+                                href={notification.action_url}
+                                onClick={() => {
+                                  if (!notification.is_read) {
+                                    markAsRead(notification.id);
+                                  }
+                                  setIsOpen(false);
+                                }}
+                                className="text-xs text-gold hover:text-gold/80"
+                              >
+                                Ver detalhes →
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          {!notification.is_read && (
+                            <button
+                              onClick={() => markAsRead(notification.id)}
+                              className="rounded p-1 text-muted transition-colors hover:bg-surface1 hover:text-text"
+                              title="Marcar como lida"
+                            >
+                              <Check className="h-3 w-3" />
+                            </button>
+                          )}
                           <button
-                            onClick={() => markAsRead(notification.id)}
-                            className="rounded p-1 text-muted transition-colors hover:bg-surface1 hover:text-text"
-                            title="Marcar como lida"
+                            onClick={() => deleteNotification(notification.id)}
+                            className="rounded p-1 text-muted transition-colors hover:bg-surface1 hover:text-red-500"
+                            title="Deletar"
                           >
-                            <Check className="h-3 w-3" />
+                            <Trash2 className="h-3 w-3" />
                           </button>
-                        )}
-                        <button
-                          onClick={() => deleteNotification(notification.id)}
-                          className="rounded p-1 text-muted transition-colors hover:bg-surface1 hover:text-red-500"
-                          title="Deletar"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -206,3 +284,5 @@ export function NotificationBell() {
     </div>
   );
 }
+
+

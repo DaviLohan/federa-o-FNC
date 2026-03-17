@@ -7,8 +7,8 @@ import { matchProposalsAPI } from '@/lib/api';
 interface ProposeDateModalProps {
   match: {
     id: number;
-    team_home: { id: number; name: string };
-    team_away: { id: number; name: string };
+    home_team: { id: number; name: string };
+    away_team: { id: number; name: string };
     championship: { id: number; name: string; start_date: string; end_date: string };
   };
   isOpen: boolean;
@@ -79,9 +79,9 @@ export function ProposeDateModal({ match, isOpen, onClose, onSuccess }: ProposeD
             <div className="mb-2 text-sm font-medium text-muted">Partida</div>
             <div className="text-center">
               <div className="flex items-center justify-center gap-3">
-                <span className="font-semibold text-text">{match.team_home.name}</span>
+                <span className="font-semibold text-text">{match.home_team.name}</span>
                 <span className="text-gold">vs</span>
-                <span className="font-semibold text-text">{match.team_away.name}</span>
+                <span className="font-semibold text-text">{match.away_team.name}</span>
               </div>
               <div className="mt-2 text-xs text-muted">{match.championship.name}</div>
             </div>

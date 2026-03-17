@@ -32,6 +32,10 @@ export interface PlayerProfile {
   total_goals: number;
   total_assists: number;
   win_rate: number;
+  // Campos expostos pelo PlayerProfileListSerializer (contexto de membership/listagem)
+  user_id?: number;
+  user_email?: string;
+  primary_position_display?: string;
 }
 
 export interface TeamOwnerProfile {
@@ -126,6 +130,19 @@ export interface InvitePlayerRequest {
   message?: string;
 }
 
+// Leave Request Types
+export interface TeamLeaveRequest {
+  id: number;
+  team: Team;
+  player: PlayerProfile;
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  status_display: string;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: User | null;
+}
+
 export interface PlayerSearchResult {
   id: number;
   player_name: string;
@@ -181,7 +198,7 @@ export interface Match {
   finished_at?: string;
   home_score: number;
   away_score: number;
-  status: 'SCHEDULED' | 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED' | 'CONTESTED';
+  status: 'PENDING' | 'SCHEDULED' | 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED' | 'CONTESTED';
   winner?: Team;
   is_draw: boolean;
   duration_minutes: number;
@@ -372,3 +389,53 @@ export interface APIError {
   detail?: string;
   [key: string]: any;
 }
+
+// ---------------------------------------------------------------------------
+// Match Lineup Types — Escalação tática por partida
+// ---------------------------------------------------------------------------
+
+/** Dados de um único jogador no payload de criação de escalação (input). */
+export interface MatchLineupPlayerData {
+  player_id: number;
+  position: string;
+  x_position: number;
+  y_position: number;
+}
+
+/** Payload completo do POST /api/v1/matches/<match_id>/lineup/ */
+export interface SubmitLineupRequest {
+  formation: string;
+  players: MatchLineupPlayerData[];
+}
+
+/** Jogador serializado na resposta da escalação (output). */
+export interface MatchLineupPlayer {
+  player: PlayerProfile;
+  position: string;
+  x_position: number;
+  y_position: number;
+}
+
+/** Escalação completa retornada pelo backend (output). */
+export interface MatchLineup {
+  id: number;
+  /** ID da partida (não o objeto expandido) */
+  match: number;
+  team: Team;
+  formation: string;
+  submitted_by: User;
+  players: MatchLineupPlayer[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** As 7 formações disponíveis no TacticalBoard — mantido em sync com o backend. */
+export type TacticalFormation =
+  | '4-3-3'
+  | '4-2-3-1'
+  | '4-4-2'
+  | '5-3-2'
+  | '4-3-2-1'
+  | '4-1-2-1-2'
+  | '4-3-3(4)';
+

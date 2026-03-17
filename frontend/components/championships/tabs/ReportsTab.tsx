@@ -184,23 +184,23 @@ export function ReportsTab({ championshipId }: ReportsTabProps) {
                     <div className="flex-1">
                       <div className="flex items-start justify-between mb-4">
                         <div>
-                          <h3 className="font-bold text-text mb-1">
-                            {contestation.match.home_team.name} {contestation.match.home_score} ×{' '}
-                            {contestation.match.away_score} {contestation.match.away_team.name}
-                          </h3>
-                          <p className="text-sm text-muted2">
-                            Partida realizada em{' '}
-                            {formatDate(contestation.match.scheduled_date)}
-                          </p>
-                        </div>
-                        <Badge className={status.color}>
-                          <StatusIcon className="w-3 h-3 mr-1" />
-                          {status.label}
-                        </Badge>
-                      </div>
+                         <h3 className="font-bold text-text mb-1">
+                             {contestation.match.home_team.name} {contestation.match.home_score} ×{' '}
+                             {contestation.match.away_score} {contestation.match.away_team.name}
+                           </h3>
+                           <p className="text-sm text-muted2">
+                             Partida realizada em{' '}
+                             {formatDate(contestation.match.scheduled_date)}
+                           </p>
+                         </div>
+                         <Badge className={status.color}>
+                           <StatusIcon className="w-3 h-3 mr-1" />
+                           {status.label}
+                         </Badge>
+                       </div>
 
-                      <div className="bg-panel2 rounded-xl p-4 mb-4">
-                        <div className="flex items-start gap-3 mb-3">
+                       <div className="bg-panel2 rounded-xl p-4 mb-4">
+                         <div className="flex items-start gap-3 mb-3">
                           <AlertCircle className="w-5 h-5 text-warning mt-0.5" />
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-text mb-1">
@@ -323,23 +323,23 @@ export function ReportsTab({ championshipId }: ReportsTabProps) {
                     <div className="flex-1">
                       <div className="flex items-start justify-between mb-4">
                         <div>
-                          <h3 className="font-bold text-text mb-1">
-                            {contestation.match.home_team.name} {contestation.match.home_score} ×{' '}
-                            {contestation.match.away_score} {contestation.match.away_team.name}
-                          </h3>
-                          <p className="text-sm text-muted2">
-                            Partida realizada em{' '}
-                            {formatDate(contestation.match.scheduled_date)}
-                          </p>
-                        </div>
-                        <Badge className={status.color}>
-                          <StatusIcon className="w-3 h-3 mr-1" />
-                          {status.label}
-                        </Badge>
-                      </div>
+                         <h3 className="font-bold text-text mb-1">
+                             {contestation.match.home_team.name} {contestation.match.home_score} ×{' '}
+                             {contestation.match.away_score} {contestation.match.away_team.name}
+                           </h3>
+                           <p className="text-sm text-muted2">
+                             Partida realizada em{' '}
+                             {formatDate(contestation.match.scheduled_date)}
+                           </p>
+                         </div>
+                         <Badge className={status.color}>
+                           <StatusIcon className="w-3 h-3 mr-1" />
+                           {status.label}
+                         </Badge>
+                       </div>
 
-                      <div className="bg-panel2 rounded-xl p-4 mb-4">
-                        <p className="text-sm font-semibold text-text mb-1">
+                       <div className="bg-panel2 rounded-xl p-4 mb-4">
+                         <p className="text-sm font-semibold text-text mb-1">
                           {reasonLabels[contestation.reason as keyof typeof reasonLabels]}
                         </p>
                         <p className="text-sm text-muted mb-3">{contestation.description}</p>

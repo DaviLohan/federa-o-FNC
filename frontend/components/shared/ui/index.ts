@@ -16,3 +16,4 @@ export { PageHeader } from './PageHeader';
 export { DataTable } from './DataTable';
 export { FilterBar } from './FilterBar';
 export { Drawer } from './Drawer';
+export { TermsModal } from './TermsModal';

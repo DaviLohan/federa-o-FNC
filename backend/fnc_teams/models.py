@@ -219,6 +219,64 @@ class Formation(models.Model):
         super().save(*args, **kwargs)
 
 
+class TeamLeaveRequest(models.Model):
+    """
+    Solicitação de saída de um jogador de um time.
+    O dono do time deve aprovar ou recusar antes de o jogador ser removido.
+    """
+
+    class Status(models.TextChoices):
+        PENDING  = 'PENDING',  _('Pendente')
+        APPROVED = 'APPROVED', _('Aprovado')
+        REJECTED = 'REJECTED', _('Recusado')
+
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name='leave_requests',
+        verbose_name=_('time')
+    )
+    player = models.ForeignKey(
+        PlayerProfile,
+        on_delete=models.CASCADE,
+        related_name='leave_requests',
+        verbose_name=_('jogador')
+    )
+    reason = models.TextField(_('motivo'), blank=True)
+    status = models.CharField(
+        _('status'),
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING
+    )
+    created_at  = models.DateTimeField(_('solicitado em'), auto_now_add=True)
+    resolved_at = models.DateTimeField(_('resolvido em'), null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='resolved_leave_requests',
+        verbose_name=_('resolvido por')
+    )
+
+    class Meta:
+        verbose_name = _('solicitação de saída')
+        verbose_name_plural = _('solicitações de saída')
+        ordering = ['-created_at']
+        # Um jogador só pode ter 1 solicitação pendente por time
+        constraints = [
+            models.UniqueConstraint(
+                fields=['team', 'player'],
+                condition=models.Q(status='PENDING'),
+                name='unique_pending_leave_request'
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.player} quer sair de {self.team} ({self.status})'
+
+
 class FormationPosition(models.Model):
     """
     Posição de um jogador em uma formação específica.

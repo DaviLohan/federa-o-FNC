@@ -58,9 +58,9 @@ export function GlobalSearch() {
       {/* Search Trigger Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 rounded-lg border border-border bg-surface1 px-3 py-2 text-sm text-muted transition-colors hover:border-gold/30 hover:text-text"
+        className="flex items-center gap-2 rounded-lg border border-border bg-surface1 p-2 text-sm text-muted transition-colors hover:border-gold/30 hover:text-text sm:px-3 sm:py-2"
       >
-        <Search className="h-4 w-4" />
+        <Search className="h-4 w-4 shrink-0" />
         <span className="hidden sm:inline">Buscar...</span>
         <kbd className="hidden rounded bg-surface2 px-2 py-0.5 text-xs text-muted lg:inline">
           ⌘K

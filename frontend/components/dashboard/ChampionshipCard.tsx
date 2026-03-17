@@ -48,7 +48,7 @@ export function ChampionshipCard({ championship }: ChampionshipCardProps) {
         {/* Header */}
         <div className="mb-4 flex items-start justify-between gap-4">
           <div className="flex-1">
-            <h3 className="mb-2 text-xl font-bold text-text group-hover:text-warning transition-colors">
+            <h3 className="mb-2 text-xl font-bold text-text group-hover:text-warning transition-colors truncate">
               {championship.name}
             </h3>
             {championship.description && (
@@ -117,7 +117,7 @@ export function ChampionshipCard({ championship }: ChampionshipCardProps) {
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-border/50 pt-4">
           <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
-          <span className="text-sm text-gold opacity-0 transition-opacity group-hover:opacity-100">
+          <span className="text-sm text-gold opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
             Ver detalhes →
           </span>
         </div>

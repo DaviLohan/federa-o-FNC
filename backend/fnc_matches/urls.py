@@ -10,7 +10,8 @@ from .views import (
     MatchConfirmationViewSet,
     PenaltyViewSet,
     PenaltyAppealViewSet,
-    StatisticsViewSet
+    StatisticsViewSet,
+    MatchLineupView,
 )
 
 # Criar router e registrar ViewSets
@@ -29,4 +30,6 @@ router.register(r'statistics', StatisticsViewSet, basename='statistics')
 # URLs
 urlpatterns = [
     path('', include(router.urls)),
+    # Escalação tática por partida — fora do router pois tem parâmetro aninhado
+    path('matches/<int:match_id>/lineup/', MatchLineupView.as_view(), name='match-lineup'),
 ]
