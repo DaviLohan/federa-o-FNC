@@ -11,7 +11,6 @@ export { ToastProvider, useToast } from './Toast';
 export { Tabs, Tab } from './Tabs';
 export { TabsPremium, TabPremium } from './TabsPremium';
 export { Modal } from './Modal';
-export { Modal as ModalV2 } from './ModalV2';
 export { EmptyState } from './EmptyState';
 export { PageHeader } from './PageHeader';
 export { DataTable } from './DataTable';
