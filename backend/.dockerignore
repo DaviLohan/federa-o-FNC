@@ -1,0 +1,14 @@
+.git
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+.env
+media
+staticfiles
+htmlcov
+.coverage
+*.log
+*:Zone.Identifier

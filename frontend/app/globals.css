@@ -1,0 +1,268 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* === IMPERIUM PREMIUM IDENTITY === */
+  
+  /* Base (Black/Carbon) */
+  --bg: 7 9 13;            /* #07090D - Deep black body background */
+  --bg0: #07090D;          /* Deep black - body background */
+  --bg1: #0B0F16;          /* Carbon - sidebar/topbar */
+  --surface1: 11 15 22;    /* #0B0F16 - Surface 1 (carbon) */
+  --surface2: 16 24 40;    /* #101828 - Surface 2 (dark panel) */
+  --panel: #101828;        /* Dark panel - cards */
+  --panel2: #0D1422;       /* Dark input - inputs/internal areas */
+  
+  /* Borders */
+  --border: 255 255 255;   /* RGB para uso com opacity */
+  --stroke: rgba(255, 255, 255, 0.08);      /* Default border */
+  --stroke2: rgba(214, 161, 30, 0.18);      /* Gold border (focus) */
+  
+  /* Text */
+  --text: 255 255 255;     /* RGB para uso com opacity */
+  --text-primary: rgba(255, 255, 255, 0.92);    /* Primary text */
+  --muted: 255 255 255;    /* RGB para uso com opacity */
+  --muted2: rgba(255, 255, 255, 0.45);          /* Placeholder text */
+  
+  /* Gold (Imperium Brand) */
+  --gold: 214 161 30;      /* #D6A11E - Gold base */
+  --gold-base: #D6A11E;    /* Gold base */
+  --gold2: #F3D36B;        /* Gold light (hover) */
+  --gold3: #B78312;        /* Gold dark (active) */
+  --gold-alpha: rgba(214, 161, 30, 0.15);  /* Gold background */
+  
+  /* Silver/White (Logo detail) */
+  --silver: rgba(255, 255, 255, 0.90);
+  
+  /* Red (Logo accent) */
+  --accent-red: #E53935;
+  
+  /* States */
+  --success: #2ECC71;
+  --warning: #F1C40F;
+  --error: #E53935;
+  --danger: #E53935;
+  --info: #3B82F6;
+  
+  /* Compatibility aliases */
+  --brand: #D6A11E;        /* Gold = new brand color */
+  --brand2: #F3D36B;       /* Gold light */
+  
+  /* Old neon colors mapped to Imperium (for gradual migration) */
+  --cyan: 214 161 30;      /* Mapped to gold */
+  --cyan2: 183 131 18;     /* Mapped to gold3 */
+  --teal: 214 161 30;      /* Mapped to gold */
+  --teal2: 183 131 18;     /* Mapped to gold3 */
+  --lime: 243 211 107;     /* Mapped to gold2 */
+  --lime2: 214 161 30;     /* Mapped to gold */
+  --green: 46 204 113;     /* Mapped to success */
+  --green2: 39 156 36;     /* Keep for success states */
+  --ice: 255 255 255;      /* Mapped to white */
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  position: relative;
+}
+
+body {
+  width: 100%;
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-text font-body antialiased;
+    background-color: #07090D;
+    background-image: radial-gradient(circle at top center, rgba(214, 161, 30, 0.06), transparent 40%);
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading font-semibold;
+  }
+  
+  h1 {
+    @apply text-3xl md:text-5xl lg:text-6xl;
+  }
+  
+  h2 {
+    @apply text-2xl md:text-4xl lg:text-5xl;
+  }
+  
+  h3 {
+    @apply text-xl md:text-2xl lg:text-3xl;
+  }
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Smooth transitions */
+* {
+  transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out,
+    color 0.2s ease-in-out;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--stroke);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  /* === GRADIENT & IMPERIUM UTILITIES === */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-gold via-gold2 to-gold;
+  }
+  
+  .gradient-border {
+    @apply relative p-[1px] bg-gradient-to-br from-gold3 via-gold to-gold2 rounded-3xl;
+  }
+  
+  /* === HOVER & INTERACTION === */
+  .card-hover {
+    @apply hover:-translate-y-1 hover:shadow-xl hover:shadow-gold/10 transition-all duration-300;
+  }
+  
+  .neon-glow-hover {
+    @apply transition-all duration-300 hover:shadow-lg hover:shadow-gold/15;
+  }
+  
+  /* === ANIMATIONS === */
+  .reveal-fade {
+    animation: reveal 0.5s ease-out both;
+  }
+  
+  .reveal-fade-delay-1 {
+    animation: reveal 0.5s ease-out 0.1s both;
+  }
+  
+  .reveal-fade-delay-2 {
+    animation: reveal 0.5s ease-out 0.2s both;
+  }
+  
+  /* === TABLE PREMIUM === */
+  .table-premium {
+    @apply w-full overflow-hidden rounded-3xl border border-border;
+  }
+  
+  .table-premium thead {
+    @apply sticky top-0 bg-surface1 backdrop-blur-sm border-b-2 border-border z-10;
+  }
+  
+  .table-premium thead th {
+    @apply px-3 py-3 text-left text-sm font-semibold text-text sm:px-6 sm:py-4;
+  }
+  
+  .table-premium tbody tr {
+    @apply border-b border-border/50 transition-colors duration-150;
+  }
+  
+  .table-premium tbody tr:nth-child(even) {
+    @apply bg-surface2/30;
+  }
+  
+  .table-premium tbody tr:hover {
+    @apply bg-gold/5 cursor-pointer;
+  }
+  
+  .table-premium tbody td {
+    @apply px-3 py-3 text-sm text-text sm:px-6 sm:py-4;
+  }
+  
+  /* === FORM CARD PREMIUM === */
+  .proof-card {
+    @apply transition-all duration-300;
+  }
+  
+  .proof-card:hover {
+    @apply shadow-lg shadow-gold/10;
+  }
+  
+  .form-card-premium {
+    @apply bg-surface1 rounded-3xl border border-border relative overflow-visible;
+  }
+  
+  .form-card-premium::before {
+    content: '';
+    @apply absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-gold3 via-gold to-gold2 opacity-50;
+  }
+  
+  /* === GRID LAYOUTS === */
+  .grid-cards {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6;
+  }
+}
+
+/* Toast and Drawer animations */
+@keyframes slide-in-bottom {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-bottom {
+  animation: slide-in-bottom 0.3s ease-out;
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+/* Shake animation for errors */
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-4px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(4px);
+  }
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}

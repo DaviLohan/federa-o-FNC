@@ -1,0 +1,32 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+<h2>🚨 [ADMIN] Partidas Pendentes de Walk-Over</h2>
+
+<p>Atenção, administrador!</p>
+
+<p>{{ matches_count }} partida(s) estão com mais de {{ hours }} horas de atraso e podem precisar de Walk-Over:</p>
+
+<div class="info-box">
+    <h3>Partidas Pendentes:</h3>
+    <ul>
+    {% for match in matches %}
+        <li>
+            <strong>#{match.id}:</strong> {{ match.home_team }} vs {{ match.away_team }}<br>
+            <small>Agendada: {{ match.scheduled_date }} | Atraso: {{ match.delay_hours }}h</small>
+        </li>
+    {% endfor %}
+    </ul>
+</div>
+
+<p><strong>Ações Recomendadas:</strong></p>
+<ul>
+    <li>Verificar status das partidas no admin</li>
+    <li>Contactar os times envolvidos</li>
+    <li>Declarar WO se necessário</li>
+</ul>
+
+<a href="{{ site_url }}/admin/fnc_matches/match/" class="button">Acessar Admin</a>
+
+<p><small>Este é um alerta automático gerado pelo sistema de detecção de WO.</small></p>
+{% endblock %}
