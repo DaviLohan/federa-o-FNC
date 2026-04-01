@@ -5,6 +5,7 @@ from django.utils.translation import gettext_lazy as _
 class Payment(models.Model):
     class Provider(models.TextChoices):
         MERCADO_PAGO = 'MERCADO_PAGO', _('Mercado Pago')
+        ASAAS = 'ASAAS', _('Asaas')  # legado
 
     class Status(models.TextChoices):
         PENDING = 'PENDING', _('Pendente')
@@ -74,7 +75,7 @@ class PaymentEvent(models.Model):
         null=True,
     )
     provider = models.CharField(
-        _('provedor'), max_length=30, choices=Payment.Provider.choices, default=Payment.Provider.MERCADO_PAGO
+        _('provedor'), max_length=30, choices=Payment.Provider.choices, default=Payment.Provider.ASAAS
     )
     event_type = models.CharField(_('tipo do evento'), max_length=100)
     gateway_event_id = models.CharField(_('ID do evento no gateway'), max_length=255, unique=True)

@@ -22,4 +22,14 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
             return obj == request.user
 
 
+class IsAdminOrSupervisor(permissions.BasePermission):
+    """
+    Permissão: apenas ADMIN ou SUPERVISOR.
+    """
 
+    def has_permission(self, request, view):
+        return (
+            request.user
+            and request.user.is_authenticated
+            and request.user.user_type in ['ADMIN', 'SUPERVISOR']
+        )

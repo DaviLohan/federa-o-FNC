@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { championshipsAPI, paymentsAPI, teamsAPI } from '@/lib/api';
+import { championshipsAPI, paymentsAPI, teamsAPI, usersAPI } from '@/lib/api';
 import { Modal, Button, useToast } from '@/components/shared/ui';
-import { Trophy, Users, DollarSign, AlertCircle, Copy, CheckCircle2, QrCode } from 'lucide-react';
+import { Trophy, Users, DollarSign, AlertCircle, Copy, CheckCircle2, QrCode, CreditCard } from 'lucide-react';
 import type { Championship, Payment, Team } from '@/types';
+import { useAuthStore } from '@/lib/auth-store';
 
 interface EnrollmentModalProps {
   isOpen: boolean;
@@ -14,23 +15,60 @@ interface EnrollmentModalProps {
   championship: Championship;
 }
 
+function formatCpf(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+function isValidCpf(cpf: string): boolean {
+  const digits = cpf.replace(/\D/g, '');
+  return digits.length === 11;
+}
+
 export function EnrollmentModal({ isOpen, onClose, championship }: EnrollmentModalProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
+  const setUser = useAuthStore((state) => state.setUser);
+
   const [selectedTeam, setSelectedTeam] = useState<number | null>(null);
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [isLoadingTeam, setIsLoadingTeam] = useState(true);
   const [checkoutPayment, setCheckoutPayment] = useState<Payment | null>(null);
+  const [cpfInput, setCpfInput] = useState('');
+  const [cpfError, setCpfError] = useState('');
+  const [hasCpf, setHasCpf] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       loadMyTeam();
+      loadUserCpf();
+      setCpfError('');
       return;
     }
-
     setCheckoutPayment(null);
   }, [isOpen]);
+
+  const loadUserCpf = async () => {
+    try {
+      const freshUser = await usersAPI.getMe();
+      setUser(freshUser);
+      if (freshUser.cpf) {
+        setHasCpf(true);
+        setCpfInput(freshUser.cpf);
+      } else {
+        setHasCpf(false);
+        setCpfInput('');
+      }
+    } catch {
+      setHasCpf(!!(user?.cpf));
+      setCpfInput(user?.cpf || '');
+    }
+  };
 
   const loadMyTeam = async () => {
     try {
@@ -53,21 +91,31 @@ export function EnrollmentModal({ isOpen, onClose, championship }: EnrollmentMod
     queryKey: ['payment-status', checkoutPayment?.id],
     queryFn: () => paymentsAPI.getStatus(checkoutPayment!.id),
     enabled: isOpen && !!checkoutPayment?.id,
-    refetchInterval: (query) => (query.state.data?.status === 'PAID' ? false : 5000),
-    staleTime: 3000,
+    refetchInterval: (query) => {
+      const s = query.state.data?.status;
+      if (s === 'PAID' || s === 'FAILED' || s === 'EXPIRED') return false;
+      return 2000;
+    },
+    staleTime: 0,
   });
 
   useEffect(() => {
     if (paymentStatusQuery.data?.status !== 'PAID' || !checkoutPayment) {
       return;
     }
-
     queryClient.invalidateQueries({ queryKey: ['championship', championship.id] });
     queryClient.invalidateQueries({ queryKey: ['enrollments', championship.id] });
     showToast('Pagamento confirmado! Seu time já está inscrito.', 'success');
     onClose();
     router.push(`/championships/${championship.id}`);
   }, [paymentStatusQuery.data?.status, checkoutPayment, championship.id, onClose, queryClient, router, showToast]);
+
+  const saveCpfMutation = useMutation({
+    mutationFn: (cpf: string) => usersAPI.updateMe({ cpf }),
+    onSuccess: (updatedUser) => {
+      setUser(updatedUser);
+    },
+  });
 
   const enrollMutation = useMutation({
     mutationFn: (teamId: number) => championshipsAPI.enroll(championship.id, { team_id: teamId }),
@@ -87,12 +135,10 @@ export function EnrollmentModal({ isOpen, onClose, championship }: EnrollmentMod
     },
     onError: (error: any) => {
       const data = error.response?.data;
-      const gatewayError = data?.gateway_error;
       const message =
         data?.error ||
         data?.detail ||
         data?.non_field_errors?.[0] ||
-        gatewayError?.message ||
         'Erro ao iniciar inscrição';
       showToast(message, 'error');
     },
@@ -113,11 +159,26 @@ export function EnrollmentModal({ isOpen, onClose, championship }: EnrollmentMod
     return `data:image/png;base64,${checkoutPayment.pix_qr_code_base64}`;
   }, [checkoutPayment?.pix_qr_code_base64]);
 
-  const handleEnroll = () => {
+  const handleEnroll = async () => {
     if (!selectedTeam) {
       showToast('Selecione um time', 'warning');
       return;
     }
+
+    if (!hasCpf) {
+      if (!isValidCpf(cpfInput)) {
+        setCpfError('Digite um CPF válido com 11 dígitos.');
+        return;
+      }
+      setCpfError('');
+      try {
+        await saveCpfMutation.mutateAsync(cpfInput.replace(/\D/g, ''));
+      } catch {
+        showToast('Não foi possível salvar o CPF. Tente novamente.', 'error');
+        return;
+      }
+    }
+
     enrollMutation.mutate(selectedTeam);
   };
 
@@ -135,21 +196,18 @@ export function EnrollmentModal({ isOpen, onClose, championship }: EnrollmentMod
   const formatCurrency = (value: string) => {
     const numValue = parseFloat(value);
     if (numValue === 0) return 'Gratuito';
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(numValue);
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValue);
   };
 
   const enrollmentFee = formatCurrency(championship.enrollment_fee);
   const prizePool = formatCurrency(championship.prize_pool);
+  const isSubmitting = saveCpfMutation.isPending || enrollMutation.isPending;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={checkoutPayment ? 'Pagamento Pix' : 'Inscrever Time'}>
       <div className="space-y-6">
         <div className="p-4 rounded-xl bg-surface2 border border-border">
           <h3 className="font-heading font-bold text-lg text-text mb-4">{championship.name}</h3>
-
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-gold/10 flex items-center justify-center">
@@ -160,7 +218,6 @@ export function EnrollmentModal({ isOpen, onClose, championship }: EnrollmentMod
                 <p className="text-sm font-semibold text-text">{prizePool}</p>
               </div>
             </div>
-
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
                 <DollarSign className="w-5 h-5 text-warning" />
@@ -193,24 +250,58 @@ export function EnrollmentModal({ isOpen, onClose, championship }: EnrollmentMod
                 </Button>
               </div>
             ) : (
-              <div>
-                <label className="block text-sm font-semibold text-text mb-3">Seu Time</label>
-                <div className="p-4 rounded-xl bg-surface2 border-2 border-gold">
-                  <div className="flex items-center gap-4">
-                    {myTeam.logo ? (
-                      <img src={myTeam.logo} alt={myTeam.name} className="w-12 h-12 rounded-lg object-cover" />
-                    ) : (
-                      <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-gold to-gold2 flex items-center justify-center text-2xl">
-                        ⚽
+              <>
+                <div>
+                  <label className="block text-sm font-semibold text-text mb-3">Seu Time</label>
+                  <div className="p-4 rounded-xl bg-surface2 border-2 border-gold">
+                    <div className="flex items-center gap-4">
+                      {myTeam.logo ? (
+                        <img src={myTeam.logo} alt={myTeam.name} className="w-12 h-12 rounded-lg object-cover" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-gold to-gold2 flex items-center justify-center text-2xl">
+                          ⚽
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-text">{myTeam.name}</h4>
+                        <p className="text-xs text-muted">{myTeam.abbreviation} • {myTeam.player_count} jogadores</p>
                       </div>
-                    )}
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-text">{myTeam.name}</h4>
-                      <p className="text-xs text-muted">{myTeam.abbreviation} • {myTeam.player_count} jogadores</p>
                     </div>
                   </div>
                 </div>
-              </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-text mb-2">
+                    <CreditCard className="w-4 h-4 inline mr-1.5 text-gold" />
+                    CPF para pagamento
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="000.000.000-00"
+                    value={hasCpf ? formatCpf(cpfInput) : cpfInput}
+                    disabled={hasCpf}
+                    onChange={(e) => {
+                      if (hasCpf) return;
+                      setCpfInput(formatCpf(e.target.value));
+                      setCpfError('');
+                    }}
+                    className={`w-full px-4 py-3 rounded-xl border text-sm transition-colors ${
+                      hasCpf
+                        ? 'bg-surface1 border-border text-muted cursor-not-allowed opacity-70'
+                        : cpfError
+                        ? 'bg-surface2 border-red-500 text-text focus:outline-none focus:ring-2 focus:ring-gold/40'
+                        : 'bg-surface2 border-border text-text focus:outline-none focus:ring-2 focus:ring-gold/40 focus:border-gold'
+                    }`}
+                  />
+                  {cpfError && <p className="text-xs text-red-400 mt-1">{cpfError}</p>}
+                  <p className="text-xs text-muted mt-1.5">
+                    {hasCpf
+                      ? 'CPF vinculado à sua conta. Para alterá-lo, acesse seu perfil.'
+                      : 'Necessário para processar o pagamento via Pix. Salvo no seu perfil para próximas inscrições.'}
+                  </p>
+                </div>
+              </>
             )}
 
             <div className="flex items-start gap-3 p-4 rounded-xl bg-gold/5 border border-gold/20">
@@ -225,8 +316,8 @@ export function EnrollmentModal({ isOpen, onClose, championship }: EnrollmentMod
 
             <div className="flex gap-3 pt-2">
               <Button variant="ghost" onClick={onClose} className="flex-1">Cancelar</Button>
-              <Button variant="primary" onClick={handleEnroll} disabled={!myTeam || enrollMutation.isPending} className="flex-1">
-                {enrollMutation.isPending ? 'Gerando Pix...' : 'Confirmar Inscrição'}
+              <Button variant="primary" onClick={handleEnroll} disabled={!myTeam || isSubmitting} className="flex-1">
+                {isSubmitting ? 'Gerando Pix...' : 'Confirmar Inscrição'}
               </Button>
             </div>
           </>

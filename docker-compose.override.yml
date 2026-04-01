@@ -1,0 +1,28 @@
+# docker-compose.override.yml
+#
+# Overrides para DESENVOLVIMENTO LOCAL.
+# Docker Compose carrega este arquivo automaticamente junto com docker-compose.yml.
+#
+# Para rodar em PRODUÇÃO sem estes overrides:
+#   docker compose -f docker-compose.yml up -d
+#
+# Para desenvolvimento (padrão, com auto-reload):
+#   docker compose up -d
+
+services:
+  db:
+    # Em dev, expor porta para acesso via pgAdmin/DBeaver local
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  backend:
+    # Em dev, usa runserver com auto-reload + settings de desenvolvimento
+    command: python manage.py runserver 0.0.0.0:8000
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - DJANGO_SETTINGS_MODULE=config.settings.development

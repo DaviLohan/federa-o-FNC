@@ -20,7 +20,7 @@ if (!API_URL) {
 }
 
 const baseURL = normalizeApiBaseUrl(API_URL);
-const PUBLIC_PATH_PREFIXES = ['/', '/home', '/login', '/register', '/championships'];
+const PUBLIC_PATH_PREFIXES = ['/', '/home', '/login', '/register', '/championships', '/verify-email', '/forgot-password', '/reset-password'];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));

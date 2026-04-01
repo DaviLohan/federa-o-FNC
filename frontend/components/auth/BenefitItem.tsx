@@ -16,9 +16,9 @@ export function BenefitItem({ icon, title, description, color = 'gold' }: Benefi
   };
 
   return (
-    <div className="flex items-start gap-4 group animate-reveal hover:-translate-y-1 transition-all duration-300">
+    <div className="flex items-start gap-3 group animate-reveal hover:-translate-y-1 transition-all duration-300">
       {/* Icon container */}
-      <div className={`flex-shrink-0 w-12 h-12 rounded-xl border flex items-center justify-center ${colorClasses[color]} transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-${color}/20`}>
+      <div className={`flex-shrink-0 w-10 h-10 rounded-xl border flex items-center justify-center ${colorClasses[color]} transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-${color}/20`}>
         {icon}
       </div>
       

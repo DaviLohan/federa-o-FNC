@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuthStore } from '@/lib/auth-store';
-import { authAPI, playerProfilesAPI } from '@/lib/api';
-import { apiClient } from '@/lib/api-client';
-import type { User } from '@/types';
+import {
+  Shield, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowLeft, ArrowRight,
+  Gamepad2, User as UserIcon, AtSign, Phone, Globe,
+} from 'lucide-react';
+import { authAPI } from '@/lib/api';
 import { Button } from '@/components/shared/ui/Button';
 import { DatePickerInput } from '@/components/shared/ui/DatePickerInput';
 import { Input } from '@/components/shared/ui/Input';
@@ -16,12 +17,11 @@ import { AuthLayout, RegisterMarketingPanel, StepIndicator } from '@/components/
 
 export default function RegisterPage() {
   const router = useRouter();
-  const login = useAuthStore((state) => state.login);
   const { showToast } = useToast();
   
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
-    // Etapa 1: Dados básicos
+    // Etapa 1: Dados basicos
     email: '',
     password: '',
     password_confirm: '',
@@ -30,7 +30,7 @@ export default function RegisterPage() {
     user_type: 'PLAYER' as const,
     platform: 'PC' as 'PS' | 'XBOX' | 'PC',
     
-    // Etapa 2: Perfil de jogador (só para PLAYER)
+    // Etapa 2: Perfil de jogador
     player_name: '',
     gamer_tag: '',
     shirt_number: '',
@@ -43,6 +43,8 @@ export default function RegisterPage() {
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
@@ -65,7 +67,6 @@ export default function RegisterPage() {
       return;
     }
 
-    // Sempre vai para etapa 2 (perfil de jogador é obrigatório)
     setStep(2);
   };
 
@@ -73,7 +74,6 @@ export default function RegisterPage() {
     e.preventDefault();
     setError('');
 
-    // Validações da etapa 2
     if (!formData.player_name || !formData.gamer_tag) {
       setError('Nome do jogador e Gamer Tag são obrigatórios');
       return;
@@ -97,7 +97,7 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      // Passo 1: Criar usuário
+      // Uma única chamada: conta + perfil + envio do código de verificação
       const registerData = {
         email: formData.email,
         password: formData.password,
@@ -106,51 +106,24 @@ export default function RegisterPage() {
         last_name: formData.last_name,
         platform: formData.platform,
         user_type: formData.user_type,
+        // Dados do perfil de jogador
+        player_name: formData.player_name,
+        gamer_tag: formData.gamer_tag,
+        shirt_number: parseInt(formData.shirt_number),
+        primary_position: formData.primary_position,
+        secondary_position: formData.secondary_position || undefined,
+        birth_date: formData.birth_date,
+        whatsapp: formData.whatsapp,
+        country: formData.country,
+        language: formData.language,
       };
       
       const response = await authAPI.register(registerData);
 
-      // Setar o token imediatamente para as requisições seguintes usarem o método padrão
-      apiClient.setToken(response.token);
-
-      // Passo 2: Atualizar perfil de jogador (sempre obrigatório)
-      let finalUser: User = response.user;
-
-      if (response.user.player_profile) {
-        const profileData = {
-          player_name: formData.player_name,
-          gamer_tag: formData.gamer_tag,
-          shirt_number: parseInt(formData.shirt_number),
-          primary_position: formData.primary_position,
-          secondary_position: formData.secondary_position || undefined,
-          birth_date: formData.birth_date,
-          whatsapp: formData.whatsapp,
-          country: formData.country,
-          language: formData.language,
-        };
-        
-        try {
-          await playerProfilesAPI.update(
-            response.user.player_profile.id, 
-            profileData,
-          );
-
-          // Buscar user atualizado para o store ter os dados do perfil preenchidos
-          try {
-            finalUser = await apiClient.get<User>('/api/v1/users/me/');
-          } catch (fetchErr) {
-            // Se falhar, usa o user do registro — não é crítico
-          }
-        } catch (profileErr: any) {
-          showToast('Conta criada, mas houve um problema ao salvar o perfil. Você pode editá-lo depois.', 'warning');
-        }
-      }
+      showToast('Conta criada! Verifique seu email para ativar.', 'success');
       
-      // Fazer login com o user mais atualizado disponível
-      login(response.token, finalUser);
-
-      showToast('Conta criada com sucesso! Bem-vindo ao IMPERIUM!', 'success');
-      router.push('/dashboard');
+      // Redirecionar para verificação de email
+      router.push(`/verify-email?email=${encodeURIComponent(response.email)}`);
     } catch (err: any) {
       console.error('Erro no registro:', err);
       const errorData = err.response?.data;
@@ -174,8 +147,8 @@ export default function RegisterPage() {
         showToast('Erro ao criar conta. Tente novamente.', 'error');
       }
       
-      // Se erro ocorreu na etapa 2, voltar para etapa 1
-      if (step === 2) {
+      // Se erro na validação do email/senha, voltar para etapa 1
+      if (err.response?.data?.email || err.response?.data?.password || err.response?.data?.password_confirm) {
         setStep(1);
       }
     } finally {
@@ -221,13 +194,25 @@ export default function RegisterPage() {
     },
   ];
 
+  const passwordToggle = (show: boolean, setShow: (v: boolean) => void) => (
+    <button
+      type="button"
+      onClick={() => setShow(!show)}
+      className="text-muted2 hover:text-muted transition-colors"
+      tabIndex={-1}
+      aria-label={show ? 'Esconder senha' : 'Mostrar senha'}
+    >
+      {show ? <EyeOff size={16} /> : <Eye size={16} />}
+    </button>
+  );
+
   return (
     <AuthLayout marketingPanel={<RegisterMarketingPanel />}>
       {/* Mobile Logo (apenas mobile) */}
       <div className="lg:hidden mb-8 text-center animate-reveal">
         <Link href="/" className="inline-flex items-center gap-3 group">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold/20 via-gold/20 to-gold2/20 border border-gold/30 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform duration-300">
-            🏆
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold/20 via-gold/20 to-gold2/20 border border-gold/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+            <Shield className="w-6 h-6 text-gold" />
           </div>
           <div>
             <div className="text-2xl font-bold text-gold">IMPERIUM</div>
@@ -237,16 +222,17 @@ export default function RegisterPage() {
       </div>
 
       {/* Form Card Premium */}
-      <div className={`form-card-premium p-8 sm:p-10 animate-reveal ${error ? 'animate-shake' : ''}`}>
+      <div className={`form-card-premium p-6 sm:p-8 animate-reveal ${error ? 'animate-shake' : ''}`}>
         <StepIndicator currentStep={step} totalSteps={2} steps={steps} />
 
         {error && (
-          <div className="bg-error/10 border border-error/20 text-error px-4 py-3 rounded-xl mb-6 text-sm whitespace-pre-line animate-slide-in-bottom">
-            {error}
+          <div className="bg-error/10 border border-error/20 text-error px-4 py-3 rounded-xl mb-6 text-sm whitespace-pre-line animate-slide-in-bottom flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
         )}
 
-        {/* ETAPA 1: Dados Básicos */}
+        {/* ETAPA 1: Dados Basicos */}
         {step === 1 && (
           <form onSubmit={handleStep1Submit} className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -258,6 +244,7 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 required
                 autoFocus
+                leftIcon={<UserIcon size={16} />}
               />
               <Input
                 label="Sobrenome"
@@ -266,6 +253,7 @@ export default function RegisterPage() {
                 value={formData.last_name}
                 onChange={handleChange}
                 required
+                leftIcon={<UserIcon size={16} />}
               />
             </div>
 
@@ -277,28 +265,33 @@ export default function RegisterPage() {
               onChange={handleChange}
               placeholder="seu@email.com"
               required
+              leftIcon={<Mail size={16} />}
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
                 label="Senha"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="Mínimo 8 caracteres"
                 required
                 minLength={8}
+                leftIcon={<Lock size={16} />}
+                rightElement={passwordToggle(showPassword, setShowPassword)}
               />
               <Input
                 label="Confirmar Senha"
-                type="password"
+                type={showPasswordConfirm ? 'text' : 'password'}
                 name="password_confirm"
                 value={formData.password_confirm}
                 onChange={handleChange}
                 placeholder="Digite novamente"
                 required
                 minLength={8}
+                leftIcon={<Lock size={16} />}
+                rightElement={passwordToggle(showPasswordConfirm, setShowPasswordConfirm)}
               />
             </div>
 
@@ -308,9 +301,9 @@ export default function RegisterPage() {
               value={formData.platform}
               onChange={handleChange}
               options={[
-                { value: 'PC', label: '🖥️ PC' },
-                { value: 'PS', label: '🎮 PlayStation' },
-                { value: 'XBOX', label: '🎮 Xbox' },
+                { value: 'PC', label: 'PC' },
+                { value: 'PS', label: 'PlayStation' },
+                { value: 'XBOX', label: 'Xbox' },
               ]}
               required
             />
@@ -321,7 +314,8 @@ export default function RegisterPage() {
               className="w-full mt-6"
               loading={isLoading}
             >
-              Continuar →
+              Continuar
+              <ArrowRight size={16} />
             </Button>
           </form>
         )}
@@ -332,7 +326,7 @@ export default function RegisterPage() {
             {/* Pro Club Info */}
             <div>
               <h3 className="text-base font-semibold text-text mb-4 flex items-center gap-2">
-                <span className="text-2xl">🎮</span>
+                <Gamepad2 className="w-5 h-5 text-gold" />
                 Informações do Pro Club
               </h3>
               <div className="space-y-4">
@@ -346,6 +340,7 @@ export default function RegisterPage() {
                     placeholder="Nome no jogo"
                     required
                     autoFocus
+                    leftIcon={<UserIcon size={16} />}
                   />
                   <Input
                     label="Gamer Tag"
@@ -355,6 +350,7 @@ export default function RegisterPage() {
                     onChange={handleChange}
                     placeholder="@gamertag"
                     required
+                    leftIcon={<AtSign size={16} />}
                   />
                 </div>
                 
@@ -389,10 +385,10 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {/* Informações Pessoais */}
+            {/* Informacoes Pessoais */}
             <div>
               <h3 className="text-base font-semibold text-text mb-4 flex items-center gap-2">
-                <span className="text-2xl">👤</span>
+                <UserIcon className="w-5 h-5 text-gold" />
                 Informações Pessoais
               </h3>
               <div className="space-y-4">
@@ -412,6 +408,7 @@ export default function RegisterPage() {
                     onChange={handleChange}
                     placeholder="+55 11 99999-9999"
                     required
+                    leftIcon={<Phone size={16} />}
                   />
                 </div>
                 
@@ -423,6 +420,7 @@ export default function RegisterPage() {
                     value={formData.country}
                     onChange={handleChange}
                     required
+                    leftIcon={<Globe size={16} />}
                   />
                   <Select
                     label="Idioma"
@@ -444,7 +442,8 @@ export default function RegisterPage() {
                 onClick={() => setStep(1)}
                 className="flex-1"
               >
-                ← Voltar
+                <ArrowLeft size={16} />
+                Voltar
               </Button>
               <Button
                 type="submit"
@@ -467,10 +466,8 @@ export default function RegisterPage() {
             Faça login
           </Link>
         </p>
-        <Link href="/" className="text-muted hover:text-text text-sm inline-flex items-center gap-1 transition-colors">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
+        <Link href="/" className="text-muted hover:text-text text-sm inline-flex items-center gap-1 transition-colors group">
+          <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />
           Voltar para home
         </Link>
       </div>

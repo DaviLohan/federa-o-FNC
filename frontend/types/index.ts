@@ -8,7 +8,9 @@ export interface User {
   user_type: 'PLAYER' | 'TEAM_OWNER' | 'SUPERVISOR' | 'ADMIN';
   user_type_display: string;
   platform: 'PS' | 'XBOX' | 'PC';
+  cpf: string | null;
   is_active: boolean;
+  is_email_verified: boolean;
   date_joined: string;
   last_login: string | null;
   player_profile: PlayerProfile | null;
@@ -57,6 +59,13 @@ export interface LoginResponse {
   user: User;
 }
 
+// Login 403 — email não verificado
+export interface LoginRequiresVerificationResponse {
+  error: string;
+  requires_verification: true;
+  email: string;
+}
+
 export interface RegisterRequest {
   email: string;
   password: string;
@@ -65,12 +74,63 @@ export interface RegisterRequest {
   last_name: string;
   user_type: 'PLAYER';
   platform: 'PS' | 'XBOX' | 'PC';
+  // Campos do perfil de jogador
+  player_name?: string;
+  gamer_tag?: string;
+  shirt_number?: number;
+  primary_position?: string;
+  secondary_position?: string;
+  birth_date?: string;
+  whatsapp?: string;
+  country?: string;
+  language?: string;
 }
 
 export interface RegisterResponse {
   message: string;
+  email: string;
+}
+
+// Verificação de email
+export interface VerifyEmailRequest {
+  email: string;
+  code: string;
+}
+
+export interface VerifyEmailResponse {
+  message: string;
   token: string;
   user: User;
+}
+
+// Reenvio de código de verificação
+export interface ResendVerificationRequest {
+  email: string;
+}
+
+export interface ResendVerificationResponse {
+  message: string;
+}
+
+// Esqueci minha senha
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ForgotPasswordResponse {
+  message: string;
+}
+
+// Redefinição de senha
+export interface ResetPasswordRequest {
+  email: string;
+  code: string;
+  new_password: string;
+  new_password_confirm: string;
+}
+
+export interface ResetPasswordResponse {
+  message: string;
 }
 
 // Team Types

@@ -119,9 +119,9 @@ export function Hero() {
             whileTap={{ scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 400, damping: 17 }}
           >
-            <Link href="/championships">
+            <Link href="/login">
               <Button variant="secondary" size="lg">
-                Ver campeonatos
+                Login
               </Button>
             </Link>
           </motion.div>

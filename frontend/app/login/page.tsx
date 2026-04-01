@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { authAPI } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/utils/errors';
@@ -22,6 +23,7 @@ export default function LoginPage() {
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +36,17 @@ export default function LoginPage() {
       showToast('Login realizado com sucesso!', 'success');
       router.push('/dashboard');
     } catch (err: any) {
+      // Handle 403 — email não verificado
+      if (
+        err.response?.status === 403 &&
+        err.response?.data?.requires_verification
+      ) {
+        const email = err.response.data.email || formData.email;
+        showToast('Email não verificado. Redirecionando...', 'warning');
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+        return;
+      }
+
       const errorMsg = extractErrorMessage(err);
       setError(errorMsg);
       showToast(errorMsg, 'error');
@@ -65,8 +78,9 @@ export default function LoginPage() {
         {/* Form Card */}
         <div className={`form-card-premium bg-surface1 border border-border rounded-2xl p-8 ${error ? 'animate-shake' : ''}`}>
           {error && (
-            <div className="bg-error/10 border border-error/20 text-error px-4 py-3 rounded-xl mb-6 text-sm animate-slide-in-bottom">
-              {error}
+            <div className="bg-error/10 border border-error/20 text-error px-4 py-3 rounded-xl mb-6 text-sm animate-slide-in-bottom flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
@@ -80,18 +94,41 @@ export default function LoginPage() {
               placeholder="seu@email.com"
               required
               disabled={isLoading}
+              leftIcon={<Mail size={16} />}
             />
 
-            <Input
-              label="Senha"
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="••••••••"
-              required
-              disabled={isLoading}
-            />
+            <div>
+              <Input
+                label="Senha"
+                type={showPassword ? 'text' : 'password'}
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="••••••••"
+                required
+                disabled={isLoading}
+                leftIcon={<Lock size={16} />}
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-muted2 hover:text-muted transition-colors"
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Esconder senha' : 'Mostrar senha'}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                }
+              />
+              <div className="mt-2 text-right">
+                <Link
+                  href="/forgot-password"
+                  className="text-gold/80 hover:text-gold text-sm font-medium transition-colors"
+                >
+                  Esqueci minha senha
+                </Link>
+              </div>
+            </div>
 
             <Button
               type="submit"
@@ -118,7 +155,7 @@ export default function LoginPage() {
               href="/" 
               className="text-muted2 hover:text-muted text-sm flex items-center justify-center gap-2 transition-colors group"
             >
-              <span className="transition-transform group-hover:-translate-x-1">←</span>
+              <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />
               Voltar para home
             </Link>
           </div>

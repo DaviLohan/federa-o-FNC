@@ -29,8 +29,12 @@ DATABASES = {
 
 # ─── Email ─────────────────────────────────────────────────────────────────────
 
-# Exibe emails no console em vez de enviar
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Em dev, o EMAIL_BACKEND vem do .env.
+# Para voltar ao console (sem enviar emails de verdade), basta setar no .env:
+#   EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+
+# Em dev, verificação de email é opcional (caso esteja usando console backend)
+ACCOUNT_EMAIL_VERIFICATION = 'optional'
 
 # ─── CORS ──────────────────────────────────────────────────────────────────────
 

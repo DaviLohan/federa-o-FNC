@@ -4,11 +4,13 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authtoken.models import Token
+from rest_framework.views import APIView
 from django.contrib.auth import get_user_model, authenticate
 from django.db.models import Q
 
-from .models import PlayerProfile, TeamOwnerProfile
-from .permissions import IsOwnerOrReadOnly
+from .models import PlayerProfile, TeamOwnerProfile, VerificationCode
+from .permissions import IsOwnerOrReadOnly, IsAdminOrSupervisor
+from .services import VerificationService
 from .serializers import (
     UserSerializer,
     UserCreateSerializer,
@@ -17,7 +19,11 @@ from .serializers import (
     PlayerProfileListSerializer,
     TeamOwnerProfileSerializer,
     TeamOwnerProfileListSerializer,
-    ChangePasswordSerializer
+    ChangePasswordSerializer,
+    VerifyEmailSerializer,
+    ResendVerificationSerializer,
+    ForgotPasswordSerializer,
+    ResetPasswordSerializer,
 )
 
 User = get_user_model()
@@ -51,6 +57,9 @@ class UserViewSet(viewsets.ModelViewSet):
         """Define permissões por ação."""
         if self.action in ['create', 'login']:
             return [AllowAny()]
+        if self.action == 'list':
+            # Apenas admins/supervisors podem listar todos os usuários
+            return [IsAuthenticated(), IsAdminOrSupervisor()]
         return [IsAuthenticated()]
     
     def get_queryset(self):
@@ -75,42 +84,38 @@ class UserViewSet(viewsets.ModelViewSet):
     
     def create(self, request, *args, **kwargs):
         """
-        Registra novo usuário e retorna token de autenticação.
+        Registra novo usuário, cria perfil preenchido e envia código de verificação.
+        NÃO retorna token — o usuário precisa verificar o email primeiro.
         
         Body:
-            - email: Email do usuário
-            - password: Senha
-            - password_confirm: Confirmação da senha
-            - first_name: Primeiro nome
-            - last_name: Sobrenome
+            - email, password, password_confirm, first_name, last_name
             - user_type: PLAYER ou TEAM_OWNER
-            - platform: PLAYSTATION, XBOX, PC
+            - platform: PS, XBOX, PC
+            - player_name, gamer_tag, shirt_number, primary_position, etc.
         
         Retorna:
-            - token: Token de autenticação
-            - user: Dados completos do usuário
+            - message: Mensagem de sucesso
+            - email: Email do usuário (para uso no frontend)
         """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         
-        # Criar ou recuperar token (get_or_create para suportar reativação)
-        token, _ = Token.objects.get_or_create(user=user)
+        # Enviar código de verificação de email
+        VerificationService.send_verification_email(user)
         
-        # Retornar usuário com token
-        user_serializer = UserDetailSerializer(user)
         headers = self.get_success_headers(serializer.data)
         
         return Response({
-            'message': 'Usuário registrado com sucesso.',
-            'token': token.key,
-            'user': user_serializer.data
+            'message': 'Conta criada com sucesso. Verifique seu email para ativar sua conta.',
+            'email': user.email,
         }, status=status.HTTP_201_CREATED, headers=headers)
     
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def login(self, request):
         """
         Realiza login do usuário e retorna token de autenticação.
+        Se o email não está verificado, retorna 403 com requires_verification.
         
         Body:
             - email: Email do usuário
@@ -143,6 +148,14 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
+        # Verificar se o email foi verificado
+        if not user.is_email_verified:
+            return Response({
+                'error': 'Email não verificado. Verifique seu email para ativar sua conta.',
+                'requires_verification': True,
+                'email': user.email,
+            }, status=status.HTTP_403_FORBIDDEN)
+        
         # Criar ou recuperar token
         token, created = Token.objects.get_or_create(user=user)
         
@@ -153,11 +166,17 @@ class UserViewSet(viewsets.ModelViewSet):
             'user': serializer.data
         })
     
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated])
     def me(self, request):
         """
-        Retorna os dados do usuário autenticado.
+        GET: Retorna os dados do usuário autenticado.
+        PATCH: Atualiza dados do usuário autenticado (ex: cpf).
         """
+        if request.method == 'PATCH':
+            serializer = UserDetailSerializer(request.user, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
         serializer = UserDetailSerializer(request.user)
         return Response(serializer.data)
     
@@ -356,3 +375,188 @@ class TeamOwnerProfileViewSet(viewsets.ModelViewSet):
             {'message': 'Perfil de dono de time desativado com sucesso.'},
             status=status.HTTP_200_OK
         )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Views de autenticação por email (verificação + reset de senha)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class VerifyEmailView(APIView):
+    """
+    POST /api/v1/auth/verify-email/
+    
+    Verifica o email do usuário com código de 6 dígitos.
+    Após verificação bem-sucedida, retorna token para login automático.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = VerifyEmailSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        code = serializer.validated_data['code']
+
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if user is None:
+            return Response(
+                {'error': 'Não foi possível processar a solicitação.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if user.is_email_verified:
+            return Response(
+                {'error': 'Email já verificado. Faça login normalmente.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        success, error_msg, _ = VerificationService.validate_code(
+            user=user,
+            code=code,
+            code_type=VerificationCode.CodeType.EMAIL_VERIFICATION
+        )
+
+        if not success:
+            return Response(
+                {'error': str(error_msg)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Marcar email como verificado
+        user.is_email_verified = True
+        user.save(update_fields=['is_email_verified'])
+
+        # Login automático — retorna token
+        token, _ = Token.objects.get_or_create(user=user)
+        user_serializer = UserDetailSerializer(user)
+
+        return Response({
+            'message': 'Email verificado com sucesso!',
+            'token': token.key,
+            'user': user_serializer.data,
+        })
+
+
+class ResendVerificationView(APIView):
+    """
+    POST /api/v1/auth/resend-verification/
+    
+    Reenvia o código de verificação de email (com rate limiting).
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ResendVerificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+
+        # Sempre retorna sucesso para não expor se o email existe
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if user is None or user.is_email_verified:
+            return Response({
+                'message': 'Se o email estiver cadastrado e não verificado, um novo código será enviado.',
+            })
+
+        # Verificar rate limiting
+        can_resend, seconds_remaining = VerificationService.can_resend(
+            user=user,
+            code_type=VerificationCode.CodeType.EMAIL_VERIFICATION
+        )
+
+        if not can_resend:
+            return Response({
+                'error': f'Aguarde {seconds_remaining} segundos antes de solicitar um novo código.',
+                'seconds_remaining': seconds_remaining,
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        VerificationService.send_verification_email(user)
+
+        return Response({
+            'message': 'Se o email estiver cadastrado e não verificado, um novo código será enviado.',
+        })
+
+
+class ForgotPasswordView(APIView):
+    """
+    POST /api/v1/auth/forgot-password/
+    
+    Envia código de redefinição de senha para o email informado.
+    Sempre retorna sucesso para não expor se o email existe.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ForgotPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        generic_message = 'Se o email estiver cadastrado, você receberá um código de redefinição de senha.'
+
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if user is None:
+            return Response({'message': generic_message})
+
+        # Verificar rate limiting
+        can_resend, seconds_remaining = VerificationService.can_resend(
+            user=user,
+            code_type=VerificationCode.CodeType.PASSWORD_RESET
+        )
+
+        if not can_resend:
+            return Response({
+                'error': f'Aguarde {seconds_remaining} segundos antes de solicitar um novo código.',
+                'seconds_remaining': seconds_remaining,
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        VerificationService.send_password_reset_email(user)
+
+        return Response({'message': generic_message})
+
+
+class ResetPasswordView(APIView):
+    """
+    POST /api/v1/auth/reset-password/
+    
+    Redefine a senha do usuário usando código de verificação de 6 dígitos.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        code = serializer.validated_data['code']
+        new_password = serializer.validated_data['new_password']
+
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if user is None:
+            return Response(
+                {'error': 'Não foi possível processar a solicitação.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        success, error_msg, _ = VerificationService.validate_code(
+            user=user,
+            code=code,
+            code_type=VerificationCode.CodeType.PASSWORD_RESET
+        )
+
+        if not success:
+            return Response(
+                {'error': str(error_msg)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Redefinir a senha
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+
+        # Invalidar todos os tokens existentes (força novo login)
+        Token.objects.filter(user=user).delete()
+
+        return Response({
+            'message': 'Senha redefinida com sucesso. Faça login com sua nova senha.',
+        })

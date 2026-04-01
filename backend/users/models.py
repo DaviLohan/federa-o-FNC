@@ -1,3 +1,7 @@
+import secrets
+from datetime import timedelta
+
+from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.db import models
 from django.utils import timezone
@@ -67,6 +71,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         choices=Platform.choices
     )
     
+    # Documento
+    cpf = models.CharField(_('CPF'), max_length=14, blank=True, null=True)
+
+    # Verificação de email
+    is_email_verified = models.BooleanField(_('email verificado'), default=False)
+
     # Status
     is_active = models.BooleanField(_('ativo'), default=True)
     is_staff = models.BooleanField(_('staff'), default=False)
@@ -250,3 +260,87 @@ class TeamOwnerProfile(models.Model):
     
     def __str__(self):
         return f'{self.user.full_name} (Owner)'
+
+
+class VerificationCode(models.Model):
+    """
+    Código de verificação de 6 dígitos para email verification e password reset.
+    
+    Cada código é de uso único, tem tempo de expiração e limite de tentativas.
+    """
+
+    class CodeType(models.TextChoices):
+        EMAIL_VERIFICATION = 'EMAIL_VERIFICATION', _('Verificação de Email')
+        PASSWORD_RESET = 'PASSWORD_RESET', _('Redefinição de Senha')
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='verification_codes',
+        verbose_name=_('usuário')
+    )
+    code = models.CharField(_('código'), max_length=6)
+    code_type = models.CharField(
+        _('tipo de código'),
+        max_length=20,
+        choices=CodeType.choices
+    )
+    is_used = models.BooleanField(_('utilizado'), default=False)
+    attempts = models.PositiveIntegerField(_('tentativas'), default=0)
+    created_at = models.DateTimeField(_('criado em'), auto_now_add=True)
+    expires_at = models.DateTimeField(_('expira em'))
+    used_at = models.DateTimeField(_('utilizado em'), null=True, blank=True)
+
+    class Meta:
+        verbose_name = _('código de verificação')
+        verbose_name_plural = _('códigos de verificação')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'code_type', '-created_at']),
+            models.Index(fields=['code', 'code_type']),
+        ]
+
+    def __str__(self):
+        return f'{self.code_type} - {self.user.email} ({self.code})'
+
+    @property
+    def is_expired(self):
+        """Verifica se o código expirou."""
+        return timezone.now() > self.expires_at
+
+    @property
+    def is_valid(self):
+        """Verifica se o código ainda pode ser utilizado."""
+        max_attempts = getattr(settings, 'VERIFICATION_CODE_MAX_ATTEMPTS', 5)
+        return (
+            not self.is_used
+            and not self.is_expired
+            and self.attempts < max_attempts
+        )
+
+    @staticmethod
+    def generate_code():
+        """Gera um código numérico de 6 dígitos criptograficamente seguro."""
+        return str(secrets.randbelow(900000) + 100000)
+
+    @classmethod
+    def create_code(cls, user, code_type):
+        """
+        Cria um novo código de verificação, invalidando códigos anteriores
+        do mesmo tipo para o mesmo usuário.
+        """
+        # Invalidar códigos anteriores não usados do mesmo tipo
+        cls.objects.filter(
+            user=user,
+            code_type=code_type,
+            is_used=False
+        ).update(is_used=True)
+
+        expiry_minutes = getattr(settings, 'VERIFICATION_CODE_EXPIRY_MINUTES', 15)
+
+        return cls.objects.create(
+            user=user,
+            code=cls.generate_code(),
+            code_type=code_type,
+            expires_at=timezone.now() + timedelta(minutes=expiry_minutes)
+        )

@@ -69,3 +69,6 @@ cloudflared.log
 
 # Debug artifacts
 erros/
+
+# OpenCode tooling
+.opencode/

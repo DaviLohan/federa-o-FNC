@@ -1,5 +1,6 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -448,11 +449,21 @@ class ChampionshipEnrollmentViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
 
-        payload = EnrollmentCheckoutService.create_checkout(
-            user=request.user,
-            championship=serializer.validated_data['championship_id'],
-            team=serializer.validated_data['team_id'],
-        )
+        try:
+            payload = EnrollmentCheckoutService.create_checkout(
+                user=request.user,
+                championship=serializer.validated_data['championship_id'],
+                team=serializer.validated_data['team_id'],
+            )
+        except ValidationError as e:
+            detail = e.detail
+            # Se for dict com 'error' e 'gateway_error', repassa direto
+            if isinstance(detail, dict):
+                return Response(detail, status=status.HTTP_400_BAD_REQUEST)
+            # Se for lista ou string
+            msg = detail[0] if isinstance(detail, list) else str(detail)
+            return Response({'error': str(msg)}, status=status.HTTP_400_BAD_REQUEST)
+
         return Response(
             {
                 'message': payload['message'],

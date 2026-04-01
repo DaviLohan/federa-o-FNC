@@ -13,9 +13,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # ─── Segurança ─────────────────────────────────────────────────────────────────
 
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-this-key-in-production')
+SECRET_KEY = config('SECRET_KEY')  # Obrigatório — sem fallback por segurança
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+# Remove entradas vazias e whitespace
+ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS if h.strip()]
 
 # ─── Apps instalados ───────────────────────────────────────────────────────────
 
@@ -126,6 +128,14 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '30/minute',
+        'user': '120/minute',
+    },
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
@@ -153,7 +163,7 @@ AUTHENTICATION_BACKENDS = [
 
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
-ACCOUNT_EMAIL_VERIFICATION = 'optional'
+ACCOUNT_EMAIL_VERIFICATION = config('ACCOUNT_EMAIL_VERIFICATION', default='mandatory')
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 
 # ─── Google OAuth ──────────────────────────────────────────────────────────────
@@ -175,7 +185,21 @@ REST_AUTH = {
     'USE_JWT': True,
     'JWT_AUTH_COOKIE': 'fnc-auth',
     'JWT_AUTH_REFRESH_COOKIE': 'fnc-refresh-token',
+    'JWT_AUTH_HTTPONLY': True,
+    'JWT_AUTH_SAMESITE': 'Lax',
     'USER_DETAILS_SERIALIZER': 'users.serializers.UserSerializer',
+}
+
+# ─── Simple JWT ────────────────────────────────────────────────────────────────
+
+from datetime import timedelta  # noqa: E402
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 # ─── Celery ────────────────────────────────────────────────────────────────────
@@ -201,14 +225,22 @@ CACHES = {
 
 # ─── Email ─────────────────────────────────────────────────────────────────────
 
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@fnc.com')
 SITE_URL = config('SITE_URL', default='http://localhost:3000')
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
+
+# ─── Verificação de Email ──────────────────────────────────────────────────────
+
+VERIFICATION_CODE_EXPIRY_MINUTES = 15       # Tempo de validade do código (minutos)
+VERIFICATION_CODE_MAX_ATTEMPTS = 5          # Máximo de tentativas por código
+VERIFICATION_CODE_RESEND_INTERVAL_SECONDS = 60  # Cooldown entre reenvios (segundos)
 
 # ─── Pagamentos ────────────────────────────────────────────────────────────────
 
@@ -216,8 +248,16 @@ STRIPE_PUBLIC_KEY = config('STRIPE_PUBLIC_KEY', default='')
 STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='')
 STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET', default='')
 
-MERCADOPAGO_ACCESS_TOKEN = config('MERCADOPAGO_ACCESS_TOKEN', default='')
-MERCADOPAGO_PUBLIC_KEY = config('MERCADOPAGO_PUBLIC_KEY', default='')
+# Mercado Pago (gateway ativo)
+MP_ACCESS_TOKEN = config('MP_ACCESS_TOKEN', default='')
+MP_WEBHOOK_SECRET = config('MP_WEBHOOK_SECRET', default='')
+MP_SANDBOX_PAYER_EMAIL = config('MP_SANDBOX_PAYER_EMAIL', default='')
+
+# Asaas (legado — mantido para histórico)
+ASAAS_API_KEY = config('ASAAS_API_KEY', default='')
+ASAAS_BASE_URL = config('ASAAS_BASE_URL', default='https://api-sandbox.asaas.com/v3')
+ASAAS_WEBHOOK_ACCESS_TOKEN = config('ASAAS_WEBHOOK_ACCESS_TOKEN', default='')
+ASAAS_WITHDRAWAL_WEBHOOK_TOKEN = config('ASAAS_WITHDRAWAL_WEBHOOK_TOKEN', default='')
 
 # ─── DRF Spectacular (API Docs) ───────────────────────────────────────────────
 

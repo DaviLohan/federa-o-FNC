@@ -4,6 +4,14 @@ import type {
   LoginResponse,
   RegisterRequest,
   RegisterResponse,
+  VerifyEmailRequest,
+  VerifyEmailResponse,
+  ResendVerificationRequest,
+  ResendVerificationResponse,
+  ForgotPasswordRequest,
+  ForgotPasswordResponse,
+  ResetPasswordRequest,
+  ResetPasswordResponse,
   User,
   PlayerProfile,
   Team,
@@ -41,6 +49,18 @@ export const authAPI = {
   
   getCurrentUser: () =>
     apiClient.get<User>('/api/v1/users/me/'),
+
+  verifyEmail: (data: VerifyEmailRequest) =>
+    apiClient.post<VerifyEmailResponse>('/api/v1/auth/verify-email/', data),
+
+  resendVerification: (data: ResendVerificationRequest) =>
+    apiClient.post<ResendVerificationResponse>('/api/v1/auth/resend-verification/', data),
+
+  forgotPassword: (data: ForgotPasswordRequest) =>
+    apiClient.post<ForgotPasswordResponse>('/api/v1/auth/forgot-password/', data),
+
+  resetPassword: (data: ResetPasswordRequest) =>
+    apiClient.post<ResetPasswordResponse>('/api/v1/auth/reset-password/', data),
 };
 
 // Users API
@@ -50,6 +70,9 @@ export const usersAPI = {
 
   getMe: () =>
     apiClient.get<User>('/api/v1/users/me/'),
+
+  updateMe: (data: Partial<User>) =>
+    apiClient.patch<User>('/api/v1/users/me/', data),
 
   getById: (id: number) =>
     apiClient.get<User>(`/api/v1/users/${id}/`),
