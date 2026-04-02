@@ -5,6 +5,7 @@ const apiUrl = rawApiUrl.replace(/\/api\/?$/, '');
 const apiUrlObj = new URL(apiUrl);
 
 const nextConfig = {
+  output: 'standalone',
   images: {
     remotePatterns: [
       {

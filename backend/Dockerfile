@@ -17,9 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar código da aplicação
 COPY . .
 
-# Coletar arquivos estáticos (pode falhar em build sem DB, ok para dev)
-RUN python manage.py collectstatic --noinput 2>/dev/null || true
+# Tornar o script de start executável
+RUN chmod +x start.sh
 
 EXPOSE 8000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "config.wsgi:application"]
+CMD ["./start.sh"]
