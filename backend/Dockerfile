@@ -17,8 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar código da aplicação
 COPY . .
 
-# Tornar o script de start executável
-RUN chmod +x start.sh
+# Tornar scripts de start executáveis
+RUN chmod +x start.sh start-celery-worker.sh start-celery-beat.sh
 
 EXPOSE 8000
 
