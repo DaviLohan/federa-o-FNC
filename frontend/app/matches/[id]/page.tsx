@@ -1,10 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { matchesAPI } from '@/lib/api';
 import { Card, Badge, Button, Skeleton } from '@/components/shared/ui';
 import { LineupDisplay } from '@/components/matches/LineupDisplay';
+import { MatchScorecard } from '@/components/matches/MatchScorecard';
+import { ReportStatusBar } from '@/components/matches/ReportStatusBar';
+import { EAReportModal } from '@/components/championships/modals';
+import { usePermissions } from '@/lib/hooks';
+import { ArrowLeft, SearchX, Handshake, BarChart3 } from 'lucide-react';
 
 export default function MatchDetailsPage() {
   const params = useParams();
@@ -18,6 +24,9 @@ export default function MatchDetailsPage() {
     enabled: !!matchId,
   });
 
+  const { canReportMatch, canContestMatch } = usePermissions();
+  const [eaReportingMatch, setEaReportingMatch] = useState(false);
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -30,7 +39,7 @@ export default function MatchDetailsPage() {
   if (!match) {
     return (
       <div className="text-center py-16">
-        <div className="text-6xl mb-4">❌</div>
+        <SearchX className="w-16 h-16 text-muted2 mx-auto mb-4" />
         <h2 className="text-xl font-semibold text-text mb-2">Partida não encontrada</h2>
         <p className="text-muted mb-6">Esta partida não existe ou foi removida.</p>
         <Button variant="primary" onClick={() => router.push('/matches')}>
@@ -39,28 +48,6 @@ export default function MatchDetailsPage() {
       </div>
     );
   }
-
-  const getStatusBadge = (status: string) => {
-    const variants: Record<string, any> = {
-      'SCHEDULED': 'default',
-      'IN_PROGRESS': 'info',
-      'FINISHED': 'success',
-      'CANCELLED': 'error',
-      'CONTESTED': 'warning',
-    };
-    return variants[status] || 'default';
-  };
-
-  const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      'SCHEDULED': 'Agendada',
-      'IN_PROGRESS': 'Em Andamento',
-      'FINISHED': 'Finalizada',
-      'CANCELLED': 'Cancelada',
-      'CONTESTED': 'Contestada',
-    };
-    return labels[status] || status;
-  };
 
   const getMatchTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
@@ -99,107 +86,42 @@ export default function MatchDetailsPage() {
           onClick={() => router.back()}
           className="text-muted hover:text-text"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
+          <ArrowLeft className="w-5 h-5" />
         </Button>
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-text">Detalhes da Partida</h1>
-          <p className="text-muted">#{match.id}</p>
+          <p className="text-muted text-sm">#{match.id}</p>
         </div>
       </div>
 
-      {/* Match Header Card */}
-      <Card>
-        <div className="space-y-6">
-          {/* Status and Type Badges */}
-          <div className="flex flex-wrap gap-2">
-            <Badge variant={getStatusBadge(match.status)}>
-              {getStatusLabel(match.status)}
-            </Badge>
-            <Badge variant="info">
-              {getMatchTypeLabel(match.match_type)}
-            </Badge>
-            {match.championship && (
-              <Badge variant="default">
-                {match.championship.name}
-              </Badge>
-            )}
-            {match.round_number && (
-              <Badge variant="default">
-                Rodada {match.round_number}
-              </Badge>
-            )}
-          </div>
+      {/* Context Badges (championship, round, match type) */}
+      <div className="flex flex-wrap gap-2">
+        <Badge variant="info">
+          {getMatchTypeLabel(match.match_type)}
+        </Badge>
+        {match.championship && (
+          <Badge variant="default">
+            {match.championship.name}
+          </Badge>
+        )}
+        {match.round_number && (
+          <Badge variant="default">
+            Rodada {match.round_number}
+          </Badge>
+        )}
+      </div>
 
-          {/* Teams and Score */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-            {/* Home Team */}
-            <div className="text-center md:text-right space-y-2">
-              <div className="flex items-center justify-center md:justify-end gap-3">
-                 {match.home_team.logo && (
-                   <img
-                     src={match.home_team.logo}
-                     alt={match.home_team.name}
-                     className="w-16 h-16 rounded-full object-cover"
-                   />
-                 )}
-                 <div>
-                   <h2 className="text-xl sm:text-2xl font-bold text-text">{match.home_team.name}</h2>
-                   <p className="text-muted text-sm">{match.home_team.abbreviation}</p>
-                 </div>
-               </div>
-               {match.winner?.id === match.home_team.id && (
-                <Badge variant="success" className="inline-flex">
-                  🏆 Vencedor
-                </Badge>
-              )}
-            </div>
-
-            {/* Score */}
-            <div className="text-center">
-              {match.status === 'FINISHED' ? (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-center gap-3 sm:gap-4">
-                    <span className="text-4xl sm:text-6xl font-bold text-text">{match.home_score}</span>
-                    <span className="text-2xl sm:text-3xl text-muted">×</span>
-                    <span className="text-4xl sm:text-6xl font-bold text-text">{match.away_score}</span>
-                  </div>
-                  {match.is_draw && (
-                    <Badge variant="warning" className="text-xs">
-                      Empate
-                    </Badge>
-                  )}
-                </div>
-              ) : (
-                <div className="text-3xl text-muted">VS</div>
-              )}
-            </div>
-
-            {/* Away Team */}
-            <div className="text-center md:text-left space-y-2">
-              <div className="flex items-center justify-center md:justify-start gap-3">
-                 <div className="md:order-2">
-                   <h2 className="text-xl sm:text-2xl font-bold text-text">{match.away_team.name}</h2>
-                   <p className="text-muted text-sm">{match.away_team.abbreviation}</p>
-                 </div>
-                 {match.away_team.logo && (
-                   <img
-                     src={match.away_team.logo}
-                     alt={match.away_team.name}
-                     className="w-16 h-16 rounded-full object-cover md:order-1"
-                   />
-                 )}
-               </div>
-               {match.winner?.id === match.away_team.id && (
-                <Badge variant="success" className="inline-flex">
-                  🏆 Vencedor
-                </Badge>
-              )}
-            </div>
-          </div>
-        </div>
-      </Card>
+      {/* Match Scorecard with Report Actions */}
+      <MatchScorecard match={match}>
+        <ReportStatusBar
+          match={match}
+          canReport={canReportMatch(match)}
+          canContest={canContestMatch(match)}
+          onReportEA={() => setEaReportingMatch(true)}
+          onReportManual={() => {}}
+          onContest={() => {}}
+        />
+      </MatchScorecard>
 
       {/* Match Information */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -266,8 +188,8 @@ export default function MatchDetailsPage() {
         {/* Friendly Match Info */}
         {match.match_type === 'FRIENDLY' && !match.championship && (
           <Card title="Partida Amistosa">
-            <div className="text-center py-8 space-y-2">
-              <div className="text-4xl">🤝</div>
+            <div className="text-center py-8 space-y-3">
+              <Handshake className="w-10 h-10 text-muted2 mx-auto" />
               <p className="text-muted">Esta é uma partida amistosa</p>
               <p className="text-muted2 text-sm">
                 Partidas amistosas não contam para campeonatos
@@ -288,36 +210,44 @@ export default function MatchDetailsPage() {
       {match.status === 'FINISHED' && (
         <Card title="Estatísticas da Partida">
           <div className="text-center py-12 space-y-3">
-            <div className="text-5xl">📊</div>
+            <BarChart3 className="w-12 h-12 text-muted2 mx-auto" />
             <h3 className="text-lg font-semibold text-text">Estatísticas em breve</h3>
-            <p className="text-muted text-sm">
-              Artilheiros, assistências e eventos da partida serão exibidos aqui
+            <p className="text-muted text-sm max-w-md mx-auto">
+              As estatísticas detalhadas desta partida serão exibidas aqui após o processamento do relatório EA Sports.
             </p>
           </div>
         </Card>
       )}
 
-      {/* Actions */}
-      <Card>
-        <div className="flex flex-col sm:flex-row gap-3">
+      {/* Navigation */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Button
+          variant="ghost"
+          onClick={() => router.push('/matches')}
+          className="flex-1"
+        >
+          Voltar para Partidas
+        </Button>
+
+        {match.championship && (
           <Button
-            variant="ghost"
-            onClick={() => router.push('/matches')}
+            variant="secondary"
+            onClick={() => router.push(`/championships/${match.championship!.id}`)}
             className="flex-1"
           >
-            Voltar para Partidas
+            Ver Campeonato
           </Button>
-          {match.championship && (
-            <Button
-              variant="primary"
-              onClick={() => router.push(`/championships`)}
-              className="flex-1"
-            >
-              Ver Campeonato
-            </Button>
-          )}
-        </div>
-      </Card>
+        )}
+      </div>
+
+      {/* EA Report Modal */}
+      {match && eaReportingMatch && (
+        <EAReportModal
+          match={match}
+          isOpen={true}
+          onClose={() => setEaReportingMatch(false)}
+        />
+      )}
     </div>
   );
 }

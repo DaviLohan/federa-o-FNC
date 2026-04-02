@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'player_stats',
     'fnc_notifications',
     'fnc_payments',
+    'ea_integration',
 ]
 
 SITE_ID = 1
@@ -210,6 +211,19 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+
+# Celery Beat — tarefas periódicas
+CELERY_BEAT_SCHEDULE = {
+    'sync-ea-matches-every-3-min': {
+        'task': 'ea_integration.sync_all_matches',
+        'schedule': 180.0,  # 3 minutos
+        'kwargs': {'match_types': ['friendlyMatch']},
+    },
+    'ea-api-health-check-every-10-min': {
+        'task': 'ea_integration.health_check_ea_api',
+        'schedule': 600.0,  # 10 minutos
+    },
+}
 
 # ─── Cache (Redis) ─────────────────────────────────────────────────────────────
 

@@ -70,6 +70,9 @@ def api_root(request):
                 'top_scorers': request.build_absolute_uri('/api/v1/top-scorers/'),
                 'leaderboard': request.build_absolute_uri('/api/v1/leaderboard/'),
                 'player_comparison': request.build_absolute_uri('/api/v1/player-comparison/'),
+                'ea_clubs': request.build_absolute_uri('/api/v1/ea/clubs/'),
+                'ea_matches': request.build_absolute_uri('/api/v1/ea/matches/'),
+                'ea_player_stats': request.build_absolute_uri('/api/v1/ea/player-stats/'),
             }
         },
         'authentication': {
@@ -102,6 +105,7 @@ urlpatterns = [
     path('api/v1/', include('player_stats.urls')),
     path('api/v1/', include('fnc_notifications.urls')),
     path('api/v1/', include('fnc_payments.urls')),
+    path('api/v1/', include('ea_integration.urls')),
 ]
 
 # Servir arquivos de media (desenvolvimento e produção sem nginx dedicado)

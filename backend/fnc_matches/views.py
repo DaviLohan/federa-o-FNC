@@ -18,6 +18,12 @@ from fnc_teams.models import Team, TeamMembership
 from users.models import PlayerProfile
 from fnc_notifications.models import Notification
 from .analytics_services import PlayerStats, TeamStats, MatchStats, ChampionshipStats
+from ea_integration.report_service import MatchReportEAService, MatchReportEAError
+from ea_integration.serializers import (
+    EAReportPreviewSerializer,
+    EAReportConfirmSerializer,
+    EAReportContestSerializer,
+)
 from .permissions import (
     IsMatchParticipantOrAdmin,
     CanSubmitMatchReport,
@@ -365,6 +371,133 @@ class MatchViewSet(viewsets.ModelViewSet):
             'count': matches.count(),
             'matches': MatchSerializer(matches, many=True).data
         })
+
+    # ── EA Report Actions ─────────────────────────────────────────────────
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='report-ea',
+        permission_classes=[IsAuthenticated, IsMatchParticipantOrAdmin],
+    )
+    def report_ea(self, request, pk=None):
+        """
+        Busca dados da EA API para esta partida e retorna preview
+        para confirmação do usuário.
+
+        POST /api/v1/matches/{id}/report-ea/
+
+        Response:
+        {
+            "ea_match_id": 123,
+            "played_at": "2025-...",
+            "home_team": { "team_id": 1, "team_name": "...", "score": 3, "players": [...] },
+            "away_team": { ... },
+            "warnings": [...],
+            "can_confirm": true
+        }
+        """
+        match = self.get_object()
+        service = MatchReportEAService()
+
+        try:
+            preview = service.fetch_ea_report(match, request.user)
+            serializer = EAReportPreviewSerializer(preview)
+            return Response(serializer.data)
+        except MatchReportEAError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Erro inesperado ao buscar dados EA: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='confirm-report',
+        permission_classes=[IsAuthenticated, IsMatchParticipantOrAdmin],
+    )
+    def confirm_report(self, request, pk=None):
+        """
+        Confirma o report EA e salva o resultado da partida.
+
+        POST /api/v1/matches/{id}/confirm-report/
+        Body: { "ea_match_id": 123 }
+
+        Cria Goals, Assists, Cards, MatchReport e atualiza estatísticas.
+        """
+        match = self.get_object()
+        serializer = EAReportConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        service = MatchReportEAService()
+
+        try:
+            updated_match = service.confirm_report(
+                match=match,
+                ea_match_id=serializer.validated_data['ea_match_id'],
+                user=request.user,
+            )
+            return Response({
+                'message': 'Resultado confirmado com sucesso!',
+                'match': MatchSerializer(updated_match).data,
+            })
+        except MatchReportEAError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Erro ao confirmar resultado: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='contest-report',
+        permission_classes=[IsAuthenticated, IsMatchParticipantOrAdmin],
+    )
+    def contest_report(self, request, pk=None):
+        """
+        Contesta os dados EA e cria uma Contestation.
+
+        POST /api/v1/matches/{id}/contest-report/
+        Body: { "ea_match_id": 123, "reason": "WRONG_SCORE", "description": "..." }
+        """
+        match = self.get_object()
+        serializer = EAReportContestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        service = MatchReportEAService()
+
+        try:
+            contestation = service.contest_report(
+                match=match,
+                ea_match_id=serializer.validated_data['ea_match_id'],
+                user=request.user,
+                reason=serializer.validated_data['reason'],
+                description=serializer.validated_data['description'],
+            )
+            return Response({
+                'message': 'Contestação enviada com sucesso!',
+                'contestation': ContestationSerializer(contestation).data,
+            })
+        except MatchReportEAError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Erro ao contestar resultado: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class MatchReportViewSet(viewsets.ModelViewSet):

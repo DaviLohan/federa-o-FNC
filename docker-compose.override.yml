@@ -26,3 +26,19 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
       - DJANGO_SETTINGS_MODULE=config.settings.development
+
+  celery_worker:
+    # Em dev, loglevel debug + auto-reload com watchdog
+    command: celery -A config worker --loglevel=debug --concurrency=1
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - DJANGO_SETTINGS_MODULE=config.settings.development
+
+  celery_beat:
+    # Em dev, loglevel debug
+    command: celery -A config beat --loglevel=debug
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - DJANGO_SETTINGS_MODULE=config.settings.development

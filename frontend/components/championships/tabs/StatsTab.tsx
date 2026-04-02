@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, EmptyState, Skeleton, Tabs, Tab } from '@/components/shared/ui';
 import { statisticsAPI } from '@/lib/api';
-import { Trophy, Target, Users, Award } from 'lucide-react';
+import { Trophy, Target, Users, BarChart3 } from 'lucide-react';
 
 interface StatsTabProps {
   championshipId: number;
@@ -44,9 +44,9 @@ export function StatsTab({ championshipId }: StatsTabProps) {
   if (playerStats.length === 0 && teamStats.length === 0) {
     return (
       <EmptyState
-        icon="📊"
+        icon={<BarChart3 className="w-16 h-16 text-gold mx-auto" />}
         title="Estatísticas ainda não disponíveis"
-        description="As estatísticas serão exibidas assim que as partidas começarem."
+        description="As estatísticas são geradas automaticamente a partir dos relatórios de partida via EA Sports. Reporte as partidas finalizadas para acompanhar artilheiros, assistências e desempenho dos times."
         size="lg"
       />
     );
@@ -68,9 +68,9 @@ export function StatsTab({ championshipId }: StatsTabProps) {
         <div>
           {topScorers.length === 0 ? (
             <EmptyState
-              icon="⚽"
+              icon={<Trophy className="w-12 h-12 text-gold mx-auto" />}
               title="Nenhum gol marcado ainda"
-              description="Os artilheiros aparecerão aqui assim que os gols começarem a ser marcados."
+              description="A tabela de artilheiros será preenchida conforme os gols forem registrados nos relatórios de partida."
             />
           ) : (
             <>
@@ -202,9 +202,9 @@ export function StatsTab({ championshipId }: StatsTabProps) {
         <div>
           {topAssisters.length === 0 ? (
             <EmptyState
-              icon="🎯"
+              icon={<Target className="w-12 h-12 text-gold mx-auto" />}
               title="Nenhuma assistência registrada"
-              description="As assistências aparecerão aqui assim que forem registradas."
+              description="O ranking de assistências será atualizado automaticamente a partir dos relatórios confirmados."
             />
           ) : (
             <Card>
@@ -268,9 +268,9 @@ export function StatsTab({ championshipId }: StatsTabProps) {
         <div>
           {bestTeams.length === 0 ? (
             <EmptyState
-              icon="👥"
+              icon={<Users className="w-12 h-12 text-gold mx-auto" />}
               title="Estatísticas de times indisponíveis"
-              description="As estatísticas dos times aparecerão aqui assim que as partidas começarem."
+              description="O desempenho dos times será calculado conforme as partidas forem reportadas e confirmadas."
             />
           ) : (
             <Card>

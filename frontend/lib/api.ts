@@ -34,6 +34,8 @@ import type {
   SubmitLineupRequest,
   Payment,
   EnrollmentCheckoutResponse,
+  EAReportPreview,
+  EAReportContestRequest,
 } from '@/types';
 
 // Auth API
@@ -205,6 +207,16 @@ export const matchesAPI = {
   
   submitReport: (id: number, formData: FormData) =>
     apiClient.upload<MatchReport>(`/api/v1/matches/${id}/submit_report/`, formData, 'post'),
+
+  // EA Report (Reportar Partida via EA API)
+  reportEA: (id: number) =>
+    apiClient.post<EAReportPreview>(`/api/v1/matches/${id}/report-ea/`),
+  
+  confirmReport: (id: number, data: { ea_match_id: number }) =>
+    apiClient.post(`/api/v1/matches/${id}/confirm-report/`, data),
+  
+  contestReport: (id: number, data: EAReportContestRequest) =>
+    apiClient.post(`/api/v1/matches/${id}/contest-report/`, data),
 };
 
 // Match Proposals API

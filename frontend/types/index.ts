@@ -552,3 +552,67 @@ export type TacticalFormation =
   | '4-3-2-1'
   | '4-1-2-1-2'
   | '4-3-3(4)';
+
+
+// ─── EA Report (Reportar Partida via EA API) ──────────────────────────────────
+
+/** Jogador interno vinculado a gamertag EA. */
+export interface EAReportMatchedPlayer {
+  id: number;
+  player_name: string;
+  gamer_tag: string | null;
+}
+
+/** Jogador na partida EA com stats e match com roster interno. */
+export interface EAReportPlayer {
+  gamertag: string;
+  position: string;
+  rating: string;
+  goals: number;
+  assists: number;
+  red_cards: number;
+  saves: number;
+  passes_made: number;
+  pass_attempts: number;
+  shots: number;
+  tackles_made: number;
+  tackle_attempts: number;
+  seconds_played: number;
+  is_disconnected: boolean;
+  matched_player: EAReportMatchedPlayer | null;
+}
+
+/** Time no preview do report EA. */
+export interface EAReportTeam {
+  team_id: number;
+  team_name: string;
+  ea_club_name: string;
+  score: number;
+  players: EAReportPlayer[];
+}
+
+/** Warning de validação no report EA. */
+export interface EAReportWarning {
+  type: string;
+  severity: 'info' | 'warning' | 'error' | 'critical';
+  message: string;
+}
+
+/** Preview completo do report EA retornado pelo backend. */
+export interface EAReportPreview {
+  ea_match_id: number;
+  ea_match_id_external: string;
+  played_at: string;
+  validation_status: string;
+  home_team: EAReportTeam;
+  away_team: EAReportTeam;
+  warnings: EAReportWarning[];
+  can_confirm: boolean;
+}
+
+/** Request para contestar um report EA. */
+export interface EAReportContestRequest {
+  ea_match_id: number;
+  reason: string;
+  description: string;
+}

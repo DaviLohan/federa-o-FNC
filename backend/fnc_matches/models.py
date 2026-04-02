@@ -271,11 +271,13 @@ class Goal(models.Model):
         verbose_name='time'
     )
     
-    # Minuto do gol
+    # Minuto do gol (nullable para dados importados da EA API que não têm minuto)
     minute = models.PositiveIntegerField(
         'minuto',
+        null=True,
+        blank=True,
         validators=[MinValueValidator(1), MaxValueValidator(120)],
-        help_text='Minuto em que o gol foi marcado (1-120)'
+        help_text='Minuto em que o gol foi marcado (1-120). Nulo quando importado da EA API.'
     )
     
     # Tipo do gol
@@ -368,9 +370,11 @@ class Card(models.Model):
         choices=CardType.choices
     )
     
-    # Minuto
+    # Minuto (nullable para dados importados da EA API que não têm minuto)
     minute = models.PositiveIntegerField(
         'minuto',
+        null=True,
+        blank=True,
         validators=[MinValueValidator(1), MaxValueValidator(120)]
     )
     

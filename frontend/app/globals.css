@@ -210,10 +210,6 @@ a {
     @apply bg-surface1 rounded-3xl border border-border relative overflow-visible;
   }
   
-  .form-card-premium::before {
-    content: '';
-    @apply absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-gold3 via-gold to-gold2 opacity-50;
-  }
   
   /* === GRID LAYOUTS === */
   .grid-cards {
