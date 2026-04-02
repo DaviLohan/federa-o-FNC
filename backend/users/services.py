@@ -7,7 +7,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from fnc_notifications.email_service import EmailService
+from fnc_notifications.tasks import send_email_task
 from .models import VerificationCode
 
 import logging
@@ -40,7 +40,7 @@ class VerificationService:
             code_type=VerificationCode.CodeType.EMAIL_VERIFICATION
         )
 
-        return EmailService.send_notification_email(
+        send_email_task.delay(
             to_emails=[user.email],
             subject='Verifique seu email - IMPERIUM',
             template_name='verification_code',
@@ -53,6 +53,7 @@ class VerificationService:
                 'site_url': getattr(settings, 'SITE_URL', ''),
             }
         )
+        return True
 
     @staticmethod
     def send_password_reset_email(user):
@@ -70,7 +71,7 @@ class VerificationService:
             code_type=VerificationCode.CodeType.PASSWORD_RESET
         )
 
-        return EmailService.send_notification_email(
+        send_email_task.delay(
             to_emails=[user.email],
             subject='Redefinição de senha - IMPERIUM',
             template_name='password_reset',
@@ -83,6 +84,7 @@ class VerificationService:
                 'site_url': getattr(settings, 'SITE_URL', ''),
             }
         )
+        return True
 
     # ──────────────────────────────────────────────────────────────────────────
     # Validação de códigos
