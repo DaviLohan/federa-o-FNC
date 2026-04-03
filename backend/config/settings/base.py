@@ -249,6 +249,7 @@ EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@fnc.com')
 SITE_URL = config('SITE_URL', default='http://localhost:3000')
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
+BREVO_API_KEY = config('BREVO_API_KEY', default='')
 
 # ─── Verificação de Email ──────────────────────────────────────────────────────
 

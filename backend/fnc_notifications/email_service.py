@@ -1,24 +1,16 @@
 """
 Serviço de envio de emails para notificações do sistema.
 
-Suporta múltiplos providers:
-- SendGrid (recomendado para produção)
-- SMTP (desenvolvimento/self-hosted)
-- Console (apenas para desenvolvimento)
+Usa a API HTTP do Brevo (ex-Sendinblue) via sib-api-v3-sdk.
+Isso evita o bloqueio de porta SMTP (587) em ambientes como Railway.
 
-Configuração no settings.py:
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'  # ou sendgrid_backend.SendGridBackend
-    EMAIL_HOST = 'smtp.sendgrid.net'
-    EMAIL_PORT = 587
-    EMAIL_USE_TLS = True
-    EMAIL_HOST_USER = 'apikey'
-    EMAIL_HOST_PASSWORD = 'SG.xxxxx'
-    DEFAULT_FROM_EMAIL = 'noreply@imperium.com'
-    
-    # SendGrid API Key (alternativa ao SMTP)
-    SENDGRID_API_KEY = 'SG.xxxxx'
+Configuração no settings.py / variáveis de ambiente:
+    BREVO_API_KEY = 'xkeysib-...'
+    DEFAULT_FROM_EMAIL = 'IMPERIUM <noreply@example.com>'
+
+Em desenvolvimento (sem BREVO_API_KEY), usa o backend SMTP/console configurado
+via EMAIL_BACKEND normal do Django.
 """
-from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.conf import settings
 from django.utils.html import strip_tags
@@ -28,11 +20,25 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _parse_email_address(address: str):
+    """
+    Transforma 'Nome <email@exemplo.com>' em {'name': 'Nome', 'email': 'email@exemplo.com'}.
+    Se não tiver nome, retorna só {'email': '...'}.
+    """
+    if '<' in address and address.endswith('>'):
+        name_part, email_part = address.rsplit('<', 1)
+        return {'name': name_part.strip(), 'email': email_part.rstrip('>')}
+    return {'email': address.strip()}
+
+
 class EmailService:
     """
     Serviço centralizado para envio de emails.
+
+    Em produção usa a API HTTP do Brevo (contorna bloqueio SMTP do Railway).
+    Em desenvolvimento usa o backend padrão do Django (SMTP / console).
     """
-    
+
     @staticmethod
     def send_notification_email(
         to_emails: List[str],
@@ -43,61 +49,119 @@ class EmailService:
     ) -> bool:
         """
         Envia email de notificação usando template HTML.
-        
+
         Args:
             to_emails: Lista de emails destinatários
             subject: Assunto do email
             template_name: Nome do template (sem extensão, ex: 'team_invitation')
             context: Contexto para o template
             from_email: Email remetente (opcional, usa DEFAULT_FROM_EMAIL)
-        
+
         Returns:
             bool: True se enviado com sucesso, False caso contrário
-        
-        Example:
-            >>> EmailService.send_notification_email(
-            ...     to_emails=['user@example.com'],
-            ...     subject='Você foi convidado para um time',
-            ...     template_name='team_invitation',
-            ...     context={'team_name': 'FNC Elite', 'inviter': 'João'}
-            ... )
         """
         if not to_emails:
             logger.warning('Tentativa de enviar email sem destinatários')
             return False
-        
-        # Email remetente
+
         from_email = from_email or settings.DEFAULT_FROM_EMAIL
-        
+
         try:
-            # Renderizar template HTML
             html_content = render_to_string(
                 f'emails/{template_name}.html',
                 context
             )
-            
-            # Versão texto puro (fallback)
             text_content = strip_tags(html_content)
-            
-            # Criar mensagem
+        except Exception as e:
+            logger.error(f'Erro ao renderizar template {template_name}: {str(e)}')
+            return False
+
+        brevo_api_key = getattr(settings, 'BREVO_API_KEY', '')
+
+        if brevo_api_key:
+            return EmailService._send_via_brevo_api(
+                to_emails=to_emails,
+                subject=subject,
+                html_content=html_content,
+                text_content=text_content,
+                from_email=from_email,
+                api_key=brevo_api_key,
+            )
+        else:
+            return EmailService._send_via_django_smtp(
+                to_emails=to_emails,
+                subject=subject,
+                html_content=html_content,
+                text_content=text_content,
+                from_email=from_email,
+            )
+
+    @staticmethod
+    def _send_via_brevo_api(
+        to_emails: List[str],
+        subject: str,
+        html_content: str,
+        text_content: str,
+        from_email: str,
+        api_key: str,
+    ) -> bool:
+        """Envia email via Brevo API HTTP (sem SMTP)."""
+        try:
+            import sib_api_v3_sdk
+            from sib_api_v3_sdk.rest import ApiException
+
+            configuration = sib_api_v3_sdk.Configuration()
+            configuration.api_key['api-key'] = api_key
+
+            api_instance = sib_api_v3_sdk.TransactionalEmailsApi(
+                sib_api_v3_sdk.ApiClient(configuration)
+            )
+
+            sender = _parse_email_address(from_email)
+            recipients = [{'email': email} for email in to_emails]
+
+            send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
+                sender=sender,
+                to=recipients,
+                subject=subject,
+                html_content=html_content,
+                text_content=text_content,
+            )
+
+            api_instance.send_transac_email(send_smtp_email)
+            logger.info(f'[Brevo API] Email enviado: {subject} -> {", ".join(to_emails)}')
+            return True
+
+        except Exception as e:
+            logger.error(f'[Brevo API] Erro ao enviar email: {str(e)}')
+            return False
+
+    @staticmethod
+    def _send_via_django_smtp(
+        to_emails: List[str],
+        subject: str,
+        html_content: str,
+        text_content: str,
+        from_email: str,
+    ) -> bool:
+        """Envia email via backend SMTP padrão do Django (desenvolvimento)."""
+        try:
+            from django.core.mail import EmailMultiAlternatives
+
             msg = EmailMultiAlternatives(
                 subject=subject,
                 body=text_content,
                 from_email=from_email,
-                to=to_emails
+                to=to_emails,
             )
-            
-            # Anexar versão HTML
-            msg.attach_alternative(html_content, "text/html")
-            
-            # Enviar
+            msg.attach_alternative(html_content, 'text/html')
             msg.send(fail_silently=False)
-            
-            logger.info(f'Email enviado com sucesso: {subject} -> {", ".join(to_emails)}')
+
+            logger.info(f'[SMTP] Email enviado: {subject} -> {", ".join(to_emails)}')
             return True
-            
+
         except Exception as e:
-            logger.error(f'Erro ao enviar email: {str(e)}')
+            logger.error(f'[SMTP] Erro ao enviar email: {str(e)}')
             return False
     
     @staticmethod
