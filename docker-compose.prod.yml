@@ -95,12 +95,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_API_URL: https://federacaoimperium.com.br
     container_name: fnc_frontend
     expose:
       - "3000"
     environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - NEXT_PUBLIC_API_URL=https://federacaoimperium.com.br
     depends_on:
       - backend
     restart: unless-stopped
