@@ -5,7 +5,8 @@ const apiUrl = rawApiUrl.replace(/\/api\/?$/, '');
 const apiUrlObj = new URL(apiUrl);
 
 const nextConfig = {
-  output: 'standalone',
+  // standalone só em produção (necessário para o Dockerfile multi-stage)
+  ...(process.env.NODE_ENV === 'production' && { output: 'standalone' }),
   images: {
     remotePatterns: [
       {
