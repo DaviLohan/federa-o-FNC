@@ -2,20 +2,17 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
+import { UsersRound, Shield, Trophy, Swords } from 'lucide-react';
+import { platformStatsAPI, PlatformStats } from '@/lib/api';
 
-interface StatItem {
-  value: number;
-  suffix: string;
-  label: string;
-  sublabel: string;
-  icon: React.ReactNode;
-}
+// ─── Counter animado ──────────────────────────────────────────────────────────
 
 function useCountUp(target: number, duration: number, active: boolean) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || target === 0) return;
     let start = 0;
     const steps = 60;
     const interval = duration / steps;
@@ -37,8 +34,34 @@ function useCountUp(target: number, duration: number, active: boolean) {
   return count;
 }
 
-function StatCard({ stat, index, active }: { stat: StatItem; index: number; active: boolean }) {
-  const count = useCountUp(stat.value, 1800, active);
+// ─── Skeleton de loading ──────────────────────────────────────────────────────
+
+function StatSkeleton() {
+  return (
+    <div className="rounded-2xl p-7 bg-gradient-to-b from-surface1 to-surface2 border border-white/[0.06] animate-pulse">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-12 rounded-xl bg-gold/10" />
+        <div className="w-20 h-10 rounded-lg bg-white/5" />
+        <div className="w-24 h-4 rounded bg-white/5" />
+        <div className="w-32 h-3 rounded bg-white/5" />
+      </div>
+    </div>
+  );
+}
+
+// ─── Card individual ──────────────────────────────────────────────────────────
+
+interface StatCardProps {
+  value: number;
+  label: string;
+  sublabel: string;
+  icon: React.ReactNode;
+  index: number;
+  active: boolean;
+}
+
+function StatCard({ value, label, sublabel, icon, index, active }: StatCardProps) {
+  const count = useCountUp(value, 1800, active);
 
   return (
     <motion.div
@@ -56,65 +79,66 @@ function StatCard({ stat, index, active }: { stat: StatItem; index: number; acti
       <div className="relative z-10 text-center">
         {/* Ícone */}
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gold/10 border border-gold/20 text-gold mb-4">
-          {stat.icon}
+          {icon}
         </div>
 
         {/* Número */}
-        <div className="font-heading text-5xl font-bold text-gold mb-1 tabular-nums"
+        <div
+          className="font-heading text-5xl font-bold text-gold mb-1 tabular-nums"
           style={{ textShadow: '0 0 30px rgba(214,161,30,0.4)' }}
         >
-          +{count.toLocaleString('pt-BR')}{stat.suffix}
+          +{count.toLocaleString('pt-BR')}
         </div>
 
         {/* Label */}
-        <div className="text-base font-semibold text-text/90 mb-1">{stat.label}</div>
+        <div className="text-base font-semibold text-text/90 mb-1">{label}</div>
 
         {/* Sublabel */}
-        <div className="text-xs text-muted/50">{stat.sublabel}</div>
+        <div className="text-xs text-muted/50">{sublabel}</div>
       </div>
     </motion.div>
   );
 }
 
-const statsData: StatItem[] = [
-  {
-    value: 500,
-    suffix: '',
-    label: 'Jogadores',
-    sublabel: 'cadastrados na plataforma',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-      </svg>
-    ),
-  },
-  {
-    value: 40,
-    suffix: '',
-    label: 'Ligas criadas',
-    sublabel: 'com múltiplos formatos',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 002.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 012.916.52 6.003 6.003 0 01-5.395 4.972m0 0a6.726 6.726 0 01-2.749 1.35m0 0a6.772 6.772 0 01-3.044 0" />
-      </svg>
-    ),
-  },
-  {
-    value: 2000,
-    suffix: '',
-    label: 'Partidas registradas',
-    sublabel: 'com resultados verificados',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-  },
-];
+// ─── Seção principal ──────────────────────────────────────────────────────────
 
 export function Stats() {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, margin: '-100px' });
+
+  const { data, isLoading, isError } = useQuery<PlatformStats>({
+    queryKey: ['platform-stats'],
+    queryFn: () => platformStatsAPI.get(),
+    staleTime: 5 * 60 * 1000, // 5 minutos
+    retry: 2,
+  });
+
+  const stats = [
+    {
+      value: data?.players ?? 0,
+      label: 'Jogadores',
+      sublabel: 'cadastrados na plataforma',
+      icon: <UsersRound className="w-5 h-5" />,
+    },
+    {
+      value: data?.teams ?? 0,
+      label: 'Times',
+      sublabel: 'competindo nas ligas',
+      icon: <Shield className="w-5 h-5" />,
+    },
+    {
+      value: data?.championships ?? 0,
+      label: 'Campeonatos',
+      sublabel: 'criados com múltiplos formatos',
+      icon: <Trophy className="w-5 h-5" />,
+    },
+    {
+      value: data?.matches ?? 0,
+      label: 'Partidas',
+      sublabel: 'finalizadas com resultados verificados',
+      icon: <Swords className="w-5 h-5" />,
+    },
+  ];
 
   return (
     <section ref={ref} className="py-24 px-4 relative overflow-hidden bg-surface1/40">
@@ -144,11 +168,33 @@ export function Stats() {
         </motion.div>
 
         {/* Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {statsData.map((stat, index) => (
-            <StatCard key={stat.label} stat={stat} index={index} active={isInView} />
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[0, 1, 2, 3].map((i) => <StatSkeleton key={i} />)}
+          </div>
+        ) : isError ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {stats.map((stat, index) => (
+              <StatCard
+                key={stat.label}
+                {...stat}
+                index={index}
+                active={isInView}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {stats.map((stat, index) => (
+              <StatCard
+                key={stat.label}
+                {...stat}
+                index={index}
+                active={isInView}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Badge "ao vivo" */}
         <motion.div
@@ -160,7 +206,7 @@ export function Stats() {
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface1 border border-white/[0.06]">
             <span className="w-2 h-2 rounded-full bg-green animate-glow" />
             <span className="text-sm font-semibold text-muted/60">
-              Plataforma ativa e em crescimento
+              Dados em tempo real da plataforma
             </span>
           </div>
         </motion.div>

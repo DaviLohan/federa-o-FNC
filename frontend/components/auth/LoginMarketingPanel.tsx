@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Shield, BarChart3, Trophy, Swords, TrendingUp } from 'lucide-react';
+import Image from 'next/image';
+import { BarChart3, Trophy, Swords, TrendingUp } from 'lucide-react';
 import { BenefitItem } from './BenefitItem';
 import { SocialProofCard } from './SocialProofCard';
 
@@ -17,7 +18,14 @@ export function LoginMarketingPanel() {
       <div className="relative z-10">
         {/* Logo */}
         <Link href="/" className="inline-flex items-center space-x-3 mb-8 group">
-          <Shield className="w-10 h-10 text-gold transition-transform group-hover:scale-110" />
+          <Image
+            src="/logo-imperium.png"
+            alt="Imperium Logo"
+            width={40}
+            height={40}
+            className="rounded-lg transition-transform group-hover:scale-105"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
           <span className="text-4xl font-bold text-gold">IMPERIUM</span>
         </Link>
 
@@ -31,7 +39,7 @@ export function LoginMarketingPanel() {
           Acesse sua conta e continue dominando nos campeonatos mais competitivos do Brasil.
         </p>
 
-        {/* Benefits - Different from register */}
+        {/* Benefits */}
         <div className="space-y-4 mb-10">
           <BenefitItem
             icon={<BarChart3 className="w-5 h-5" />}
@@ -66,21 +74,9 @@ export function LoginMarketingPanel() {
           Plataforma em crescimento
         </p>
         <div className="grid grid-cols-3 gap-3">
-          <SocialProofCard
-            value="500+"
-            label="Jogadores"
-            color="gold"
-          />
-          <SocialProofCard
-            value="150+"
-            label="Times"
-            color="gold"
-          />
-          <SocialProofCard
-            value="12+"
-            label="Ligas"
-            color="gold"
-          />
+          <SocialProofCard value="500+" label="Jogadores" color="gold" />
+          <SocialProofCard value="150+" label="Times" color="gold" />
+          <SocialProofCard value="12+" label="Ligas" color="gold" />
         </div>
       </div>
     </div>

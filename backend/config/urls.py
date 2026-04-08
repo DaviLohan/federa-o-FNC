@@ -23,7 +23,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from .search_views import global_search
-from .admin_views import admin_stats
+from .admin_views import admin_stats, platform_stats
 
 
 @api_view(['GET'])
@@ -39,7 +39,7 @@ def api_root(request):
         'version': '1.0.0',
         'documentation': request.build_absolute_uri('/api/docs/'),
         'endpoints': {
-            'admin': request.build_absolute_uri('/admin/'),
+            'admin': request.build_absolute_uri('/django-admin/'),
             'docs': {
                 'swagger': request.build_absolute_uri('/api/docs/'),
                 'redoc': request.build_absolute_uri('/api/redoc/'),
@@ -87,8 +87,8 @@ urlpatterns = [
     # Root
     path('', api_root, name='api-root'),
     
-    # Admin
-    path('admin/', admin.site.urls),
+    # Admin (Django Admin movido para /django-admin/ para não conflitar com o painel Next.js em /admin)
+    path('django-admin/', admin.site.urls),
     
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
@@ -97,6 +97,7 @@ urlpatterns = [
     
     # API v1
     path('api/v1/search/', global_search, name='global-search'),
+    path('api/v1/stats/platform/', platform_stats, name='platform-stats'),
     path('api/v1/admin/stats/', admin_stats, name='admin-stats'),
     path('api/v1/', include('users.urls')),
     path('api/v1/', include('fnc_teams.urls')),

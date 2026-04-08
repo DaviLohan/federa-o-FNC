@@ -1,5 +1,5 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import get_user_model
@@ -13,6 +13,26 @@ from fnc_matches.models import Match
 from users.models import PlayerProfile
 
 User = get_user_model()
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def platform_stats(request):
+    """
+    Retorna estatísticas públicas da plataforma para exibição na landing page.
+    Não requer autenticação.
+    """
+    total_players = User.objects.filter(is_active=True).count()
+    total_teams = Team.objects.filter(is_active=True).count()
+    total_championships = Championship.objects.count()
+    total_matches = Match.objects.filter(status='FINISHED').count()
+
+    return Response({
+        'players': total_players,
+        'teams': total_teams,
+        'championships': total_championships,
+        'matches': total_matches,
+    })
 
 
 @api_view(['GET'])

@@ -16,7 +16,6 @@ import {
   Users,
   Trophy,
   Calendar,
-  CalendarClock,
   BarChart3,
   Bell,
   User,
@@ -37,8 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard',    href: '/dashboard',        icon: LayoutDashboard },
   { label: 'Times',        href: '/teams',            icon: Users },
   { label: 'Campeonatos',  href: '/championships',    icon: Trophy },
-  { label: 'Partidas',     href: '/matches',          icon: Calendar,      exact: true },
-  { label: 'Agendamento',  href: '/matches/schedule', icon: CalendarClock },
+  { label: 'Partidas',     href: '/matches',          icon: Calendar },
   { label: 'Estatísticas', href: '/statistics',       icon: BarChart3 },
   { label: 'Notificações', href: '/notifications',    icon: Bell },
   { label: 'Perfil',       href: '/profile',          icon: User },
@@ -113,9 +111,9 @@ export function Navbar() {
               <Image
                 src="/logo-imperium.png"
                 alt="Imperium Logo"
-                width={32}
-                height={32}
-                className="rounded-lg transition-transform group-hover:scale-105"
+                width={36}
+                height={36}
+                className="rounded-full transition-transform group-hover:scale-105"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
                 }}

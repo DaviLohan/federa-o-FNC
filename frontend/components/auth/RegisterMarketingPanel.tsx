@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
-import { Shield, BarChart3, TrendingUp, ClipboardList, CircleDollarSign, BadgeCheck } from 'lucide-react';
+import Image from 'next/image';
+import { BarChart3, TrendingUp, ClipboardList, CircleDollarSign, BadgeCheck } from 'lucide-react';
 import { BenefitItem } from './BenefitItem';
 import { SocialProofCard } from './SocialProofCard';
 
@@ -16,15 +17,18 @@ export function RegisterMarketingPanel() {
       
       <div className="relative z-10 space-y-8">
         {/* Logo Section */}
-        <Link href="/" className="inline-block group animate-reveal">
-          <div className="flex items-center gap-3">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-gold/20 via-gold/20 to-gold2/20 border border-gold/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Shield className="w-8 h-8 text-gold" />
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-gold">IMPERIUM</div>
-              <div className="text-xs text-muted uppercase tracking-wider">Elite Esports Platform</div>
-            </div>
+        <Link href="/" className="inline-flex items-center gap-3 group animate-reveal">
+          <Image
+            src="/logo-imperium.png"
+            alt="Imperium Logo"
+            width={48}
+            height={48}
+            className="rounded-xl transition-transform group-hover:scale-105"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+          <div>
+            <div className="text-3xl font-bold text-gold">IMPERIUM</div>
+            <div className="text-xs text-muted uppercase tracking-wider">Elite Esports Platform</div>
           </div>
         </Link>
 

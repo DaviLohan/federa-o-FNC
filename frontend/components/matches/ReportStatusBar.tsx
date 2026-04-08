@@ -27,7 +27,7 @@ const reportStatusConfig: Record<
   string,
   { icon: typeof CheckCircle2; label: string; className: string } | null
 > = {
-  PENDING: { icon: Clock, label: 'Aguardando agendamento', className: 'text-muted2' },
+  PENDING: { icon: Clock, label: 'Aguardando partida', className: 'text-muted2' },
   SCHEDULED: { icon: Gamepad2, label: 'Reportar resultado da partida', className: 'text-brand' },
   IN_PROGRESS: { icon: Gamepad2, label: 'Partida em andamento', className: 'text-brand' },
   FINISHED: { icon: CheckCircle2, label: 'Resultado confirmado', className: 'text-success' },

@@ -219,39 +219,6 @@ export const matchesAPI = {
     apiClient.post(`/api/v1/matches/${id}/contest-report/`, data),
 };
 
-// Match Proposals API
-export const matchProposalsAPI = {
-  getAll: (params?: any) =>
-    apiClient.get('/api/v1/proposals/', params),
-  
-  getById: (id: number) =>
-    apiClient.get(`/api/v1/proposals/${id}/`),
-  
-  create: (data: { match_id: number; proposed_date: string }) =>
-    apiClient.post('/api/v1/proposals/', data),
-  
-  respond: (id: number, data: { action: 'accept' | 'reject'; rejection_reason?: string }) =>
-    apiClient.post(`/api/v1/proposals/${id}/respond/`, data),
-};
-
-// Match Confirmations API
-export const matchConfirmationsAPI = {
-  getAll: (params?: any) =>
-    apiClient.get('/api/v1/confirmations/', params),
-  
-  getById: (id: number) =>
-    apiClient.get(`/api/v1/confirmations/${id}/`),
-  
-  create: (data: { match_id: number; team_id: number }) =>
-    apiClient.post('/api/v1/confirmations/', data),
-  
-  confirm: (id: number) =>
-    apiClient.post(`/api/v1/confirmations/${id}/confirm/`, {}),
-  
-  decline: (id: number, data: { reason: string }) =>
-    apiClient.post(`/api/v1/confirmations/${id}/decline/`, data),
-};
-
 // Contestations API
 export const contestationsAPI = {
   getAll: (params?: any) =>
@@ -450,4 +417,16 @@ export const matchLineupsAPI = {
    */
   getOpponent: (matchId: number) =>
     apiClient.get<MatchLineup>(`/api/v1/matches/${matchId}/lineup/`, { team: 'opponent' }),
+};
+
+// Platform Stats API (público — landing page)
+export interface PlatformStats {
+  players: number;
+  teams: number;
+  championships: number;
+  matches: number;
+}
+
+export const platformStatsAPI = {
+  get: () => apiClient.get<PlatformStats>('/api/v1/stats/platform/'),
 };
