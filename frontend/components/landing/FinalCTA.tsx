@@ -230,16 +230,37 @@ export function FinalCTA() {
           transition={{ duration: 0.5, delay: 0.2 }}
         >
           {[
-            { icon: '⚡', text: 'Setup em 5 minutos' },
-            { icon: '🔒', text: 'Dados seguros' },
-            { icon: '🌐', text: 'Multiplataforma' },
+            {
+              icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                </svg>
+              ),
+              text: 'Setup em 5 minutos',
+            },
+            {
+              icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+              ),
+              text: 'Dados seguros',
+            },
+            {
+              icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3" />
+                </svg>
+              ),
+              text: 'Multiplataforma',
+            },
           ].map((item) => (
             <div
               key={item.text}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-surface1/60 border border-white/[0.05]"
+              className="flex flex-col items-center justify-center gap-2 px-4 py-4 rounded-xl bg-surface1/60 border border-white/[0.05] text-center"
             >
-              <span className="text-xl">{item.icon}</span>
-              <span className="text-sm font-semibold text-muted/50">{item.text}</span>
+              <span className="text-gold">{item.icon}</span>
+              <span className="text-sm font-semibold text-white/70">{item.text}</span>
             </div>
           ))}
         </motion.div>

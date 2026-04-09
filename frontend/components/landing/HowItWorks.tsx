@@ -82,7 +82,7 @@ export function HowItWorks() {
 
         {/* Steps */}
         <motion.div
-          className="relative grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-6"
+          className="relative grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-6 items-stretch"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: '-60px' }}
@@ -100,7 +100,7 @@ export function HowItWorks() {
               <motion.div
                 whileHover={{ scale: 1.1 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-                className="relative mb-8 z-10"
+                className="relative mb-8 z-10 flex-shrink-0"
               >
                 <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-gold via-gold to-gold3 flex items-center justify-center shadow-lg shadow-gold/30 text-bg">
                   {step.icon}
@@ -121,7 +121,7 @@ export function HowItWorks() {
               <motion.div
                 whileHover={{ y: -4, boxShadow: '0 16px 40px rgba(214,161,30,0.1)' }}
                 transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                className="w-full rounded-2xl p-6 bg-gradient-to-b from-surface1 to-surface2 border border-white/[0.06] relative overflow-hidden group"
+                className="w-full flex-1 flex flex-col rounded-2xl p-6 bg-gradient-to-b from-surface1 to-surface2 border border-white/[0.06] relative overflow-hidden group"
               >
                 {/* Borda topo dourada */}
                 <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-gold/25 to-transparent" />
@@ -131,12 +131,12 @@ export function HowItWorks() {
                   {step.title}
                 </h3>
 
-                {/* Descrição */}
-                <p className="text-muted/65 text-sm mb-5 leading-relaxed">
+                {/* Descrição — flex-grow empurra features para baixo */}
+                <p className="text-muted/65 text-sm mb-5 leading-relaxed flex-grow">
                   {step.description}
                 </p>
 
-                {/* Features */}
+                {/* Features — sempre na base do card */}
                 <ul className="space-y-2 text-left">
                   {step.features.map((feature) => (
                     <li key={feature} className="flex items-center gap-2 text-sm text-muted/55">

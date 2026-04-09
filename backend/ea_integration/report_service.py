@@ -325,12 +325,17 @@ class MatchReportEAService:
         """Busca o EAClub vinculado a um Team."""
         try:
             ea_club = EAClub.objects.get(team=team)
+            if not ea_club.is_active:
+                logger.warning(
+                    'EAClub id=%d (%s) vinculado ao time "%s" está inativo.',
+                    ea_club.pk, ea_club.ea_club_id, team.name,
+                )
             return ea_club
         except EAClub.DoesNotExist:
             raise MatchReportEAError(
-                f'O time {label} ({team.name}) não tem um clube EA vinculado. '
-                f'É necessário vincular o clube EA ao time antes de reportar '
-                f'partidas via EA API.'
+                f'O time {label} "{team.name}" não possui um clube EA vinculado. '
+                f'Acesse o painel admin → EA Integration → EA Clubs, '
+                f'localize o clube correspondente e vincule-o ao time "{team.name}".'
             )
 
     def _find_existing_ea_match(self, match: Match):
@@ -350,6 +355,7 @@ class MatchReportEAService:
         Busca partidas na EA API e procura uma que envolva ambos os clubs.
 
         Tenta buscar pelo home_club primeiro, depois pelo away_club.
+        Para cada clube, tenta friendlyMatch e leagueMatch.
         Usa o MatchSyncService para criar EAMatch + EAPlayerMatchStats.
         """
         # Determinar janela de tempo baseada na data agendada
@@ -363,15 +369,34 @@ class MatchReportEAService:
             str(away_ea_club.ea_club_id),
         }
 
-        # Tentar buscar pelo home club primeiro, depois pelo away
-        for search_club in [home_ea_club, away_ea_club]:
-            ea_match = self._search_from_club(
-                search_club, target_club_ids,
-                window_start, window_end,
-            )
-            if ea_match:
-                return ea_match
+        logger.info(
+            'Buscando partida EA: Match PK=%d | clubs alvo=%s | janela=[%s, %s]',
+            match.pk, target_club_ids,
+            window_start.strftime('%d/%m/%Y %H:%M UTC'),
+            window_end.strftime('%d/%m/%Y %H:%M UTC'),
+        )
 
+        # Tentar buscar pelo home club primeiro, depois pelo away.
+        # Para cada clube, tentar friendlyMatch primeiro, depois leagueMatch.
+        match_types = ['friendlyMatch', 'leagueMatch']
+        for search_club in [home_ea_club, away_ea_club]:
+            for match_type in match_types:
+                ea_match = self._search_from_club(
+                    search_club, target_club_ids,
+                    window_start, window_end,
+                    match_type=match_type,
+                )
+                if ea_match:
+                    return ea_match
+
+        logger.warning(
+            'Nenhuma partida EA encontrada para Match PK=%d '
+            '(clubs=%s, janela=%s a %s). '
+            'Verificado: friendlyMatch e leagueMatch para ambos os clubes.',
+            match.pk, target_club_ids,
+            window_start.strftime('%d/%m/%Y %H:%M UTC'),
+            window_end.strftime('%d/%m/%Y %H:%M UTC'),
+        )
         return None
 
     def _search_from_club(
@@ -380,6 +405,7 @@ class MatchReportEAService:
         target_club_ids: set[str],
         window_start,
         window_end,
+        match_type: str = 'friendlyMatch',
     ) -> 'EAMatch | None':
         """
         Busca partidas de um clube na EA API e tenta encontrar uma
@@ -389,19 +415,22 @@ class MatchReportEAService:
             raw_matches = self.client.get_matches(
                 club_id=str(search_club.ea_club_id),
                 platform=search_club.platform,
-                match_type='friendlyMatch',
+                match_type=match_type,
             )
         except EAApiError as e:
             logger.error(
-                'Erro ao buscar partidas EA para %s: %s',
-                search_club.name, e,
+                'Erro ao buscar partidas EA para %s (match_type=%s): %s',
+                search_club.name, match_type, e,
             )
             return None
 
         logger.info(
-            'EA retornou %d partidas para %s (buscando match entre %s)',
-            len(raw_matches), search_club.name, target_club_ids,
+            'EA retornou %d partidas para %s (match_type=%s, buscando clubs=%s)',
+            len(raw_matches), search_club.name, match_type, target_club_ids,
         )
+
+        discarded_wrong_clubs = 0
+        discarded_out_of_window = 0
 
         for match_data in raw_matches:
             # Verificar se envolve ambos os clubs
@@ -409,6 +438,7 @@ class MatchReportEAService:
             club_ids_in_match = set(clubs_data.keys())
 
             if not target_club_ids.issubset(club_ids_in_match):
+                discarded_wrong_clubs += 1
                 continue
 
             # Verificar se está dentro da janela de tempo
@@ -417,13 +447,23 @@ class MatchReportEAService:
 
             if not (window_start <= played_at <= window_end):
                 logger.debug(
-                    'Partida EA %s fora da janela de tempo: %s',
-                    match_data.get('matchId'), played_at,
+                    'Partida EA %s descartada (fora da janela): played_at=%s | '
+                    'janela=[%s, %s]',
+                    match_data.get('matchId'),
+                    played_at.strftime('%d/%m/%Y %H:%M UTC'),
+                    window_start.strftime('%d/%m/%Y %H:%M UTC'),
+                    window_end.strftime('%d/%m/%Y %H:%M UTC'),
                 )
+                discarded_out_of_window += 1
                 continue
 
             # Encontrou! Sincronizar via MatchSyncService
             ea_match_id = str(match_data.get('matchId', ''))
+            logger.info(
+                'Partida EA %s encontrada! clubs=%s, played_at=%s',
+                ea_match_id, club_ids_in_match,
+                played_at.strftime('%d/%m/%Y %H:%M UTC'),
+            )
 
             # Verificar se já foi sincronizada
             existing = EAMatch.objects.filter(ea_match_id=ea_match_id).first()
@@ -450,6 +490,14 @@ class MatchReportEAService:
                     'Erro ao processar partida EA %s: %s',
                     ea_match_id, e, exc_info=True,
                 )
+
+        if raw_matches:
+            logger.info(
+                'Resumo descarte para %s (%s): %d partidas verificadas | '
+                '%d descartadas (clubs incorretos) | %d descartadas (fora da janela)',
+                search_club.name, match_type, len(raw_matches),
+                discarded_wrong_clubs, discarded_out_of_window,
+            )
 
         return None
 
