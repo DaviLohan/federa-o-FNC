@@ -8,7 +8,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { useMyTeam } from '@/hooks/useMyTeam';
 import { Button, Input, ImageUpload, useToast, PageHeader, FilterBar, SkeletonGrid, EmptyState, Select, Modal } from '@/components/shared/ui';
 import { TeamCard } from '@/components/teams/TeamCard';
-import type { Team } from '@/types';
+import type { Team, PaginatedResponse } from '@/types';
 import { Users, Search } from 'lucide-react';
 
 function getApiErrorMessage(error: any, fallback: string) {
@@ -71,6 +71,15 @@ export default function TeamsPage() {
     onSuccess: async (createdTeam) => {
       queryClient.setQueryData(['my-team'], createdTeam);
       queryClient.setQueryData(['team', createdTeam.id], createdTeam);
+      // Insere o time no cache da listagem imediatamente (atualização otimista),
+      // sem esperar o refetch — garante aparição instantânea ao voltar para /teams.
+      queryClient.setQueryData(
+        ['teams'],
+        (old: PaginatedResponse<Team> | undefined) => {
+          if (!old) return { count: 1, next: null, previous: null, results: [createdTeam] };
+          return { ...old, count: old.count + 1, results: [...old.results, createdTeam] };
+        },
+      );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['teams'] }),
         queryClient.invalidateQueries({ queryKey: ['my-team'] }),
