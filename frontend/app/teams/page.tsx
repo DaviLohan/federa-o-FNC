@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamsAPI, usersAPI } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { useMyTeam } from '@/hooks/useMyTeam';
-import { Button, Card, Input, ImageUpload, useToast, PageHeader, FilterBar, SkeletonGrid, EmptyState, Select } from '@/components/shared/ui';
+import { Button, Input, ImageUpload, useToast, PageHeader, FilterBar, SkeletonGrid, EmptyState, Select, Modal } from '@/components/shared/ui';
 import { TeamCard } from '@/components/teams/TeamCard';
 import type { Team } from '@/types';
 import { Users, Search } from 'lucide-react';
@@ -313,101 +313,96 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
     });
   };
 
+  const footer = (
+    <div className="flex gap-3">
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={onClose}
+        className="flex-1"
+        disabled={isLoading}
+      >
+        Cancelar
+      </Button>
+      <Button
+        type="submit"
+        form="team-modal-form"
+        variant="primary"
+        className="flex-1"
+        loading={isLoading}
+      >
+        {team ? 'Salvar Alterações' : 'Criar Time'}
+      </Button>
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-      <Card className="max-w-2xl w-full form-card-premium">
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-text">
-              {team ? 'Editar Time' : 'Criar Novo Time'}
-            </h2>
-            <p className="text-muted mt-1">
-              {team ? 'Atualize as informações do time' : 'Preencha os dados do novo time'}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-muted hover:text-text transition-colors text-2xl leading-none"
-          >
-            ×
-          </button>
-        </div>
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={team ? 'Editar Time' : 'Criar Novo Time'}
+      description={team ? 'Atualize as informações do time' : 'Preencha os dados do novo time'}
+      size="lg"
+      stickyFooter={footer}
+    >
+      <form id="team-modal-form" onSubmit={handleSubmit} className="space-y-5">
+        {/* Logo Upload */}
+        <ImageUpload
+          label="Logo do Time"
+          value={team?.logo}
+          onChange={(file) => setLogoFile(file)}
+          previewClassName="w-20 h-20 sm:w-24 sm:h-24"
+          helpText="PNG, JPG ou WEBP até 5MB"
+        />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Logo Upload */}
-          <ImageUpload
-            label="Logo do Time"
-            value={team?.logo}
-            onChange={(file) => setLogoFile(file)}
-            previewClassName="w-24 h-24"
-            helpText="PNG, JPG ou WEBP até 5MB"
-          />
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <Input
-                label="Nome do Time"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                placeholder="Ex: Thunder FC"
-                required
-              />
-            </div>
+        {/* Nome + Abreviação */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="sm:col-span-2">
             <Input
-              label="Abreviação"
-              name="abbreviation"
-              value={formData.abbreviation}
+              label="Nome do Time"
+              name="name"
+              value={formData.name}
               onChange={handleChange}
-              placeholder="Ex: THU"
-              maxLength={5}
+              placeholder="Ex: Thunder FC"
               required
             />
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-muted mb-2">
-              Descrição
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows={4}
-              className="w-full px-4 py-3 bg-surface2 border border-border rounded-xl text-text placeholder-muted focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-all resize-none"
-              placeholder="Descreva seu time..."
-            />
-          </div>
-
           <Input
-            label="Data de Fundação"
-            name="foundation_date"
-            type="date"
-            value={formData.foundation_date}
+            label="Abreviação"
+            name="abbreviation"
+            value={formData.abbreviation}
             onChange={handleChange}
+            placeholder="Ex: THU"
+            maxLength={5}
             required
           />
+        </div>
 
-          <div className="flex space-x-3 pt-4">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onClose}
-              className="flex-1"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              className="flex-1"
-              loading={isLoading}
-            >
-              {team ? 'Salvar Alterações' : 'Criar Time'}
-            </Button>
-          </div>
-        </form>
-      </Card>
-    </div>
+        {/* Descrição */}
+        <div>
+          <label className="block text-sm font-medium text-muted mb-2">
+            Descrição
+          </label>
+          <textarea
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            rows={3}
+            className="w-full px-4 py-3 bg-surface2 border border-border rounded-xl text-text placeholder-muted focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-all resize-none text-sm"
+            placeholder="Descreva seu time..."
+          />
+        </div>
+
+        {/* Data de Fundação */}
+        <Input
+          label="Data de Fundação"
+          name="foundation_date"
+          type="date"
+          value={formData.foundation_date}
+          onChange={handleChange}
+          required
+        />
+      </form>
+    </Modal>
   );
 }

@@ -96,13 +96,13 @@ export function Modal({
   // ── Sticky footer mode: flex column with scrollable content ──
   if (stickyFooter) {
     const heightClass = fullHeight
-      ? 'h-[calc(100vh-2rem)]'
-      : 'max-h-[90vh]';
-    const overlayPy = fullHeight ? 'py-4' : 'py-8';
+      ? 'h-[calc(100dvh-2rem)]'
+      : 'max-h-[calc(100dvh-2rem)] sm:max-h-[90vh]';
+    const overlayPy = fullHeight ? 'py-4' : 'py-4 sm:py-8';
 
     modalContent = (
       <div
-        className={`fixed inset-0 z-[100] flex items-start justify-center bg-black/60 backdrop-blur-sm px-4 ${overlayPy}`}
+        className={`fixed inset-0 z-[100] flex items-start justify-center bg-black/60 backdrop-blur-sm px-3 sm:px-4 ${overlayPy}`}
         onClick={onClose}
       >
         <div
@@ -115,7 +115,7 @@ export function Modal({
           </div>
 
           {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-6 md:py-5">
             {children}
           </div>
 
