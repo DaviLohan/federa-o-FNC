@@ -70,7 +70,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     <>
       <Navbar />
       <main className="min-h-screen bg-bg1 pt-16">
-        <div className="p-4 md:p-6 lg:p-8">
+        <div className="max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8">
           {children}
         </div>
       </main>

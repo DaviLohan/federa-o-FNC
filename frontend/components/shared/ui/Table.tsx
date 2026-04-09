@@ -9,8 +9,8 @@ interface TableProps {
 
 export function Table({ headers, data, renderRow, emptyMessage = 'Nenhum dado encontrado' }: TableProps) {
   return (
-    <div className="w-full overflow-x-auto">
-      <table className="w-full">
+    <div className="w-full overflow-x-auto rounded-2xl border border-border">
+      <table className="w-full min-w-[480px]">
         <thead>
           <tr className="border-b border-stroke">
             {headers.map((header, index) => (

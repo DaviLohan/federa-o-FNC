@@ -109,7 +109,7 @@ export function ChampionshipCard({ championship }: ChampionshipCardProps) {
         </p>
 
         {/* Info Grid */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3">
           {/* Teams */}
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center shrink-0 border border-gold/20">

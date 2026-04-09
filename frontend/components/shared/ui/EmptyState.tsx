@@ -37,7 +37,7 @@ export function EmptyState({
   };
 
   return (
-    <div className={`bg-surface1 border border-border rounded-3xl text-center ${sizes[size]} px-8`}>
+    <div className={`bg-surface1 border border-border rounded-3xl text-center ${sizes[size]} px-4 sm:px-8`}>
       {icon && (
         <div className={`${iconSizes[size === 'lg' ? 'lg' : size === 'md' ? 'md' : 'sm']} mb-6 animate-floaty opacity-50`}>
           {typeof icon === 'string' ? icon : icon}

@@ -71,25 +71,25 @@ export function MatchScorecard({ match, children }: MatchScorecardProps) {
                   <img
                     src={match.home_team.logo}
                     alt={match.home_team.name}
-                    className="w-10 h-10 md:w-12 md:h-12 rounded-lg object-cover shrink-0"
+                    className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg object-cover shrink-0"
                   />
                 )}
               </div>
 
               {/* Score */}
-              <div className="flex items-center justify-center px-2">
+              <div className="flex items-center justify-center px-1 sm:px-2">
                 {match.status === 'FINISHED' || match.status === 'CONTESTED' ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl md:text-3xl font-bold text-text font-heading">
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <span className="text-xl sm:text-2xl md:text-3xl font-bold text-text font-heading">
                       {match.home_score}
                     </span>
-                    <span className="text-lg md:text-2xl font-bold text-muted2">&times;</span>
-                    <span className="text-2xl md:text-3xl font-bold text-text font-heading">
+                    <span className="text-base sm:text-lg md:text-2xl font-bold text-muted2">&times;</span>
+                    <span className="text-xl sm:text-2xl md:text-3xl font-bold text-text font-heading">
                       {match.away_score}
                     </span>
                   </div>
                 ) : (
-                  <span className="text-xl font-bold text-muted2">&times;</span>
+                  <span className="text-lg sm:text-xl font-bold text-muted2">&times;</span>
                 )}
               </div>
 
@@ -99,7 +99,7 @@ export function MatchScorecard({ match, children }: MatchScorecardProps) {
                   <img
                     src={match.away_team.logo}
                     alt={match.away_team.name}
-                    className="w-10 h-10 md:w-12 md:h-12 rounded-lg object-cover shrink-0"
+                    className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg object-cover shrink-0"
                   />
                 )}
                 <div className="text-left min-w-0">

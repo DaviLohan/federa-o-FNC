@@ -3,23 +3,71 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { statisticsAPI, championshipsAPI } from '@/lib/api';
-import { Card, Select, Skeleton, PageHeader, FilterBar, Table } from '@/components/shared/ui';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp } from 'lucide-react';
+import {
+  Card,
+  Select,
+  Skeleton,
+  PageHeader,
+  FilterBar,
+  Table,
+  EmptyState,
+  TabsPremium,
+  TabPremium,
+} from '@/components/shared/ui';
+import { StatKpiCard } from '@/components/statistics/StatKpiCard';
+import { StatRankRow } from '@/components/statistics/StatRankRow';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
+import {
+  TrendingUp,
+  Target,
+  Trophy,
+  Percent,
+  Flame,
+  Crosshair,
+  BarChart2,
+  Medal,
+  Users,
+} from 'lucide-react';
+
+// ─── Tooltip personalizado para o gráfico ─────────────────────────────────────
+
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-panel border border-stroke rounded-xl px-3 py-2 shadow-lg text-sm">
+      <p className="text-brand font-semibold mb-1">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.dataKey} className="text-text font-mono">
+          {p.name}: <span className="text-gold font-bold">{p.value}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function StatisticsPage() {
   const [selectedChampionship, setSelectedChampionship] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<string>('jogadores');
 
   const useAdvanced = selectedChampionship !== 'all';
   const championshipId = useAdvanced ? Number(selectedChampionship) : undefined;
 
-  // Championships para o filtro
+  // ── Queries ──────────────────────────────────────────────────────────────
+
   const { data: championshipsData } = useQuery({
     queryKey: ['championships'],
     queryFn: () => championshipsAPI.getAll(),
   });
-
-  // ── modo avançado (campeonato específico) ────────────────────────────────
 
   const { data: topScorersData, isLoading: scorersLoading } = useQuery({
     queryKey: ['top-scorers-advanced', championshipId],
@@ -45,8 +93,6 @@ export default function StatisticsPage() {
     enabled: useAdvanced,
   });
 
-  // ── modo legado (todos os campeonatos) ───────────────────────────────────
-
   const { data: playerStatsData, isLoading: playerStatsLoading } = useQuery({
     queryKey: ['player-statistics-legacy'],
     queryFn: () => statisticsAPI.getPlayerStats({}),
@@ -59,11 +105,10 @@ export default function StatisticsPage() {
     enabled: !useAdvanced,
   });
 
-  // ── dados normalizados ───────────────────────────────────────────────────
+  // ── Dados normalizados ────────────────────────────────────────────────────
 
   const championships = championshipsData?.results || [];
 
-  // Artilheiros
   const topScorers = useMemo(() => {
     if (useAdvanced) {
       const raw: any[] = (topScorersData as any)?.results ?? topScorersData ?? [];
@@ -73,7 +118,6 @@ export default function StatisticsPage() {
     return [...legacy].sort((a, b) => b.goals - a.goals).slice(0, 10);
   }, [useAdvanced, topScorersData, playerStatsData]);
 
-  // Assistências
   const topAssisters = useMemo(() => {
     if (useAdvanced) {
       const raw: any[] = (topAssistersData as any)?.results ?? topAssistersData ?? [];
@@ -83,7 +127,6 @@ export default function StatisticsPage() {
     return [...legacy].sort((a, b) => b.assists - a.assists).slice(0, 10);
   }, [useAdvanced, topAssistersData, playerStatsData]);
 
-  // Classificação
   const teamLeaderboard = useMemo(() => {
     if (useAdvanced) {
       const raw: any[] = (rankingsData as any)?.results ?? rankingsData ?? [];
@@ -93,10 +136,8 @@ export default function StatisticsPage() {
     return [...legacy].sort((a, b) => b.points - a.points);
   }, [useAdvanced, rankingsData, teamStatsData]);
 
-  // Overview (avançado)
   const overview: any = overviewData ?? null;
 
-  // Dados do gráfico
   const chartData = useMemo(() => {
     if (useAdvanced) {
       const raw: any[] = (rankingsData as any)?.results ?? rankingsData ?? [];
@@ -105,8 +146,8 @@ export default function StatisticsPage() {
         .slice(0, 8)
         .map((r) => ({
           name: (r.team_name as string).substring(0, 3).toUpperCase(),
-          gols: r.goals.scored,
-          jogos: r.matches.total,
+          Gols: r.goals.scored,
+          Jogos: r.matches.total,
         }));
     }
     const legacy: any[] = teamStatsData?.results || [];
@@ -115,18 +156,20 @@ export default function StatisticsPage() {
       .slice(0, 8)
       .map((s) => ({
         name: s.team.abbreviation || (s.team.name as string).substring(0, 3).toUpperCase(),
-        gols: s.goals_scored,
-        jogos: s.matches_played,
+        Gols: s.goals_scored,
+        Jogos: s.matches_played,
       }));
   }, [useAdvanced, rankingsData, teamStatsData]);
 
-  // Estados de loading
+  // ── Loading states ────────────────────────────────────────────────────────
+
   const scorersIsLoading = useAdvanced ? scorersLoading : playerStatsLoading;
   const assistersIsLoading = useAdvanced ? assistersLoading : playerStatsLoading;
   const leaderboardIsLoading = useAdvanced ? rankingsLoading : teamStatsLoading;
   const chartIsLoading = useAdvanced ? rankingsLoading : teamStatsLoading;
 
-  // KPI helpers
+  // ── KPI helpers ───────────────────────────────────────────────────────────
+
   function getTopScorerGoals() {
     if (useAdvanced) return topScorers[0]?.goals?.total ?? 0;
     return topScorers[0]?.goals ?? 0;
@@ -136,7 +179,6 @@ export default function StatisticsPage() {
     return topScorers[0]?.player?.player_name ?? null;
   }
   function getTopAssisterAssists() {
-    if (useAdvanced) return topAssisters[0]?.assists ?? 0;
     return topAssisters[0]?.assists ?? 0;
   }
   function getTopAssisterName() {
@@ -144,7 +186,6 @@ export default function StatisticsPage() {
     return topAssisters[0]?.player?.player_name ?? null;
   }
   function getLeaderPoints() {
-    if (useAdvanced) return teamLeaderboard[0]?.points ?? 0;
     return teamLeaderboard[0]?.points ?? 0;
   }
   function getLeaderName() {
@@ -160,401 +201,441 @@ export default function StatisticsPage() {
     return teamLeaderboard[0]?.win_rate?.toFixed(0) ?? 0;
   }
 
+  const selectedChampionshipName =
+    championships.find((c: any) => c.id.toString() === selectedChampionship)?.name ?? null;
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <PageHeader
         title="Estatísticas"
-        subtitle="Rankings e desempenho de jogadores e times"
+        subtitle={
+          selectedChampionshipName
+            ? `Dados de ${selectedChampionshipName}`
+            : 'Rankings e desempenho de jogadores e times'
+        }
         icon={<TrendingUp className="w-8 h-8" />}
       />
 
       {/* Filtro */}
-      <FilterBar>
-        <Select
-          label="Filtrar por Campeonato"
-          value={selectedChampionship}
-          onChange={(e) => setSelectedChampionship(e.target.value)}
-          options={[
-            { value: 'all', label: 'Todos os Campeonatos' },
-            ...championships.map((c: any) => ({ value: c.id.toString(), label: c.name })),
-          ]}
-        />
+      <FilterBar
+        onReset={() => setSelectedChampionship('all')}
+      >
+        <div className="w-full sm:w-64">
+          <Select
+            label=""
+            value={selectedChampionship}
+            onChange={(e) => setSelectedChampionship(e.target.value)}
+            options={[
+              { value: 'all', label: 'Todos os Campeonatos' },
+              ...championships.map((c: any) => ({
+                value: c.id.toString(),
+                label: c.name,
+              })),
+            ]}
+          />
+        </div>
       </FilterBar>
 
       {/* KPI Cards */}
-      <div className={`grid gap-4 ${useAdvanced ? 'grid-cols-2 lg:grid-cols-5' : 'grid-cols-2 lg:grid-cols-4'}`}>
-        <Card>
-          <div className="text-center">
-            <div className="text-3xl mb-2">⚽</div>
-            <div className="text-3xl font-mono font-bold text-warning mb-1">{getTopScorerGoals()}</div>
-            <div className="text-sm text-muted">Artilheiro</div>
-            {getTopScorerName() && (
-              <div className="text-xs text-text mt-1 font-semibold">{getTopScorerName()}</div>
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <div className="text-center">
-            <div className="text-3xl mb-2">🎯</div>
-            <div className="text-3xl font-mono font-bold text-gold mb-1">{getTopAssisterAssists()}</div>
-            <div className="text-sm text-muted">Assistências</div>
-            {getTopAssisterName() && (
-              <div className="text-xs text-text mt-1 font-semibold">{getTopAssisterName()}</div>
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <div className="text-center">
-            <div className="text-3xl mb-2">🏆</div>
-            <div className="text-3xl font-mono font-bold text-gold mb-1">{getLeaderPoints()}</div>
-            <div className="text-sm text-muted">Pontos</div>
-            {getLeaderName() && (
-              <div className="text-xs text-text mt-1 font-semibold">{getLeaderName()}</div>
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <div className="text-center">
-            <div className="text-3xl mb-2">📈</div>
-            <div className="text-3xl font-mono font-bold text-green mb-1">{getLeaderWinRate()}%</div>
-            <div className="text-sm text-muted">Taxa de Vitória</div>
-            {getLeaderName() && (
-              <div className="text-xs text-text mt-1 font-semibold">{getLeaderName()}</div>
-            )}
-          </div>
-        </Card>
-
+      <div
+        className={`grid gap-3 grid-cols-1 min-[360px]:grid-cols-2 ${
+          useAdvanced && overview ? 'md:grid-cols-3 lg:grid-cols-5' : 'md:grid-cols-2 lg:grid-cols-4'
+        }`}
+      >
+        <StatKpiCard
+          icon={<Target className="w-5 h-5" />}
+          value={getTopScorerGoals()}
+          label="Artilheiro"
+          sublabel={getTopScorerName()}
+          accent="warning"
+        />
+        <StatKpiCard
+          icon={<Crosshair className="w-5 h-5" />}
+          value={getTopAssisterAssists()}
+          label="Assistências"
+          sublabel={getTopAssisterName()}
+          accent="gold"
+        />
+        <StatKpiCard
+          icon={<Trophy className="w-5 h-5" />}
+          value={getLeaderPoints()}
+          label="Pontos — Líder"
+          sublabel={getLeaderName()}
+          accent="gold"
+        />
+        <StatKpiCard
+          icon={<Percent className="w-5 h-5" />}
+          value={`${getLeaderWinRate()}%`}
+          label="Taxa de Vitória"
+          sublabel={getLeaderName()}
+          accent="green"
+        />
         {useAdvanced && overview && (
-          <Card>
-            <div className="text-center">
-              <div className="text-3xl mb-2">🔥</div>
-              <div className="text-3xl font-mono font-bold text-warning mb-1">{overview.goals?.total ?? 0}</div>
-              <div className="text-sm text-muted">Gols no Campeonato</div>
-              <div className="text-xs text-muted mt-1">
-                {overview.goals?.average_per_match?.toFixed(1) ?? '0.0'}/partida
-              </div>
-            </div>
-          </Card>
+          <StatKpiCard
+            icon={<Flame className="w-5 h-5" />}
+            value={overview.goals?.total ?? 0}
+            label="Gols no Campeonato"
+            sublabel={`${overview.goals?.average_per_match?.toFixed(1) ?? '0.0'} por partida`}
+            accent="brand"
+          />
         )}
       </div>
 
-      {/* Gráfico Gols por Time */}
-      {chartIsLoading ? (
-        <Card title="📊 Gols por Time">
-          <Skeleton className="h-80 w-full" />
-        </Card>
-      ) : chartData.length > 0 && (
-        <Card title="📊 Gols por Time" className="reveal-fade">
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData}>
-              <defs>
-                <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#14CCDD" stopOpacity={0.8} />
-                  <stop offset="50%" stopColor="#1B975D" stopOpacity={0.6} />
-                  <stop offset="100%" stopColor="#A8D724" stopOpacity={0.4} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(167, 177, 194, 0.1)" />
-              <XAxis dataKey="name" stroke="rgba(167, 177, 194, 0.5)" style={{ fontSize: '12px' }} />
-              <YAxis stroke="rgba(167, 177, 194, 0.5)" style={{ fontSize: '12px' }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'rgb(11, 15, 20)',
-                  border: '1px solid rgb(27, 34, 48)',
-                  borderRadius: '12px',
-                  color: '#EAF0FF',
-                }}
-                labelStyle={{ color: '#14CCDD' }}
-              />
-              <Bar dataKey="gols" fill="url(#colorGradient)" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-      )}
+      {/* Abas: Jogadores / Times */}
+      <div className="space-y-4">
+        <TabsPremium value={activeTab} onChange={setActiveTab}>
+          <TabPremium
+            value="jogadores"
+            label="Jogadores"
+            icon={<Medal className="w-4 h-4" />}
+            badge={topScorers.length}
+          />
+          <TabPremium
+            value="times"
+            label="Times"
+            icon={<Users className="w-4 h-4" />}
+            badge={teamLeaderboard.length}
+          />
+        </TabsPremium>
 
-      {/* Artilharia */}
-      <Card title="🥇 Artilharia" className="reveal-fade-delay-1">
-        {scorersIsLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
-          </div>
-        ) : topScorers.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-5xl mb-3">⚽</div>
-            <p className="text-muted">Nenhuma estatística disponível</p>
-          </div>
-        ) : useAdvanced ? (
-          <Table
-            headers={['#', 'Jogador', 'Time', 'Gols', 'Assistências', 'Jogos', 'Média']}
-            data={topScorers}
-            renderRow={(stat: any, index: number) => (
-              <>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-warning/10 text-warning border border-warning/20 font-bold">
-                    {index + 1}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="font-semibold text-text">{stat.player_name}</div>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text">{stat.team_name}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-warning font-mono font-bold text-lg">{stat.goals?.total ?? stat.goals}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-gold font-mono">{stat.assists}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-muted font-mono">{stat.matches_played}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text font-mono">
-                    {stat.matches_played > 0
-                      ? ((stat.goals?.total ?? stat.goals) / stat.matches_played).toFixed(2)
-                      : '0.00'}
-                  </span>
-                </td>
-              </>
-            )}
-          />
-        ) : (
-          <Table
-            headers={['#', 'Jogador', 'Time', 'Gols', 'Assists', 'Jogos', 'Média']}
-            data={topScorers}
-            renderRow={(stat: any, index: number) => (
-              <>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-warning/10 text-warning border border-warning/20 font-bold">
-                    {index + 1}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div>
-                    <div className="font-semibold text-text">{stat.player.player_name}</div>
-                    <div className="text-xs text-muted2">{stat.player.primary_position}</div>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text">{stat.team.name}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-warning font-mono font-bold text-lg">{stat.goals}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-gold font-mono">{stat.assists}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-muted font-mono">{stat.matches_played}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text font-mono">{stat.goals_per_match?.toFixed(2)}</span>
-                </td>
-              </>
-            )}
-          />
-        )}
-      </Card>
+        {/* ── Aba: Jogadores ─────────────────────────────────────────── */}
+        {activeTab === 'jogadores' && (
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Artilharia */}
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-warning/10 border border-warning/20 flex items-center justify-center">
+                  <Target className="w-4 h-4 text-warning" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-text text-base leading-none">Artilharia</h3>
+                  <p className="text-xs text-muted2 mt-0.5">Top marcadores</p>
+                </div>
+              </div>
 
-      {/* Assistências */}
-      <Card title="🎯 Assistências">
-        {assistersIsLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
-          </div>
-        ) : topAssisters.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-5xl mb-3">🎯</div>
-            <p className="text-muted">Nenhuma estatística disponível</p>
-          </div>
-        ) : useAdvanced ? (
-          <Table
-            headers={['#', 'Jogador', 'Time', 'Assistências', 'Gols', 'Jogos', 'Média']}
-            data={topAssisters}
-            renderRow={(stat: any, index: number) => (
-              <>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gold/10 text-gold border border-gold/20 font-bold">
-                    {index + 1}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="font-semibold text-text">{stat.player_name}</div>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text">{stat.team_name}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-gold font-mono font-bold text-lg">{stat.assists}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-warning font-mono">{stat.goals?.total ?? stat.goals ?? 0}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-muted font-mono">{stat.matches_played}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text font-mono">
-                    {stat.matches_played > 0
-                      ? (stat.assists / stat.matches_played).toFixed(2)
-                      : '0.00'}
-                  </span>
-                </td>
-              </>
-            )}
-          />
-        ) : (
-          <Table
-            headers={['#', 'Jogador', 'Time', 'Assists', 'Gols', 'Jogos', 'Média']}
-            data={topAssisters}
-            renderRow={(stat: any, index: number) => (
-              <>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gold/10 text-gold border border-gold/20 font-bold">
-                    {index + 1}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div>
-                    <div className="font-semibold text-text">{stat.player.player_name}</div>
-                    <div className="text-xs text-muted2">{stat.player.primary_position}</div>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text">{stat.team.name}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-gold font-mono font-bold text-lg">{stat.assists}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-warning font-mono">{stat.goals}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-muted font-mono">{stat.matches_played}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text font-mono">{stat.assists_per_match?.toFixed(2)}</span>
-                </td>
-              </>
-            )}
-          />
-        )}
-      </Card>
+              {scorersIsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Skeleton key={i} className="h-10 w-full rounded-lg" />
+                  ))}
+                </div>
+              ) : topScorers.length === 0 ? (
+                <EmptyState
+                  icon={
+                    <div className="w-12 h-12 rounded-xl bg-warning/10 border border-warning/20 flex items-center justify-center mx-auto">
+                      <Target className="w-6 h-6 text-warning" />
+                    </div>
+                  }
+                  title="Nenhum dado"
+                  description="Sem estatísticas de gols disponíveis."
+                />
+              ) : (
+                <div>
+                  {topScorers.map((stat: any, idx: number) => {
+                    const goals = useAdvanced
+                      ? (stat.goals?.total ?? stat.goals ?? 0)
+                      : (stat.goals ?? 0);
+                    const name = useAdvanced
+                      ? stat.player_name
+                      : stat.player?.player_name;
+                    const team = useAdvanced ? stat.team_name : stat.team?.name;
+                    const assists = stat.assists ?? 0;
+                    const matches = stat.matches_played ?? 0;
+                    return (
+                      <StatRankRow
+                        key={idx}
+                        position={idx + 1}
+                        name={name}
+                        team={team}
+                        primaryValue={goals}
+                        primaryLabel="gols"
+                        accent="warning"
+                        secondaryStats={[
+                          { label: 'Ast', value: assists },
+                          { label: 'Jogos', value: matches },
+                        ]}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
 
-      {/* Classificação dos Times */}
-      <Card title="🏆 Classificação dos Times">
-        {leaderboardIsLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
+            {/* Assistências */}
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center">
+                  <Crosshair className="w-4 h-4 text-gold" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-text text-base leading-none">Assistências</h3>
+                  <p className="text-xs text-muted2 mt-0.5">Top garçons</p>
+                </div>
+              </div>
+
+              {assistersIsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Skeleton key={i} className="h-10 w-full rounded-lg" />
+                  ))}
+                </div>
+              ) : topAssisters.length === 0 ? (
+                <EmptyState
+                  icon={
+                    <div className="w-12 h-12 rounded-xl bg-gold/10 border border-gold/20 flex items-center justify-center mx-auto">
+                      <Crosshair className="w-6 h-6 text-gold" />
+                    </div>
+                  }
+                  title="Nenhum dado"
+                  description="Sem estatísticas de assistências disponíveis."
+                />
+              ) : (
+                <div>
+                  {topAssisters.map((stat: any, idx: number) => {
+                    const assists = stat.assists ?? 0;
+                    const goals = useAdvanced
+                      ? (stat.goals?.total ?? stat.goals ?? 0)
+                      : (stat.goals ?? 0);
+                    const name = useAdvanced
+                      ? stat.player_name
+                      : stat.player?.player_name;
+                    const team = useAdvanced ? stat.team_name : stat.team?.name;
+                    const matches = stat.matches_played ?? 0;
+                    return (
+                      <StatRankRow
+                        key={idx}
+                        position={idx + 1}
+                        name={name}
+                        team={team}
+                        primaryValue={assists}
+                        primaryLabel="assist."
+                        accent="gold"
+                        secondaryStats={[
+                          { label: 'Gols', value: goals },
+                          { label: 'Jogos', value: matches },
+                        ]}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
           </div>
-        ) : teamLeaderboard.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-5xl mb-3">🏆</div>
-            <p className="text-muted">Nenhuma estatística disponível</p>
-          </div>
-        ) : useAdvanced ? (
-          <Table
-            headers={['#', 'Time', 'PTS', 'J', 'V', 'E', 'D', 'GP', 'GC', 'SG']}
-            data={teamLeaderboard}
-            renderRow={(stat: any, index: number) => (
-              <>
-                <td className="px-4 py-3">
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full font-bold ${
-                    index < 3 ? 'bg-gradient-to-br from-gold/20 via-gold/20 to-gold2/20 border border-gold/30' : 'bg-surface2'
-                  }`}>
-                    <span className={index < 3 ? 'gradient-text' : 'text-muted'}>{stat.position ?? index + 1}</span>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="font-semibold text-text">{stat.team_name}</div>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-warning font-mono font-bold text-lg">{stat.points}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text font-mono">{stat.matches?.total}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-green font-mono">{stat.matches?.wins}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-muted font-mono">{stat.matches?.draws}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-error font-mono">{stat.matches?.losses}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text font-mono">{stat.goals?.scored}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text font-mono">{stat.goals?.conceded}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`font-mono ${(stat.goals?.difference ?? 0) >= 0 ? 'text-green' : 'text-error'}`}>
-                    {(stat.goals?.difference ?? 0) >= 0 ? '+' : ''}{stat.goals?.difference}
-                  </span>
-                </td>
-              </>
-            )}
-          />
-        ) : (
-          <Table
-            headers={['#', 'Time', 'PTS', 'J', 'V', 'E', 'D', 'GP', 'GC', 'SG', '%']}
-            data={teamLeaderboard}
-            renderRow={(stat: any, index: number) => (
-              <>
-                <td className="px-4 py-3">
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full font-bold ${
-                    index < 3 ? 'bg-gradient-to-br from-gold/20 via-gold/20 to-gold2/20 border border-gold/30' : 'bg-surface2'
-                  }`}>
-                    <span className={index < 3 ? 'gradient-text' : 'text-muted'}>{index + 1}</span>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div>
-                    <div className="font-semibold text-text">{stat.team.name}</div>
-                    <div className="text-xs text-muted">{stat.championship?.name}</div>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-warning font-mono font-bold text-lg">{stat.points}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text font-mono">{stat.matches_played}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-green font-mono">{stat.matches_won}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-muted font-mono">{stat.matches_drawn}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-error font-mono">{stat.matches_lost}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text font-mono">{stat.goals_scored}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text font-mono">{stat.goals_conceded}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`font-mono ${stat.goal_difference >= 0 ? 'text-green' : 'text-error'}`}>
-                    {stat.goal_difference >= 0 ? '+' : ''}{stat.goal_difference}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-text font-mono">{stat.win_rate?.toFixed(0)}%</span>
-                </td>
-              </>
-            )}
-          />
         )}
-      </Card>
+
+        {/* ── Aba: Times ──────────────────────────────────────────────── */}
+        {activeTab === 'times' && (
+          <div className="space-y-4">
+            {/* Gráfico Gols por Time */}
+            {chartIsLoading ? (
+              <Card>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-brand/10 border border-brand/20 flex items-center justify-center">
+                    <BarChart2 className="w-4 h-4 text-brand" />
+                  </div>
+                  <h3 className="font-bold text-text text-base">Gols por Time</h3>
+                </div>
+                <Skeleton className="h-64 w-full rounded-xl" />
+              </Card>
+            ) : chartData.length > 0 ? (
+              <Card>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-brand/10 border border-brand/20 flex items-center justify-center">
+                    <BarChart2 className="w-4 h-4 text-brand" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-text text-base leading-none">Gols por Time</h3>
+                    <p className="text-xs text-muted2 mt-0.5">Top 8 times em gols marcados</p>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={chartData} barSize={28}>
+                    <defs>
+                      <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--color-brand, #14CCDD)" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="var(--color-gold, #D4AF37)" stopOpacity={0.5} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="rgba(167, 177, 194, 0.08)"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="name"
+                      stroke="rgba(167, 177, 194, 0.4)"
+                      tick={{ fontSize: 12 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      stroke="rgba(167, 177, 194, 0.4)"
+                      tick={{ fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={28}
+                    />
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+                    <Bar dataKey="Gols" fill="url(#barGradient)" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
+            ) : null}
+
+            {/* Classificação dos Times */}
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center">
+                  <Trophy className="w-4 h-4 text-gold" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-text text-base leading-none">Classificação</h3>
+                  <p className="text-xs text-muted2 mt-0.5">Ranking de times por pontos</p>
+                </div>
+              </div>
+
+              {leaderboardIsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Skeleton key={i} className="h-12 w-full rounded-lg" />
+                  ))}
+                </div>
+              ) : teamLeaderboard.length === 0 ? (
+                <EmptyState
+                  icon={
+                    <div className="w-12 h-12 rounded-xl bg-gold/10 border border-gold/20 flex items-center justify-center mx-auto">
+                      <Trophy className="w-6 h-6 text-gold" />
+                    </div>
+                  }
+                  title="Nenhum dado"
+                  description="Sem classificação disponível."
+                />
+              ) : useAdvanced ? (
+                <Table
+                  headers={['#', 'Time', 'PTS', 'J', 'V', 'E', 'D', 'GP', 'GC', 'SG']}
+                  data={teamLeaderboard}
+                  renderRow={(stat: any, index: number) => (
+                    <>
+                      <td className="px-4 py-3">
+                        <div
+                          className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${
+                            index < 3
+                              ? 'bg-gradient-to-br from-gold/20 via-gold/20 to-gold2/20 border border-gold/30'
+                              : 'bg-panel2 border border-stroke'
+                          }`}
+                        >
+                          <span className={index < 3 ? 'gradient-text' : 'text-muted2'}>
+                            {stat.position ?? index + 1}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-text">{stat.team_name}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-warning font-mono font-bold text-lg">{stat.points}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-text font-mono">{stat.matches?.total}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-green font-mono">{stat.matches?.wins}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-muted2 font-mono">{stat.matches?.draws}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-error font-mono">{stat.matches?.losses}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-text font-mono">{stat.goals?.scored}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-text font-mono">{stat.goals?.conceded}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`font-mono ${
+                            (stat.goals?.difference ?? 0) >= 0 ? 'text-green' : 'text-error'
+                          }`}
+                        >
+                          {(stat.goals?.difference ?? 0) >= 0 ? '+' : ''}
+                          {stat.goals?.difference}
+                        </span>
+                      </td>
+                    </>
+                  )}
+                />
+              ) : (
+                <Table
+                  headers={['#', 'Time', 'PTS', 'J', 'V', 'E', 'D', 'GP', 'GC', 'SG', '%']}
+                  data={teamLeaderboard}
+                  renderRow={(stat: any, index: number) => (
+                    <>
+                      <td className="px-4 py-3">
+                        <div
+                          className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${
+                            index < 3
+                              ? 'bg-gradient-to-br from-gold/20 via-gold/20 to-gold2/20 border border-gold/30'
+                              : 'bg-panel2 border border-stroke'
+                          }`}
+                        >
+                          <span className={index < 3 ? 'gradient-text' : 'text-muted2'}>
+                            {index + 1}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div>
+                          <div className="font-semibold text-text">{stat.team.name}</div>
+                          <div className="text-xs text-muted2">{stat.championship?.name}</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-warning font-mono font-bold text-lg">{stat.points}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-text font-mono">{stat.matches_played}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-green font-mono">{stat.matches_won}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-muted2 font-mono">{stat.matches_drawn}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-error font-mono">{stat.matches_lost}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-text font-mono">{stat.goals_scored}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-text font-mono">{stat.goals_conceded}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`font-mono ${
+                            stat.goal_difference >= 0 ? 'text-green' : 'text-error'
+                          }`}
+                        >
+                          {stat.goal_difference >= 0 ? '+' : ''}
+                          {stat.goal_difference}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-text font-mono">{stat.win_rate?.toFixed(0)}%</span>
+                      </td>
+                    </>
+                  )}
+                />
+              )}
+            </Card>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

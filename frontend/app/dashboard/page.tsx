@@ -191,7 +191,7 @@ export default function DashboardPage() {
       {/* 5. Quick Actions */}
       <div>
         <SectionHeader title="Ações Rápidas" subtitle="Acesso rápido às principais funcionalidades" />
-        <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {user.user_type === 'TEAM_OWNER' && !myTeam && (
             <QuickActionTile
               title="Criar Time"

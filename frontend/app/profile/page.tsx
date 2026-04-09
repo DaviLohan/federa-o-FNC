@@ -246,7 +246,7 @@ export default function ProfilePage() {
                 <label className="text-sm text-muted block mb-3 uppercase tracking-wide font-semibold">
                   Seu Player ID único
                 </label>
-                 <div className="text-5xl sm:text-6xl md:text-7xl font-mono font-bold gradient-text mb-4 tracking-tight">
+                 <div className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-mono font-bold gradient-text mb-4 tracking-tight break-all">
                   #{user.player_profile.id}
                 </div>
                 <div className="flex flex-wrap gap-3 items-center">
