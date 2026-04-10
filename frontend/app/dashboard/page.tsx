@@ -229,6 +229,7 @@ export default function DashboardPage() {
               icon={<Shield className="h-6 w-6" />}
               href="/admin"
               color="purple"
+              prefetch={false}
             />
           )}
         </div>

@@ -9,6 +9,7 @@ interface QuickActionTileProps {
   icon: ReactNode;
   href: string;
   color: 'cyan' | 'lime' | 'teal' | 'green' | 'purple';
+  prefetch?: boolean;
 }
 
 const colorClasses = {
@@ -25,9 +26,10 @@ export function QuickActionTile({
   icon,
   href,
   color,
+  prefetch = true,
 }: QuickActionTileProps) {
   return (
-    <Link href={href}>
+    <Link href={href} prefetch={prefetch}>
       <div
         className={`
           group relative overflow-hidden rounded-xl border border-border

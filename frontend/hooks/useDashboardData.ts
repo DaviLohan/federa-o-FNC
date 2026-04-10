@@ -74,7 +74,7 @@ export function useDashboardData() {
     openChampionships: championships.length,
     upcomingMatches: upcomingMatches.length,
     pendingInvitations: pendingInvitations.length,
-    hasTeam: !!myTeam && !teamError,
+    hasTeam: !!myTeam,
     hasEnrollment: myEnrollments.length > 0,
   };
 
