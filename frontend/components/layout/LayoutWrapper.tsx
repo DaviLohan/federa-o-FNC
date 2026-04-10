@@ -44,11 +44,18 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     if (!currentUserQuery.data) return;
 
     const nextUser = currentUserQuery.data;
+    const currentPlayerProfileId = user?.player_profile?.id ?? null;
+    const nextPlayerProfileId = nextUser.player_profile?.id ?? null;
+    const currentOwnerProfileId = user?.team_owner_profile?.id ?? null;
+    const nextOwnerProfileId = nextUser.team_owner_profile?.id ?? null;
+
     if (
       !user ||
       user.id !== nextUser.id ||
       user.user_type !== nextUser.user_type ||
-      user.full_name !== nextUser.full_name
+      user.full_name !== nextUser.full_name ||
+      currentPlayerProfileId !== nextPlayerProfileId ||
+      currentOwnerProfileId !== nextOwnerProfileId
     ) {
       setUser(nextUser);
     }
