@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Trophy, Users, Calendar, Award } from 'lucide-react';
 import { Badge } from '@/components/shared/ui/Badge';
+import { formatDateShort } from '@/lib/utils/date';
 
 interface ChampionshipCardProps {
   championship: {
@@ -109,7 +110,7 @@ export function ChampionshipCard({ championship }: ChampionshipCardProps) {
             <Calendar className="h-3 w-3" />
             <span>
               Início:{' '}
-              {new Date(championship.start_date).toLocaleDateString('pt-BR')}
+              {formatDateShort(championship.start_date)}
             </span>
           </div>
         )}

@@ -6,6 +6,7 @@ import { Modal, Button, Select, ImageUpload, useToast } from '@/components/share
 import { contestationsAPI } from '@/lib/api';
 import type { Match } from '@/types';
 import { AlertTriangle, Send } from 'lucide-react';
+import { formatDateTime } from '@/lib/utils/date';
 
 interface ContestationModalProps {
   match: Match;
@@ -190,13 +191,7 @@ export function ContestationModal({ match, teamId, isOpen, onClose }: Contestati
           <div className="pt-3 border-t border-stroke">
             <p className="text-xs text-muted2 text-center">
               Partida realizada em{' '}
-              {new Date(match.scheduled_date).toLocaleString('pt-BR', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
+              {formatDateTime(match.scheduled_date)}
             </p>
           </div>
         </div>

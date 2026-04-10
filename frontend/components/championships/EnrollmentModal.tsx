@@ -8,6 +8,7 @@ import { Modal, Button, useToast } from '@/components/shared/ui';
 import { Trophy, Users, DollarSign, AlertCircle, Copy, CheckCircle2, QrCode, CreditCard } from 'lucide-react';
 import type { Championship, Payment, Team } from '@/types';
 import { useAuthStore } from '@/lib/auth-store';
+import { formatDateTimeShort } from '@/lib/utils/date';
 
 interface EnrollmentModalProps {
   isOpen: boolean;
@@ -343,7 +344,7 @@ export function EnrollmentModal({ isOpen, onClose, championship }: EnrollmentMod
 
               {checkoutPayment.expires_at && (
                 <p className="text-xs text-muted">
-                  Expira em {new Date(checkoutPayment.expires_at).toLocaleString('pt-BR')}
+                  Expira em {formatDateTimeShort(checkoutPayment.expires_at)}
                 </p>
               )}
 

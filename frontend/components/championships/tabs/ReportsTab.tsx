@@ -6,6 +6,7 @@ import { Card, EmptyState, Badge, Skeleton, Button, useToast } from '@/component
 import { contestationsAPI } from '@/lib/api';
 import { usePermissions } from '@/lib/hooks';
 import { AlertCircle, CheckCircle, Clock, XCircle, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { formatDateTime } from '@/lib/utils/date';
 
 interface ReportsTabProps {
   championshipId: number;
@@ -90,16 +91,6 @@ export function ReportsTab({ championshipId }: ReportsTabProps) {
       />
     );
   }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
 
   // Group by status
   const pendingContestations = contestations.filter((c) => c.status === 'PENDING');
@@ -190,7 +181,7 @@ export function ReportsTab({ championshipId }: ReportsTabProps) {
                            </h3>
                            <p className="text-sm text-muted2">
                              Partida realizada em{' '}
-                             {formatDate(contestation.match.scheduled_date)}
+                             {formatDateTime(contestation.match.scheduled_date)}
                            </p>
                          </div>
                          <Badge className={status.color}>
@@ -231,7 +222,7 @@ export function ReportsTab({ championshipId }: ReportsTabProps) {
                         <span>•</span>
                         <span>Time: <strong className="text-text">{contestation.team.name}</strong></span>
                         <span>•</span>
-                        <span>{formatDate(contestation.created_at)}</span>
+                        <span>{formatDateTime(contestation.created_at)}</span>
                       </div>
                     </div>
 
@@ -329,7 +320,7 @@ export function ReportsTab({ championshipId }: ReportsTabProps) {
                            </h3>
                            <p className="text-sm text-muted2">
                              Partida realizada em{' '}
-                             {formatDate(contestation.match.scheduled_date)}
+                             {formatDateTime(contestation.match.scheduled_date)}
                            </p>
                          </div>
                          <Badge className={status.color}>
@@ -367,7 +358,7 @@ export function ReportsTab({ championshipId }: ReportsTabProps) {
                         {contestation.reviewed_at && (
                           <>
                             <span>•</span>
-                            <span>{formatDate(contestation.reviewed_at)}</span>
+                            <span>{formatDateTime(contestation.reviewed_at)}</span>
                           </>
                         )}
                       </div>

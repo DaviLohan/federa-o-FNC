@@ -38,6 +38,7 @@ import type {
   MatchLineupPlayerData,
 } from '@/types';
 import { ChevronDown, User, Check, X, Loader2, Swords, Trash2, AlertTriangle, ImageIcon, Pencil, MousePointer, Circle, Eraser, Eye, EyeOff, Move } from 'lucide-react';
+import { formatToday, formatDayMonth, formatDateTimeShort } from '@/lib/utils/date';
 
 // ---------------------------------------------------------------------------
 // Compatibilidade de posições
@@ -906,7 +907,7 @@ async function generateLineupImage(
 
   ctx.fillStyle = 'rgba(214,161,30,0.6)';
   ctx.textAlign = 'right';
-  ctx.fillText(new Date().toLocaleDateString('pt-BR'), W - FIELD_X, H - FOOTER_H / 2);
+  ctx.fillText(formatToday(), W - FIELD_X, H - FOOTER_H / 2);
 
   // ── Download ──────────────────────────────────────────────────────────────
   const link    = document.createElement('a');
@@ -1407,7 +1408,7 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
                 <option value="">{isLoadingMatches ? 'Carregando...' : 'Selecionar partida...'}</option>
                 {scheduledMatches.map((match) => {
                   const opp  = match.home_team?.id === team.id ? match.away_team : match.home_team;
-                  const date = new Date(match.scheduled_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+                  const date = formatDayMonth(match.scheduled_date);
                   return <option key={match.id} value={match.id}>vs {opp?.name ?? '—'} · {date}</option>;
                 })}
                 {!isLoadingMatches && scheduledMatches.length === 0 && <option disabled>Nenhuma partida agendada</option>}
@@ -1417,7 +1418,7 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
             {selectedMatch && opponentTeam && (
               <p className="text-[11px] text-[#D6A11E]/80 px-1">
                 {team.name} vs {opponentTeam.name} ·{' '}
-                {new Date(selectedMatch.scheduled_date).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                {formatDateTimeShort(selectedMatch.scheduled_date)}
               </p>
             )}
           </div>
@@ -1452,7 +1453,7 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
               <option value="">{isLoadingMatches ? 'Carregando...' : 'Selecionar partida...'}</option>
               {scheduledMatches.map((match) => {
                 const opp  = match.home_team?.id === team.id ? match.away_team : match.home_team;
-                const date = new Date(match.scheduled_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+                const date = formatDayMonth(match.scheduled_date);
                 return <option key={match.id} value={match.id}>vs {opp?.name ?? '—'} · {date}</option>;
               })}
               {!isLoadingMatches && scheduledMatches.length === 0 && <option disabled>Nenhuma partida agendada</option>}

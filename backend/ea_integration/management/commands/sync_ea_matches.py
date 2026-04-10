@@ -29,9 +29,9 @@ class Command(BaseCommand):
         parser.add_argument(
             '--match-types',
             nargs='+',
-            default=['leagueMatch'],
+            default=['friendlyMatch'],
             choices=['leagueMatch', 'friendlyMatch', 'playoffMatch'],
-            help='Tipos de partida para buscar (padrão: leagueMatch).',
+            help='Tipos de partida para buscar (padrão: friendlyMatch).',
         )
         parser.add_argument(
             '--verbose',

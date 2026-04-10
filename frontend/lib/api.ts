@@ -26,6 +26,7 @@ import type {
   PlayerStatistics,
   TeamStatistics,
   PaginatedResponse,
+  EAClubSearchResult,
   Contestation,
   MatchReport,
   Group,
@@ -135,6 +136,11 @@ export const teamsAPI = {
   
   getMyTeam: () =>
     apiClient.get<Team>('/api/v1/teams/my-team/'),
+};
+
+export const eaAPI = {
+  searchClubs: (data: { club_name: string; platform: 'common-gen5' | 'common-gen4' | 'pc' }) =>
+    apiClient.post<{ count: number; results: EAClubSearchResult[] }>('/api/v1/ea/clubs/search/', data),
 };
 
 // Championships API

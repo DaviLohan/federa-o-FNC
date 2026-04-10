@@ -8,6 +8,7 @@ import { DataTable } from '@/components/shared/ui/DataTable';
 import { Badge } from '@/components/shared/ui/Badge';
 import { Button } from '@/components/shared/ui/Button';
 import { Drawer } from '@/components/shared/ui/Drawer';
+import { formatDateShort } from '@/lib/utils/date';
 import { Modal } from '@/components/shared/ui/Modal';
 import { useToast } from '@/components/shared/ui/Toast';
 import Link from 'next/link';
@@ -139,7 +140,7 @@ export default function AdminCampeonatosPage() {
     {
       header: 'Início',
       accessor: (row: Championship) =>
-        row.start_date ? new Date(row.start_date).toLocaleDateString('pt-BR') : '—',
+        row.start_date ? formatDateShort(row.start_date) : '—',
     },
     {
       header: 'Ações',
@@ -276,9 +277,9 @@ export default function AdminCampeonatosPage() {
                 { label: 'Mínimo de times', value: selectedChampionship.min_teams },
                 { label: 'Taxa de inscrição', value: `R$ ${selectedChampionship.enrollment_fee}` },
                 { label: 'Premiação', value: `R$ ${selectedChampionship.prize_pool}` },
-                { label: 'Início inscrições', value: new Date(selectedChampionship.enrollment_start).toLocaleDateString('pt-BR') },
-                { label: 'Fim inscrições', value: new Date(selectedChampionship.enrollment_end).toLocaleDateString('pt-BR') },
-                { label: 'Data de início', value: new Date(selectedChampionship.start_date).toLocaleDateString('pt-BR') },
+                { label: 'Início inscrições', value: formatDateShort(selectedChampionship.enrollment_start) },
+                { label: 'Fim inscrições', value: formatDateShort(selectedChampionship.enrollment_end) },
+                { label: 'Data de início', value: formatDateShort(selectedChampionship.start_date) },
                 { label: 'Agenda de Jogos', value: (() => {
                     const days = selectedChampionship.game_days;
                     const start = selectedChampionship.game_start_time;

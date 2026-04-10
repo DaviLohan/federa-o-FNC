@@ -6,6 +6,7 @@ import type { Championship, Enrollment } from '@/types';
 import { Calendar, DollarSign, Users, Trophy, FileText, Clock, Zap, Target } from 'lucide-react';
 import { Button } from '@/components/shared/ui';
 import { PaymentPixModal } from '../PaymentPixModal';
+import { formatDateTimeLong } from '@/lib/utils/date';
 
 interface OverviewTabProps {
   championship: Championship;
@@ -15,15 +16,6 @@ interface OverviewTabProps {
 
 export function OverviewTab({ championship, enrollments, pendingEnrollment = null }: OverviewTabProps) {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
 
   const formatCurrency = (value: string) => {
     const numValue = parseFloat(value);
@@ -194,7 +186,7 @@ export function OverviewTab({ championship, enrollments, pendingEnrollment = nul
                 <div className="text-2xl group-hover:scale-110 transition-transform">{item.icon}</div>
                 <div className="flex-1 pt-1">
                   <p className="text-sm font-heading font-semibold text-text mb-1">{item.label}</p>
-                  <p className="text-sm text-muted font-mono">{formatDate(item.date)}</p>
+                  <p className="text-sm text-muted font-mono">{formatDateTimeLong(item.date)}</p>
                 </div>
               </div>
             ))}
@@ -233,7 +225,7 @@ export function OverviewTab({ championship, enrollments, pendingEnrollment = nul
               <p className="text-muted text-lg">
                 {isEnrollmentOpen
                   ? 'As inscrições estão abertas. Não perca a chance de participar deste campeonato épico!'
-                  : `As inscrições abrirão em ${formatDate(championship.enrollment_start)}`}
+                  : `As inscrições abrirão em ${formatDateTimeLong(championship.enrollment_start)}`}
               </p>
               {isEnrollmentOpen && championship.max_teams && (
                 <div className="flex items-center gap-3 pt-2">

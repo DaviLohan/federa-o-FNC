@@ -461,7 +461,7 @@ class MatchValidationService:
                     f'Nenhuma partida agendada encontrada entre '
                     f'{home_team.name} e {away_team.name} dentro de '
                     f'{MATCH_TIME_WINDOW_HOURS}h da partida EA '
-                    f'({played_at.strftime("%d/%m/%Y %H:%M")}).'
+                    f'({timezone.localtime(played_at).strftime("%d/%m/%Y %H:%M")}).'
                 ),
                 raw_comparison={
                     'home_team': home_team.name,
@@ -561,7 +561,7 @@ class MatchValidationService:
             f'Partida EA: {ea_match.ea_match_id}',
             f'{ea_match.home_club_name} {ea_match.home_score} x '
             f'{ea_match.away_score} {ea_match.away_club_name}',
-            f'Data: {ea_match.played_at.strftime("%d/%m/%Y %H:%M")}',
+            f'Data: {timezone.localtime(ea_match.played_at).strftime("%d/%m/%Y %H:%M")}',
             '\n**Inconsistências detectadas:**\n',
         ]
         for i, issue in enumerate(error_issues, 1):

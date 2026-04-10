@@ -24,6 +24,7 @@ class NotificationService:
         related_match_id: Optional[int] = None,
         related_championship_id: Optional[int] = None,
         related_invitation_id: Optional[int] = None,
+        related_leave_request_id: Optional[int] = None,
     ) -> Notification:
         """
         Cria uma notificação para um usuário.
@@ -49,6 +50,7 @@ class NotificationService:
             related_match_id=related_match_id,
             related_championship_id=related_championship_id,
             related_invitation_id=related_invitation_id,
+            related_leave_request_id=related_leave_request_id,
         )
     
     @staticmethod

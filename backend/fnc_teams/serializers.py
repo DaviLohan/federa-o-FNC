@@ -1,6 +1,16 @@
 from rest_framework import serializers
 from .models import Team, TeamMembership, TeamInvitation, TeamLeaveRequest, Formation, FormationPosition
 from users.serializers import UserSerializer, PlayerProfileListSerializer
+from ea_integration.ea_client import EAApiError, EAProClubsClient
+from ea_integration.models import EAClub
+
+
+class TeamEAClubSerializer(serializers.ModelSerializer):
+    platform_display = serializers.CharField(source='get_platform_display', read_only=True)
+
+    class Meta:
+        model = EAClub
+        fields = ['ea_club_id', 'platform', 'platform_display', 'name']
 
 
 class TeamSerializer(serializers.ModelSerializer):
@@ -9,6 +19,13 @@ class TeamSerializer(serializers.ModelSerializer):
     """
     owner = UserSerializer(read_only=True)
     owner_id = serializers.IntegerField(write_only=True, required=False)
+    ea_club = TeamEAClubSerializer(read_only=True)
+    ea_club_id = serializers.CharField(write_only=True, required=False, allow_blank=False)
+    ea_platform = serializers.ChoiceField(
+        write_only=True,
+        required=False,
+        choices=EAClub.Platform.choices,
+    )
     
     # Campos calculados
     player_count = serializers.IntegerField(read_only=True)
@@ -29,6 +46,9 @@ class TeamSerializer(serializers.ModelSerializer):
             'logo',
             'description',
             'foundation_date',
+            'ea_club',
+            'ea_club_id',
+            'ea_platform',
             'is_active',
             'player_count',
             'has_active_championship',
@@ -58,7 +78,99 @@ class TeamSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     'Você já possui um time ativo. Um usuário só pode ser dono de 1 time.'
                 )
+
+            self._validate_ea_club_binding(data)
+
+        if self.instance and ('ea_club_id' in data or 'ea_platform' in data):
+            raise serializers.ValidationError(
+                'O vínculo com a EA deve ser criado no cadastro inicial do time e não pode ser alterado por este endpoint.'
+            )
+
         return data
+
+    def _validate_ea_club_binding(self, data):
+        errors = {}
+        ea_club_id = str(data.get('ea_club_id') or '').strip()
+        ea_platform = data.get('ea_platform')
+
+        if not ea_club_id:
+            errors['ea_club_id'] = 'Valide o time na API antes de concluir o cadastro.'
+
+        if not ea_platform:
+            errors['ea_platform'] = 'A plataforma validada na API é obrigatória.'
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        if EAClub.objects.filter(ea_club_id=ea_club_id, platform=ea_platform).exists():
+            existing = EAClub.objects.select_related('team').filter(
+                ea_club_id=ea_club_id,
+                platform=ea_platform,
+            ).first()
+            team_name = existing.team.name if existing and existing.team_id else None
+            detail = 'Este clube da EA já está vinculado a outro time.'
+            if team_name:
+                detail = f'Este clube da EA já está vinculado ao time "{team_name}".'
+            raise serializers.ValidationError({'ea_club_id': detail})
+
+        client = EAProClubsClient()
+        try:
+            payload = client.get_club_info(club_ids=ea_club_id, platform=ea_platform)
+        except EAApiError:
+            raise serializers.ValidationError({
+                'ea_club_id': 'Não foi possível validar o time na API da EA agora. Tente novamente em instantes.'
+            })
+
+        official_club = self._extract_official_club(payload, ea_club_id)
+        if not official_club:
+            raise serializers.ValidationError({
+                'ea_club_id': 'O time selecionado não foi localizado na API da EA. Revise os dados e valide novamente.'
+            })
+
+        self.context['validated_ea_club'] = {
+            'ea_club_id': ea_club_id,
+            'platform': ea_platform,
+            'name': official_club.get('name') or official_club.get('clubName') or ea_club_id,
+        }
+
+    def _extract_official_club(self, payload, ea_club_id):
+        club_key = str(ea_club_id)
+
+        if isinstance(payload, dict):
+            if club_key in payload and isinstance(payload[club_key], dict):
+                return payload[club_key]
+            if payload.get('clubId') == club_key or str(payload.get('clubId')) == club_key:
+                return payload
+            if payload.get('ea_club_id') == club_key:
+                return payload
+
+        if isinstance(payload, list):
+            for item in payload:
+                if not isinstance(item, dict):
+                    continue
+                if str(item.get('clubId')) == club_key or str(item.get('ea_club_id')) == club_key:
+                    return item
+
+        return None
+
+    def create(self, validated_data):
+        validated_data.pop('owner_id', None)
+        validated_data.pop('ea_club_id', None)
+        validated_data.pop('ea_platform', None)
+
+        validated_ea_club = self.context.get('validated_ea_club')
+        if not validated_ea_club:
+            raise serializers.ValidationError('A validação do time na API é obrigatória antes do cadastro.')
+
+        team = Team.objects.create(**validated_data)
+        EAClub.objects.create(
+            team=team,
+            ea_club_id=validated_ea_club['ea_club_id'],
+            platform=validated_ea_club['platform'],
+            name=validated_ea_club['name'],
+            is_active=True,
+        )
+        return team
 
 
 class TeamListSerializer(serializers.ModelSerializer):
@@ -68,6 +180,7 @@ class TeamListSerializer(serializers.ModelSerializer):
     owner = UserSerializer(read_only=True)
     owner_name = serializers.CharField(source='owner.get_full_name', read_only=True)
     player_count = serializers.IntegerField(read_only=True)
+    ea_club = TeamEAClubSerializer(read_only=True)
     
     class Meta:
         model = Team
@@ -78,6 +191,7 @@ class TeamListSerializer(serializers.ModelSerializer):
             'logo',
             'owner',
             'owner_name',
+            'ea_club',
             'player_count',
             'is_active',
             'foundation_date'
@@ -303,6 +417,7 @@ class TeamDetailSerializer(serializers.ModelSerializer):
     Serializer detalhado do time com membros e formações.
     """
     owner = UserSerializer(read_only=True)
+    ea_club = TeamEAClubSerializer(read_only=True)
     members = serializers.SerializerMethodField()
     formations = FormationSerializer(many=True, read_only=True)
     
@@ -319,6 +434,7 @@ class TeamDetailSerializer(serializers.ModelSerializer):
             'logo',
             'description',
             'foundation_date',
+            'ea_club',
             'is_active',
             'player_count',
             'has_active_championship',

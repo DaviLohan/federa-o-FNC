@@ -3,13 +3,18 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { teamsAPI, usersAPI } from '@/lib/api';
+import { eaAPI, teamsAPI, usersAPI } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { useMyTeam } from '@/hooks/useMyTeam';
 import { Button, Input, ImageUpload, useToast, PageHeader, FilterBar, SkeletonGrid, EmptyState, Select, Modal } from '@/components/shared/ui';
 import { TeamCard } from '@/components/teams/TeamCard';
-import type { Team, PaginatedResponse } from '@/types';
-import { Users, Search } from 'lucide-react';
+import type { Team, PaginatedResponse, EAClubSearchResult } from '@/types';
+import { Users, Search, AlertTriangle, CheckCircle2, Link2, ShieldCheck } from 'lucide-react';
+
+interface TeamSubmitData extends Partial<Team> {
+  ea_club_id?: string;
+  ea_platform?: 'common-gen5' | 'common-gen4' | 'pc';
+}
 
 function getApiErrorMessage(error: any, fallback: string) {
   const data = error?.response?.data;
@@ -54,7 +59,7 @@ export default function TeamsPage() {
 
   // Create team mutation
   const createMutation = useMutation({
-    mutationFn: ({ data, file }: { data: Partial<Team>; file?: File | null }) => {
+    mutationFn: ({ data, file }: { data: TeamSubmitData; file?: File | null }) => {
       if (file) {
         const formData = new FormData();
         Object.entries(data).forEach(([key, value]) => {
@@ -295,11 +300,13 @@ export default function TeamsPage() {
 interface TeamModalProps {
   team: Team | null;
   onClose: () => void;
-  onSubmit: (data: Partial<Team>, file?: File | null) => void;
+  onSubmit: (data: TeamSubmitData, file?: File | null) => void;
   isLoading: boolean;
 }
 
 function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
+  const { showToast } = useToast();
+  const isEditing = !!team;
   const [formData, setFormData] = useState({
     name: team?.name || '',
     abbreviation: team?.abbreviation || '',
@@ -307,13 +314,100 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
     foundation_date: team?.foundation_date || new Date().toISOString().split('T')[0],
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [platform, setPlatform] = useState<'common-gen5' | 'common-gen4' | 'pc'>(
+    team?.ea_club?.platform || 'common-gen5'
+  );
+  const [searchResults, setSearchResults] = useState<EAClubSearchResult[]>([]);
+  const [selectedClub, setSelectedClub] = useState<EAClubSearchResult | null>(
+    team?.ea_club
+      ? {
+          ea_club_id: team.ea_club.ea_club_id,
+          name: team.ea_club.name,
+        }
+      : null
+  );
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+
+  const getClubIdentifier = (club: EAClubSearchResult | null) =>
+    club ? String(club.ea_club_id || club.clubId || '').trim() : '';
+
+  const getClubDisplayName = (club: EAClubSearchResult | null) =>
+    club ? String(club.name || club.clubName || '').trim() : '';
+
+  const validateClubMutation = useMutation({
+    mutationFn: () =>
+      eaAPI.searchClubs({
+        club_name: formData.name.trim(),
+        platform,
+      }),
+    onSuccess: (response) => {
+      const availableResults = response.results || [];
+      setSearchResults(availableResults);
+
+      if (availableResults.length === 0) {
+        setSelectedClub(null);
+        setValidationMessage(
+          'Não encontramos um time correspondente na API da EA. Revise o nome informado e tente novamente.'
+        );
+        return;
+      }
+
+      const selectableResults = availableResults.filter((result) => !result.already_linked);
+      if (selectableResults.length === 1 && availableResults.length === 1) {
+        setSelectedClub(selectableResults[0]);
+        setValidationMessage('Time validado com sucesso. Você já pode concluir o cadastro.');
+        return;
+      }
+
+      setSelectedClub(null);
+      setValidationMessage(
+        selectableResults.length > 0
+          ? 'Encontramos mais de um resultado. Selecione abaixo o time correto antes de concluir o cadastro.'
+          : 'Os resultados encontrados já estão vinculados a outros times. Escolha outro time ou revise os dados informados.'
+      );
+    },
+    onError: (error: any) => {
+      setSearchResults([]);
+      setSelectedClub(null);
+      setValidationMessage(null);
+      showToast(getApiErrorMessage(error, 'Erro ao validar time na API'), 'error');
+    },
+  });
+
+  const resetValidation = () => {
+    if (isEditing) return;
+    setSearchResults([]);
+    setSelectedClub(null);
+    setValidationMessage(null);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData, logoFile);
+
+    if (!isEditing && !selectedClub) {
+      showToast('Valide e selecione o time oficial na API antes de criar o cadastro.', 'error');
+      return;
+    }
+
+    onSubmit(
+      {
+        ...formData,
+        ...(isEditing
+          ? {}
+          : {
+              ea_club_id: getClubIdentifier(selectedClub),
+              ea_platform: platform,
+            }),
+      },
+      logoFile
+    );
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (e.target.name === 'name') {
+      resetValidation();
+    }
+
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
@@ -337,6 +431,7 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
         variant="primary"
         className="flex-1"
         loading={isLoading}
+        disabled={!isEditing && !selectedClub}
       >
         {team ? 'Salvar Alterações' : 'Criar Time'}
       </Button>
@@ -348,7 +443,7 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
       isOpen
       onClose={onClose}
       title={team ? 'Editar Time' : 'Criar Novo Time'}
-      description={team ? 'Atualize as informações do time' : 'Preencha os dados do novo time'}
+      description={team ? 'Atualize as informações do time' : 'Preencha os dados, valide na API da EA e conclua o cadastro'}
       size="lg"
       stickyFooter={footer}
     >
@@ -384,6 +479,182 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
             required
           />
         </div>
+
+        {!isEditing && (
+          <div className="rounded-2xl border border-gold/20 bg-gold/5 p-4 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gold/10 border border-gold/20 flex items-center justify-center text-gold flex-shrink-0">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-text">
+                  Validação obrigatória na API da EA
+                </h3>
+                <p className="text-xs text-muted mt-1">
+                  O time só pode ser criado depois que o sistema localizar o clube oficial na EA e confirmar o identificador correto.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+              <Select
+                label="Plataforma"
+                value={platform}
+                onChange={(e) => {
+                  setPlatform(e.target.value as 'common-gen5' | 'common-gen4' | 'pc');
+                  resetValidation();
+                }}
+                options={[
+                  { value: 'common-gen5', label: 'PS5 / Xbox Series / Cross-play' },
+                  { value: 'common-gen4', label: 'PS4 / Xbox One' },
+                  { value: 'pc', label: 'PC' },
+                ]}
+              />
+
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  if (formData.name.trim().length < 2) {
+                    showToast('Informe o nome do time antes de validar na API.', 'error');
+                    return;
+                  }
+                  validateClubMutation.mutate();
+                }}
+                loading={validateClubMutation.isPending}
+                className="sm:min-w-[170px]"
+              >
+                Validar na API
+              </Button>
+            </div>
+
+            {validationMessage && (
+              <div className={`rounded-xl border px-3 py-2.5 text-sm ${selectedClub
+                ? 'border-success/30 bg-success/10 text-success'
+                : 'border-warning/30 bg-warning/10 text-warning'
+              }`}>
+                {validationMessage}
+              </div>
+            )}
+
+            {selectedClub && (
+              <div className="rounded-2xl border border-success/30 bg-success/10 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-success/10 border border-success/20 flex items-center justify-center text-success flex-shrink-0">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-text">Time confirmado</p>
+                    <p className="text-sm text-text mt-1">{getClubDisplayName(selectedClub)}</p>
+                    <div className="flex flex-wrap gap-2 mt-2 text-xs text-muted">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-border bg-surface2">
+                        ID oficial: {getClubIdentifier(selectedClub)}
+                      </span>
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-border bg-surface2">
+                        Plataforma: {platform}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {searchResults.length > 1 && (
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-text">
+                  Selecione o time correto encontrado na API
+                </p>
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {searchResults.map((result) => {
+                    const resultId = getClubIdentifier(result);
+                    const isSelected = getClubIdentifier(selectedClub) === resultId;
+                    const isBlocked = !!result.already_linked;
+
+                    return (
+                      <button
+                        key={`${resultId}-${getClubDisplayName(result)}`}
+                        type="button"
+                        disabled={isBlocked}
+                        onClick={() => {
+                          setSelectedClub(result);
+                          setValidationMessage('Time validado com sucesso. Você já pode concluir o cadastro.');
+                        }}
+                        className={`w-full rounded-2xl border p-4 text-left transition-all ${
+                          isBlocked
+                            ? 'border-error/30 bg-error/10 opacity-70 cursor-not-allowed'
+                            : isSelected
+                              ? 'border-gold/50 bg-gold/10 shadow-lg shadow-gold/10'
+                              : 'border-border bg-surface2 hover:border-gold/40 hover:bg-surface1'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-text truncate">{getClubDisplayName(result)}</p>
+                            <div className="flex flex-wrap gap-2 mt-2 text-xs text-muted">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full border border-border bg-surface1">
+                                ID: {resultId}
+                              </span>
+                              {result.overallRank && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full border border-border bg-surface1">
+                                  Rank: {result.overallRank}
+                                </span>
+                              )}
+                              {result.members && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full border border-border bg-surface1">
+                                  Membros: {result.members}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {isBlocked ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-error/30 bg-error/10 text-error">
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              Em uso
+                            </span>
+                          ) : isSelected ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-gold/30 bg-gold/10 text-gold">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Selecionado
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border bg-surface1 text-muted">
+                              <Link2 className="w-3.5 h-3.5" />
+                              Selecionar
+                            </span>
+                          )}
+                        </div>
+
+                        {isBlocked && result.existing_team && (
+                          <p className="mt-3 text-xs text-error">
+                            Já vinculado ao time {result.existing_team.name}.
+                          </p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {isEditing && team.ea_club && (
+          <div className="rounded-2xl border border-border bg-surface2 p-4">
+            <p className="text-sm font-semibold text-text">Vínculo oficial com a EA</p>
+            <div className="flex flex-wrap gap-2 mt-3 text-xs text-muted">
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-border bg-surface1">
+                {team.ea_club.name}
+              </span>
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-border bg-surface1">
+                ID: {team.ea_club.ea_club_id}
+              </span>
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-border bg-surface1">
+                {team.ea_club.platform_display || team.ea_club.platform}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Descrição */}
         <div>

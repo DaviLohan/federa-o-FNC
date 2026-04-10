@@ -4,11 +4,13 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q, Count, Exists, OuterRef, Prefetch
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from .models import Team, TeamMembership, TeamInvitation, TeamLeaveRequest, Formation, FormationPosition
+from player_stats.models import PlayerProfile
 from .permissions import (
     IsTeamOwnerOrReadOnly,
     IsTeamMemberOrOwner,
@@ -68,7 +70,7 @@ class TeamViewSet(viewsets.ModelViewSet):
             )
         )
 
-        return queryset.select_related('owner').annotate(
+        return queryset.select_related('owner', 'ea_club').annotate(
             player_count=Count('teammembership', filter=Q(teammembership__is_active=True), distinct=True),
             has_active_championship=Exists(active_championships)
         ).prefetch_related(
@@ -136,7 +138,25 @@ class TeamViewSet(viewsets.ModelViewSet):
             user.user_type = 'TEAM_OWNER'
             user.save(update_fields=['user_type'])
 
-        serializer.save(owner=user)
+        try:
+            with transaction.atomic():
+                team = serializer.save(owner=user)
+
+                # Adicionar o owner ao elenco como membro com role OWNER
+                try:
+                    player_profile = PlayerProfile.objects.get(user=user)
+                    TeamMembership.objects.create(
+                        team=team,
+                        player=player_profile,
+                        role=TeamMembership.Role.OWNER,
+                        is_active=True,
+                    )
+                except PlayerProfile.DoesNotExist:
+                    pass
+        except IntegrityError:
+            raise ValidationError(
+                'Este clube oficial da EA já está vinculado a outro time. Revise a validação e tente novamente.'
+            )
     
     @action(detail=True, methods=['get'])
     def members(self, request, pk=None):
@@ -207,7 +227,7 @@ class TeamViewSet(viewsets.ModelViewSet):
         
         Requer: player_id
         """
-        team = self.get_object()
+        team = get_object_or_404(Team, pk=pk, is_active=True)
         
         # Verificar se o usuário é o dono do time
         if team.owner != request.user:

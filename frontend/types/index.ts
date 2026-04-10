@@ -134,6 +134,31 @@ export interface ResetPasswordResponse {
 }
 
 // Team Types
+export interface TeamEAClub {
+  ea_club_id: string;
+  platform: 'common-gen5' | 'common-gen4' | 'pc';
+  platform_display?: string;
+  name: string;
+}
+
+export interface EAClubSearchResult {
+  ea_club_id: string;
+  name: string;
+  clubId?: string | number;
+  clubName?: string;
+  members?: number | string;
+  wins?: number | string;
+  losses?: number | string;
+  ties?: number | string;
+  overallRank?: number | string;
+  skillRating?: number | string;
+  already_linked?: boolean;
+  existing_team?: {
+    id: number;
+    name: string;
+  } | null;
+}
+
 export interface Team {
   id: number;
   name: string;
@@ -142,6 +167,7 @@ export interface Team {
   description: string;
   foundation_date: string;
   owner: User;
+  ea_club?: TeamEAClub | null;
   player_count: number;
   has_active_championship: boolean;
   members?: TeamMembership[];

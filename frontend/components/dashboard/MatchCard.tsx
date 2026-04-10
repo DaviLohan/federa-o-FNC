@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Calendar, Clock, Trophy } from 'lucide-react';
 import { Badge } from '@/components/shared/ui/Badge';
+import { formatDayMonth } from '@/lib/utils/date';
 
 interface MatchCardProps {
   match: {
@@ -47,11 +48,7 @@ export function MatchCard({ match, showActions = false, compact = false }: Match
   const statusInfo = statusConfig[match.status];
 
   // Formatar data
-  const matchDate = new Date(match.scheduled_date);
-  const formattedDate = matchDate.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-  });
+  const formattedDate = formatDayMonth(match.scheduled_date);
 
   return (
     <Link href={`/matches/${match.id}`}>

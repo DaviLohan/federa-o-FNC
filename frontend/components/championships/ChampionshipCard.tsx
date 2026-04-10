@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/shared/ui';
 import type { Championship } from '@/types';
 import { Calendar, Trophy, Users, DollarSign } from 'lucide-react';
+import { formatDate } from '@/lib/utils/date';
 
 interface ChampionshipCardProps {
   championship: Championship;
@@ -31,14 +32,6 @@ export function ChampionshipCard({ championship }: ChampionshipCardProps) {
 
   const handleClick = () => {
     router.push(`/championships/${championship.id}`);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
   };
 
   const formatCurrency = (value: string) => {

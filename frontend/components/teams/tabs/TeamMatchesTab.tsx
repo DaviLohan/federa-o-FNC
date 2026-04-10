@@ -8,6 +8,7 @@ import { Card, Badge, Button, EmptyState } from '@/components/shared/ui';
 import { MatchReportModal } from '@/components/championships/modals/MatchReportModal';
 import type { Match } from '@/types';
 import { Calendar, Clock, ChevronRight } from 'lucide-react';
+import { formatDate, formatTime } from '@/lib/utils/date';
 
 interface TeamMatchesTabProps {
   teamId: number;
@@ -31,21 +32,6 @@ const filterTabs: { id: FilterStatus; label: string }[] = [
   { id: 'IN_PROGRESS', label: 'Em Andamento'  },
   { id: 'FINISHED',    label: 'Finalizadas'   },
 ];
-
-function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-function formatTime(dateString: string) {
-  return new Date(dateString).toLocaleTimeString('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 export function TeamMatchesTab({ teamId, isOwner }: TeamMatchesTabProps) {
   const router = useRouter();

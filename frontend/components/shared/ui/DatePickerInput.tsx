@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { formatDateShort, formatMonthYear } from '@/lib/utils/date';
 
 interface DatePickerInputProps {
   label: string;
@@ -39,7 +40,7 @@ function parseDate(value: string) {
 function formatDate(value: string) {
   const parsed = parseDate(value);
   if (!parsed) return 'dd/mm/aaaa';
-  return parsed.toLocaleDateString('pt-BR');
+  return formatDateShort(parsed.toISOString());
 }
 
 function isSameDay(a: Date | null, b: Date | null) {
@@ -97,10 +98,7 @@ export function DatePickerInput({ label, value, onChange, required = false, min,
   const minDate = parseDate(min || '');
   const maxDate = parseDate(max || '');
 
-  const monthLabel = displayMonth.toLocaleDateString('pt-BR', {
-    month: 'long',
-    year: 'numeric',
-  });
+  const monthLabel = formatMonthYear(displayMonth);
 
   const currentYear = displayMonth.getFullYear();
   const currentMonthIndex = displayMonth.getMonth();

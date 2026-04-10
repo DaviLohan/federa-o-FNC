@@ -18,6 +18,7 @@ import { Loader2, Shield } from 'lucide-react';
 import type { MatchLineup, MatchLineupPlayer } from '@/types';
 import type { TacticalFormation } from '@/types';
 import { FORMATION_POSITIONS, type FormationSlot } from '@/lib/formations';
+import { formatDate } from '@/lib/utils/date';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -587,11 +588,7 @@ export function LineupDisplay({ matchId }: LineupDisplayProps) {
         Escalação definida por{' '}
         {lineup.submitted_by.full_name || lineup.submitted_by.email}
         {' · '}
-        {new Date(lineup.created_at).toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric',
-        })}
+        {formatDate(lineup.created_at)}
       </p>
     </div>
   );

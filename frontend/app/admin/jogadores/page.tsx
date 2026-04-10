@@ -8,6 +8,7 @@ import { DataTable } from '@/components/shared/ui/DataTable';
 import { Badge } from '@/components/shared/ui/Badge';
 import { Button } from '@/components/shared/ui/Button';
 import { Drawer } from '@/components/shared/ui/Drawer';
+import { formatDateShort } from '@/lib/utils/date';
 import { useToast } from '@/components/shared/ui/Toast';
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -123,7 +124,7 @@ export default function AdminJogadoresPage() {
     {
       header: 'Cadastro',
       accessor: (row: UserType) =>
-        row.date_joined ? new Date(row.date_joined).toLocaleDateString('pt-BR') : '—',
+        row.date_joined ? formatDateShort(row.date_joined) : '—',
     },
     {
       header: 'Nickname',
@@ -241,8 +242,8 @@ export default function AdminJogadoresPage() {
             <div className="grid grid-cols-2 gap-3">
               {[
                 { label: 'Plataforma', value: PLATFORM_LABELS[selectedUser.platform] || selectedUser.platform },
-                { label: 'Cadastro', value: new Date(selectedUser.date_joined).toLocaleDateString('pt-BR') },
-                { label: 'Último login', value: selectedUser.last_login ? new Date(selectedUser.last_login).toLocaleDateString('pt-BR') : 'Nunca' },
+                { label: 'Cadastro', value: formatDateShort(selectedUser.date_joined) },
+                { label: 'Último login', value: selectedUser.last_login ? formatDateShort(selectedUser.last_login) : 'Nunca' },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-surface2 rounded-xl p-3">
                   <p className="text-xs text-muted mb-1">{label}</p>

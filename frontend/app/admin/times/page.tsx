@@ -8,6 +8,7 @@ import { DataTable } from '@/components/shared/ui/DataTable';
 import { Badge } from '@/components/shared/ui/Badge';
 import { Button } from '@/components/shared/ui/Button';
 import { Drawer } from '@/components/shared/ui/Drawer';
+import { formatDateShort } from '@/lib/utils/date';
 import { useToast } from '@/components/shared/ui/Toast';
 import Link from 'next/link';
 
@@ -127,7 +128,7 @@ export default function AdminTimesPage() {
     {
       header: 'Criado em',
       accessor: (row: Team) =>
-        row.created_at ? new Date(row.created_at).toLocaleDateString('pt-BR') : '—',
+        row.created_at ? formatDateShort(row.created_at) : '—',
     },
     {
       header: 'Ações',
@@ -246,8 +247,8 @@ export default function AdminTimesPage() {
             {/* Info grid */}
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: 'Fundação', value: selectedTeam.foundation_date ? new Date(selectedTeam.foundation_date).toLocaleDateString('pt-BR') : '—' },
-                { label: 'Criado em', value: selectedTeam.created_at ? new Date(selectedTeam.created_at).toLocaleDateString('pt-BR') : '—' },
+                { label: 'Fundação', value: selectedTeam.foundation_date ? formatDateShort(selectedTeam.foundation_date) : '—' },
+                { label: 'Criado em', value: selectedTeam.created_at ? formatDateShort(selectedTeam.created_at) : '—' },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-surface2 rounded-xl p-3">
                   <p className="text-xs text-muted mb-1">{label}</p>

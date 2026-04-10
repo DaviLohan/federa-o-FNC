@@ -8,6 +8,7 @@ import { DataTable } from '@/components/shared/ui/DataTable';
 import { Badge } from '@/components/shared/ui/Badge';
 import { Button } from '@/components/shared/ui/Button';
 import { Drawer } from '@/components/shared/ui/Drawer';
+import { formatDateShort, formatDateTimeShort } from '@/lib/utils/date';
 import { useToast } from '@/components/shared/ui/Toast';
 import Link from 'next/link';
 
@@ -147,7 +148,7 @@ export default function AdminPartidasPage() {
     {
       header: 'Data',
       accessor: (row: Match) =>
-        row.scheduled_date ? new Date(row.scheduled_date).toLocaleDateString('pt-BR') : '—',
+        row.scheduled_date ? formatDateShort(row.scheduled_date) : '—',
     },
     {
       header: 'Ações',
@@ -300,10 +301,10 @@ export default function AdminPartidasPage() {
             {/* Info */}
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: 'Agendada para', value: selectedMatch.scheduled_date ? new Date(selectedMatch.scheduled_date).toLocaleString('pt-BR') : '—' },
+                { label: 'Agendada para', value: selectedMatch.scheduled_date ? formatDateTimeShort(selectedMatch.scheduled_date) : '—' },
                 { label: 'Duração', value: selectedMatch.duration_minutes ? `${selectedMatch.duration_minutes} min` : '—' },
-                { label: 'Início', value: selectedMatch.started_at ? new Date(selectedMatch.started_at).toLocaleString('pt-BR') : '—' },
-                { label: 'Fim', value: selectedMatch.finished_at ? new Date(selectedMatch.finished_at).toLocaleString('pt-BR') : '—' },
+                { label: 'Início', value: selectedMatch.started_at ? formatDateTimeShort(selectedMatch.started_at) : '—' },
+                { label: 'Fim', value: selectedMatch.finished_at ? formatDateTimeShort(selectedMatch.finished_at) : '—' },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-surface2 rounded-xl p-3">
                   <p className="text-xs text-muted mb-1">{label}</p>

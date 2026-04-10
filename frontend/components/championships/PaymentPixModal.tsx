@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { paymentsAPI } from '@/lib/api';
 import { Modal, Button, useToast } from '@/components/shared/ui';
 import { CheckCircle2, Copy, QrCode } from 'lucide-react';
+import { formatDateTimeShort } from '@/lib/utils/date';
 
 interface PaymentPixModalProps {
   isOpen: boolean;
@@ -103,7 +104,7 @@ export function PaymentPixModal({ isOpen, onClose, paymentId, championshipId }: 
 
             {payment.expires_at && (
               <p className="text-xs text-muted">
-                Expira em {new Date(payment.expires_at).toLocaleString('pt-BR')}
+                Expira em {formatDateTimeShort(payment.expires_at)}
               </p>
             )}
 

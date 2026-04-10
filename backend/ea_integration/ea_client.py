@@ -86,19 +86,14 @@ class EAProClubsClient:
             'clubName': club_name,
             'platform': platform,
         }
-        try:
-            data = self._get('/allTimeLeaderboard/search', params=params)
-        except EAApiError as e:
-            logger.warning(
-                'Busca de clube falhou para "%s" (platform=%s): %s',
-                club_name, platform, e,
-            )
-            return []
+        data = self._get('/allTimeLeaderboard/search', params=params)
 
         # A EA retorna um dict onde cada chave é um club_id
         # Ex: {"57755": {"name": "MVL ES", "wins": "100", ...}}
         if isinstance(data, dict):
             return [{'ea_club_id': cid, **info} for cid, info in data.items()]
+        if isinstance(data, list):
+            return data
         return []
 
     def get_club_info(

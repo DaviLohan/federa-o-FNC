@@ -8,6 +8,7 @@ import { DataTable } from '@/components/shared/ui/DataTable';
 import { Badge } from '@/components/shared/ui/Badge';
 import { Button } from '@/components/shared/ui/Button';
 import { Drawer } from '@/components/shared/ui/Drawer';
+import { formatDateShort, formatDateTimeShort } from '@/lib/utils/date';
 import { useToast } from '@/components/shared/ui/Toast';
 
 const ENROLLMENT_STATUS_VARIANTS: Record<string, any> = {
@@ -173,7 +174,7 @@ export default function AdminInscricoesPage() {
     {
       header: 'Data',
       accessor: (row: Enrollment) =>
-        row.enrolled_at ? new Date(row.enrolled_at).toLocaleDateString('pt-BR') : '—',
+        row.enrolled_at ? formatDateShort(row.enrolled_at) : '—',
     },
     {
       header: 'Ações',
@@ -395,7 +396,7 @@ export default function AdminInscricoesPage() {
             {/* Info grid */}
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: 'Inscrito em', value: selectedEnrollment.enrolled_at ? new Date(selectedEnrollment.enrolled_at).toLocaleString('pt-BR') : '—' },
+                { label: 'Inscrito em', value: selectedEnrollment.enrolled_at ? formatDateTimeShort(selectedEnrollment.enrolled_at) : '—' },
                 { label: 'ID da inscrição', value: `#${selectedEnrollment.id}` },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-surface2 rounded-xl p-3">
@@ -421,7 +422,7 @@ export default function AdminInscricoesPage() {
                   {selectedEnrollment.payment.paid_at && (
                     <div className="flex justify-between">
                       <span className="text-muted text-sm">Pago em</span>
-                      <span className="text-success text-sm">{new Date(selectedEnrollment.payment.paid_at).toLocaleString('pt-BR')}</span>
+                      <span className="text-success text-sm">{formatDateTimeShort(selectedEnrollment.payment.paid_at)}</span>
                     </div>
                   )}
                 </div>

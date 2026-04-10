@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { championshipsAPI } from '@/lib/api';
 import type { Championship } from '@/types';
+import { formatDayMonth } from '@/lib/utils/date';
 
 function formatType(type: Championship['championship_type']) {
   const map = {
@@ -17,7 +18,7 @@ function formatType(type: Championship['championship_type']) {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  return formatDayMonth(dateStr);
 }
 
 function StatusBadge({ status }: { status: Championship['status'] }) {

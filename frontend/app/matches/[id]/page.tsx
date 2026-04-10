@@ -8,6 +8,7 @@ import { Card, Badge, Button, Skeleton } from '@/components/shared/ui';
 import { LineupDisplay } from '@/components/matches/LineupDisplay';
 import { MatchScorecard } from '@/components/matches/MatchScorecard';
 import { ReportStatusBar } from '@/components/matches/ReportStatusBar';
+import { formatDateTimeLong } from '@/lib/utils/date';
 import { EAReportModal } from '@/components/championships/modals';
 import { usePermissions } from '@/lib/hooks';
 import { ArrowLeft, SearchX, Handshake, BarChart3 } from 'lucide-react';
@@ -57,14 +58,6 @@ export default function MatchDetailsPage() {
       'FINAL': 'Final',
     };
     return labels[type] || type;
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('pt-BR', {
-      dateStyle: 'long',
-      timeStyle: 'short',
-    }).format(date);
   };
 
   const formatDuration = (minutes: number) => {
@@ -130,18 +123,18 @@ export default function MatchDetailsPage() {
           <div className="space-y-4">
             <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 py-2 border-b border-border">
               <span className="text-muted">Data Agendada:</span>
-              <span className="text-text font-semibold">{formatDate(match.scheduled_date)}</span>
+              <span className="text-text font-semibold">{formatDateTimeLong(match.scheduled_date)}</span>
             </div>
             {match.started_at && (
               <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 py-2 border-b border-border">
                 <span className="text-muted">Início Real:</span>
-                <span className="text-text font-semibold">{formatDate(match.started_at)}</span>
+                <span className="text-text font-semibold">{formatDateTimeLong(match.started_at)}</span>
               </div>
             )}
             {match.finished_at && (
               <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 py-2 border-b border-border">
                 <span className="text-muted">Finalizada em:</span>
-                <span className="text-text font-semibold">{formatDate(match.finished_at)}</span>
+                <span className="text-text font-semibold">{formatDateTimeLong(match.finished_at)}</span>
               </div>
             )}
             <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 py-2 border-b border-border">

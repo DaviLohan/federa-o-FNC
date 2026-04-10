@@ -5,6 +5,7 @@ import { Button, Badge } from '@/components/shared/ui';
 import { PhaseBadge } from './PhaseBadge';
 import { Calendar, Trophy, Users, Edit, ArrowLeft, Zap, Clock } from 'lucide-react';
 import type { Championship } from '@/types';
+import { formatDate } from '@/lib/utils/date';
 
 interface ChampionshipHeroProps {
   championship: Championship;
@@ -31,14 +32,6 @@ export function ChampionshipHero({ championship, canManage = false, onEdit }: Ch
       style: 'currency',
       currency: 'BRL',
     }).format(numValue);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
   };
 
   // Determinar fase atual baseado no status do backend e tipo do campeonato

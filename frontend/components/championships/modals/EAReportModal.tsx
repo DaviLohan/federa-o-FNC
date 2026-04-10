@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Modal, Button, Badge, Select, useToast } from '@/components/shared/ui';
 import { matchesAPI } from '@/lib/api';
 import type { Match, EAReportPreview, EAReportPlayer, EAReportWarning } from '@/types';
+import { formatDateTime } from '@/lib/utils/date';
 import {
   Gamepad2,
   CheckCircle2,
@@ -523,13 +524,7 @@ function PreviewContent({
 
         <div className="pt-2 border-t border-stroke/50 flex items-center justify-center gap-3 flex-wrap">
           <p className="text-xs text-muted2">
-            {playedAt.toLocaleString('pt-BR', {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
+            {formatDateTime(preview.played_at)}
           </p>
           <Badge variant="info">{preview.ea_match_id_external}</Badge>
         </div>

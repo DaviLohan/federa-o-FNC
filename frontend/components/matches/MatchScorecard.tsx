@@ -4,6 +4,7 @@ import { Badge } from '@/components/shared/ui';
 import type { Match } from '@/types';
 import { Calendar, Clock } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { formatDate, formatTime } from '@/lib/utils/date';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,21 +21,6 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   CANCELLED: { label: 'Cancelada', color: 'bg-error/20 text-error' },
   CONTESTED: { label: 'Contestada', color: 'bg-warning/20 text-warning' },
 };
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const formatDate = (dateString: string) =>
-  new Date(dateString).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-
-const formatTime = (dateString: string) =>
-  new Date(dateString).toLocaleTimeString('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 
 // ─── Component ────────────────────────────────────────────────────────────────
 

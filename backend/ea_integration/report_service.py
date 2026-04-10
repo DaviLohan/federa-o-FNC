@@ -192,7 +192,7 @@ class MatchReportEAService:
             notes=(
                 f'Resultado importado automaticamente via EA API. '
                 f'EA Match ID: {ea_match.ea_match_id}. '
-                f'Partida EA jogada em {ea_match.played_at.strftime("%d/%m/%Y %H:%M")}.'
+                f'Partida EA jogada em {timezone.localtime(ea_match.played_at).strftime("%d/%m/%Y %H:%M")}.'
             ),
             status=MatchReport.Status.APPROVED,
             approved_by=user,
@@ -265,7 +265,7 @@ class MatchReportEAService:
                 f'EA Match ID: {ea_match.ea_match_id}\n'
                 f'{ea_match.home_club_name} {ea_match.home_score} x '
                 f'{ea_match.away_score} {ea_match.away_club_name}\n'
-                f'Partida EA: {ea_match.played_at.strftime("%d/%m/%Y %H:%M")}'
+                f'Partida EA: {timezone.localtime(ea_match.played_at).strftime("%d/%m/%Y %H:%M")}'
             ),
             status=Contestation.Status.PENDING,
         )
@@ -442,7 +442,8 @@ class MatchReportEAService:
                 continue
 
             # Verificar se está dentro da janela de tempo
-            timestamp = match_data.get('timestamp', 0)
+            # int() protege contra timestamp vir como string numérica da EA API
+            timestamp = int(match_data.get('timestamp', 0))
             played_at = datetime.fromtimestamp(timestamp, tz=tz.utc)
 
             if not (window_start <= played_at <= window_end):

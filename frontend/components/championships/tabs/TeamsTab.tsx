@@ -10,6 +10,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { teamsAPI } from '@/lib/api';
 import { EnrollmentModal } from '../EnrollmentModal';
 import { PaymentPixModal } from '../PaymentPixModal';
+import { formatDate } from '@/lib/utils/date';
 
 interface TeamsTabProps {
   enrollments: Enrollment[];
@@ -65,14 +66,6 @@ export function TeamsTab({ enrollments, championship }: TeamsTabProps) {
       </>
     );
   }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  };
 
   // Separate approved and pending teams
   const approvedTeams = enrollments.filter((e) => e.status === 'APPROVED');

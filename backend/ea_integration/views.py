@@ -71,13 +71,51 @@ class EAClubViewSet(viewsets.ModelViewSet):
 
         client = EAProClubsClient()
         try:
+            platform = serializer.validated_data.get('platform', 'common-gen5')
             results = client.search_club(
                 club_name=serializer.validated_data['club_name'],
-                platform=serializer.validated_data.get('platform', 'common-gen5'),
+                platform=platform,
             )
+
+            enriched_results = []
+            for result in results:
+                ea_club_id = str(
+                    result.get('ea_club_id')
+                    or result.get('clubId')
+                    or (result.get('clubInfo') or {}).get('clubId')
+                    or ''
+                ).strip()
+                club_name = (
+                    result.get('name')
+                    or result.get('clubName')
+                    or (result.get('clubInfo') or {}).get('name')
+                    or ''
+                ).strip()
+
+                existing_link = EAClub.objects.select_related('team').filter(
+                    ea_club_id=ea_club_id,
+                    platform=platform,
+                ).first()
+
+                enriched_results.append({
+                    **result,
+                    'ea_club_id': ea_club_id,
+                    'name': club_name,
+                    'platform': platform,
+                    'already_linked': bool(existing_link),
+                    'existing_team': (
+                        {
+                            'id': existing_link.team_id,
+                            'name': existing_link.team.name,
+                        }
+                        if existing_link and existing_link.team_id
+                        else None
+                    ),
+                })
+
             return Response({
-                'count': len(results),
-                'results': results,
+                'count': len(enriched_results),
+                'results': enriched_results,
             })
         except EAApiError as e:
             logger.error('Erro ao buscar clube na EA: %s', e)

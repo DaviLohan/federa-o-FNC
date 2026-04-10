@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone as tz
 from typing import Optional
 
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.utils import timezone
 
 from .ea_client import EAProClubsClient, EAApiError
@@ -244,12 +244,13 @@ class MatchSyncService:
             home_club_data.get('details', {}).get('name')
             or home_club_data.get('name')
             or f'Clube {home_club_id}'
-        )
+        ).strip()
+
         away_club_name = (
             away_club_data.get('details', {}).get('name')
             or away_club_data.get('name')
             or f'Clube {away_club_id}'
-        )
+        ).strip()
 
         # ── Garantir que os EAClubs existem no DB ───────────────────────────
         home_club = self._get_or_create_club(
@@ -264,7 +265,8 @@ class MatchSyncService:
         )
 
         # ── Converter timestamp ─────────────────────────────────────────────
-        timestamp = match_data.get('timestamp', 0)
+        # int() protege contra timestamp vir como string numérica da EA API
+        timestamp = int(match_data.get('timestamp', 0))
         played_at = datetime.fromtimestamp(timestamp, tz=tz.utc)
 
         # ── Determinar tipo de partida ──────────────────────────────────────
@@ -275,19 +277,27 @@ class MatchSyncService:
         away_score = self._safe_int(away_club_data.get('goals', 0))
 
         # ── Criar EAMatch ───────────────────────────────────────────────────
-        ea_match = EAMatch.objects.create(
-            ea_match_id=ea_match_id,
-            match_type=match_type,
-            source=EAMatch.Source.EA_API,
-            played_at=played_at,
-            home_club=home_club,
-            home_club_name=home_club_name,
-            home_score=home_score,
-            away_club=away_club,
-            away_club_name=away_club_name,
-            away_score=away_score,
-            raw_data=match_data,
-        )
+        try:
+            ea_match = EAMatch.objects.create(
+                ea_match_id=ea_match_id,
+                match_type=match_type,
+                source=EAMatch.Source.EA_API,
+                played_at=played_at,
+                home_club=home_club,
+                home_club_name=home_club_name,
+                home_score=home_score,
+                away_club=away_club,
+                away_club_name=away_club_name,
+                away_score=away_score,
+                raw_data=match_data,
+            )
+        except IntegrityError:
+            # Race condition: outro worker criou a mesma partida simultaneamente
+            logger.warning(
+                'IntegrityError ao criar partida %s — provavelmente criada por outro worker, ignorando.',
+                ea_match_id,
+            )
+            return None
 
         # ── Processar stats dos jogadores ───────────────────────────────────
         players_data = match_data.get('players', {})
