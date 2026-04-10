@@ -255,6 +255,11 @@ class TeamViewSet(viewsets.ModelViewSet):
         instance.is_active = False
         instance.save(update_fields=['is_active'])
 
+        # Reverter owner para PLAYER — sem time ativo ele deixa de ser TEAM_OWNER
+        owner = instance.owner
+        owner.user_type = 'PLAYER'
+        owner.save(update_fields=['user_type'])
+
         # Desativar todos os membros
         TeamMembership.objects.filter(team=instance, is_active=True).update(
             is_active=False,

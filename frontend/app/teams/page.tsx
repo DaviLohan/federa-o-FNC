@@ -193,16 +193,14 @@ export default function TeamsPage() {
         }
       />
 
-      {/* Info: usuário já tem time */}
-      {(hasTeam || isOwner) && (
+      {/* Info: usuário já tem time — só exibe quando myTeam está resolvido para evitar nome vazio */}
+      {hasTeam && myTeam && (
         <div className="rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 text-sm text-muted">
-          Você já {isOwner ? 'é dono do time' : 'faz parte de um time'}{' '}
-          {myTeam ? (
-            <a href={`/teams/${myTeam.id}`} className="text-gold underline underline-offset-2">
-              {myTeam.name}
-            </a>
-          ) : null}
-          . Para criar um novo time, {isOwner ? 'exclua o time atual' : 'solicite saída do time atual'}.
+          Você já {myTeam.owner?.id === user?.id ? 'é dono do time' : 'faz parte de um time'}{' '}
+          <a href={`/teams/${myTeam.id}`} className="text-gold underline underline-offset-2">
+            {myTeam.name}
+          </a>
+          . Para criar um novo time, {myTeam.owner?.id === user?.id ? 'exclua o time atual' : 'solicite saída do time atual'}.
         </div>
       )}
 
