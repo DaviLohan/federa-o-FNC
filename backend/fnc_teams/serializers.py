@@ -35,7 +35,7 @@ class TeamSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at'
         ]
-        read_only_fields = ['id', 'foundation_date', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'is_active', 'foundation_date', 'created_at', 'updated_at']
     
     def validate_name(self, value):
         """Valida unicidade do nome."""
@@ -82,6 +82,7 @@ class TeamListSerializer(serializers.ModelSerializer):
             'is_active',
             'foundation_date'
         ]
+        read_only_fields = ['id', 'is_active', 'foundation_date']
 
 
 class TeamMembershipSerializer(serializers.ModelSerializer):
