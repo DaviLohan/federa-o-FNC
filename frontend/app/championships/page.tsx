@@ -7,7 +7,7 @@ import { Button, Card, Input, DatePickerInput, Badge, Table, Select, useToast, S
 import type { Championship } from '@/types';
 import { useAuthStore } from '@/lib/auth-store';
 import { ChampionshipCard } from '@/components/championships/ChampionshipCard';
-import { Search, Trophy } from 'lucide-react';
+import { Search, Trophy, CalendarRange, PlayCircle, Flag } from 'lucide-react';
 
 function getApiErrorMessage(error: any, fallback: string) {
   const data = error?.response?.data;
@@ -135,13 +135,16 @@ export default function ChampionshipsPage() {
   });
 
   const championships = championshipsData?.results || [];
+  const openCount = championships.filter((c) => c.status === 'OPEN').length;
+  const inProgressCount = championships.filter((c) => c.status === 'IN_PROGRESS').length;
+  const finishedCount = championships.filter((c) => c.status === 'FINISHED').length;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <PageHeader 
         title="Campeonatos"
-        subtitle="Gerencie campeonatos e inscrições"
+        subtitle="Acompanhe torneios abertos, em andamento e finalizados com visão clara do calendário competitivo."
         icon={<Trophy className="w-8 h-8" />}
         actions={
           canManageChampionships && (
@@ -152,8 +155,49 @@ export default function ChampionshipsPage() {
         }
       />
 
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="!p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-mono uppercase tracking-widest text-muted">Janela aberta</p>
+              <p className="mt-2 text-3xl font-black font-heading text-text">{openCount}</p>
+              <p className="mt-1 text-sm text-muted">Campeonatos recebendo atenção e inscrições.</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold/20 bg-gold/10 text-gold">
+              <CalendarRange className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="!p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-mono uppercase tracking-widest text-muted">Em andamento</p>
+              <p className="mt-2 text-3xl font-black font-heading text-text">{inProgressCount}</p>
+              <p className="mt-1 text-sm text-muted">Competições atualmente movimentando partidas e tabelas.</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold/20 bg-gold/10 text-gold">
+              <PlayCircle className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="!p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-mono uppercase tracking-widest text-muted">Encerrados</p>
+              <p className="mt-2 text-3xl font-black font-heading text-text">{finishedCount}</p>
+              <p className="mt-1 text-sm text-muted">Histórico competitivo já concluído.</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold/20 bg-gold/10 text-gold">
+              <Flag className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+      </div>
+
       {/* Filters */}
-      <FilterBar>
+        <FilterBar>
         {/* Search */}
         <div className="flex-1 min-w-[200px]">
           <div className="relative">
@@ -190,7 +234,7 @@ export default function ChampionshipsPage() {
         <SkeletonGrid count={6} />
       ) : championships.length === 0 ? (
         <EmptyState
-          icon="🏆"
+          icon={<Trophy className="mx-auto h-14 w-14 text-gold/40" />}
           title="Nenhum campeonato encontrado"
           description={
             canManageChampionships

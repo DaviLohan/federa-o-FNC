@@ -20,7 +20,7 @@ import {
 import { MatchCard } from '@/components/matches/MatchCard';
 import { EAReportModal } from '@/components/championships/modals/EAReportModal';
 import type { Match } from '@/types';
-import { Calendar, Search } from 'lucide-react';
+import { Swords, Search, Clock3, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 export default function MatchesPage() {
   const router = useRouter();
@@ -102,6 +102,10 @@ export default function MatchesPage() {
   const matches = matchesData?.results ?? [];
   const teams = teamsData?.results ?? [];
   const championships = championshipsData?.results ?? [];
+  const scheduledCount = matches.filter((match) => match.status === 'SCHEDULED').length;
+  const inProgressCount = matches.filter((match) => match.status === 'IN_PROGRESS').length;
+  const finishedCount = matches.filter((match) => match.status === 'FINISHED').length;
+  const contestedCount = matches.filter((match) => match.status === 'CONTESTED').length;
 
   const hasActiveFilters =
     !!searchQuery ||
@@ -146,16 +150,70 @@ export default function MatchesPage() {
         title="Partidas"
         subtitle={
           isLoading
-            ? 'Carregando partidas...'
-            : `${filteredMatches.length} partida${filteredMatches.length !== 1 ? 's' : ''} encontrada${filteredMatches.length !== 1 ? 's' : ''}`
+            ? 'Carregando calendário competitivo...'
+            : `${filteredMatches.length} partida${filteredMatches.length !== 1 ? 's' : ''} encontrada${filteredMatches.length !== 1 ? 's' : ''} no painel central de confrontos`
         }
-        icon={<Calendar className="w-8 h-8" />}
+        icon={<Swords className="w-8 h-8" />}
         actions={
           <Button variant="primary" onClick={() => setShowCreateModal(true)}>
             + Agendar Partida
           </Button>
         }
       />
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card className="!p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-mono uppercase tracking-widest text-muted">Agendadas</p>
+              <p className="mt-2 text-3xl font-black font-heading text-text">{scheduledCount}</p>
+              <p className="mt-1 text-sm text-muted">Confrontos prontos para lineup e kickoff.</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold/20 bg-gold/10 text-gold">
+              <Clock3 className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="!p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-mono uppercase tracking-widest text-muted">Em andamento</p>
+              <p className="mt-2 text-3xl font-black font-heading text-text">{inProgressCount}</p>
+              <p className="mt-1 text-sm text-muted">Partidas correndo ou aguardando fechamento.</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold/20 bg-gold/10 text-gold">
+              <Swords className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="!p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-mono uppercase tracking-widest text-muted">Finalizadas</p>
+              <p className="mt-2 text-3xl font-black font-heading text-text">{finishedCount}</p>
+              <p className="mt-1 text-sm text-muted">Resultados já consolidados no histórico.</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold/20 bg-gold/10 text-gold">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="!p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-mono uppercase tracking-widest text-muted">Contestadas</p>
+              <p className="mt-2 text-3xl font-black font-heading text-text">{contestedCount}</p>
+              <p className="mt-1 text-sm text-muted">Casos que pedem revisão e atenção extra.</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold/20 bg-gold/10 text-gold">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+      </div>
 
       {/* Filters */}
       <FilterBar
@@ -220,7 +278,7 @@ export default function MatchesPage() {
       ) : filteredMatches.length === 0 ? (
         <Card>
           <EmptyState
-            icon="⚽"
+            icon={<Swords className="mx-auto h-14 w-14 text-gold/40" />}
             title={
               hasActiveFilters
                 ? 'Nenhuma partida encontrada'

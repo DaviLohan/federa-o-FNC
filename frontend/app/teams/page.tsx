@@ -6,15 +6,21 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { eaAPI, teamsAPI, usersAPI } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { useMyTeam } from '@/hooks/useMyTeam';
-import { Button, Input, ImageUpload, useToast, PageHeader, FilterBar, SkeletonGrid, EmptyState, Select, Modal } from '@/components/shared/ui';
+import { Button, Input, ImageUpload, useToast, PageHeader, FilterBar, SkeletonGrid, EmptyState, Select, Modal, Card } from '@/components/shared/ui';
 import { TeamCard } from '@/components/teams/TeamCard';
 import type { Team, PaginatedResponse, EAClubSearchResult } from '@/types';
-import { Users, Search, AlertTriangle, CheckCircle2, Link2, ShieldCheck } from 'lucide-react';
+import { Search, AlertTriangle, CheckCircle2, Link2, ShieldCheck, Users, UserCheck, CircleOff } from 'lucide-react';
 
 interface TeamSubmitData extends Partial<Team> {
   ea_club_id?: string;
   ea_platform?: 'common-gen5' | 'common-gen4' | 'pc';
 }
+
+const PLATFORM_LABELS: Record<'common-gen5' | 'common-gen4' | 'pc', string> = {
+  'common-gen5': 'PS5 / Xbox Series / Cross-play',
+  'common-gen4': 'PS4 / Xbox One',
+  pc: 'PC',
+};
 
 function getApiErrorMessage(error: any, fallback: string) {
   const data = error?.response?.data;
@@ -147,6 +153,13 @@ export default function TeamsPage() {
   });
 
   const teams = teamsData?.results || [];
+  const activeTeamsCount = teams.filter((team) => team.is_active).length;
+  const inactiveTeamsCount = teams.length - activeTeamsCount;
+  const membershipStatus = hasTeam
+    ? myTeam?.owner?.id === user?.id
+      ? 'Você gerencia um time'
+      : 'Você faz parte de um time'
+    : 'Nenhum vínculo atual';
   
   // Filter teams based on search and status
   const filteredTeams = teams.filter((team) => {
@@ -184,7 +197,7 @@ export default function TeamsPage() {
       {/* Header */}
       <PageHeader 
         title="Times"
-        subtitle="Gerencie seus times e jogadores"
+        subtitle="Gerencie seu clube, valide vínculos oficiais na EA e organize o elenco com mais segurança."
         icon={<Users className="w-8 h-8" />}
         actions={
           <Button
@@ -198,9 +211,52 @@ export default function TeamsPage() {
         }
       />
 
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="!p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-mono uppercase tracking-widest text-muted">Times visíveis</p>
+              <p className="mt-2 text-3xl font-black font-heading text-text">{teams.length}</p>
+              <p className="mt-1 text-sm text-muted">Clubes listados para o seu perfil atual.</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold/20 bg-gold/10 text-gold">
+              <Users className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="!p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-mono uppercase tracking-widest text-muted">Status do elenco</p>
+              <p className="mt-2 text-lg font-bold text-text">{activeTeamsCount} ativos</p>
+              <p className="mt-1 text-sm text-muted">{inactiveTeamsCount} inativos no seu histórico recente.</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold/20 bg-gold/10 text-gold">
+              <UserCheck className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="!p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-mono uppercase tracking-widest text-muted">Seu momento</p>
+              <p className="mt-2 text-lg font-bold text-text">{membershipStatus}</p>
+              <p className="mt-1 text-sm text-muted">
+                {hasTeam && myTeam ? myTeam.name : 'Crie ou entre em um time para começar a competir.'}
+              </p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold/20 bg-gold/10 text-gold">
+              {hasTeam ? <Users className="h-5 w-5" /> : <CircleOff className="h-5 w-5" />}
+            </div>
+          </div>
+        </Card>
+      </div>
+
       {/* Info: usuário já tem time — só exibe quando myTeam está resolvido para evitar nome vazio */}
       {hasTeam && myTeam && (
-        <div className="rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 text-sm text-muted">
+        <div className="rounded-2xl border border-gold/30 bg-gold/5 px-5 py-4 text-sm text-muted shadow-lg shadow-gold/5">
           Você já {myTeam.owner?.id === user?.id ? 'é dono do time' : 'faz parte de um time'}{' '}
           <a href={`/teams/${myTeam.id}`} className="text-gold underline underline-offset-2">
             {myTeam.name}
@@ -248,7 +304,7 @@ export default function TeamsPage() {
         <SkeletonGrid count={6} />
       ) : filteredTeams.length === 0 ? (
         <EmptyState
-          icon="👥"
+          icon={<Users className="mx-auto h-14 w-14 text-gold/40" />}
           title={searchQuery || statusFilter !== 'all' ? 'Nenhum time encontrado' : 'Nenhum time cadastrado'}
           description={
             searchQuery || statusFilter !== 'all' 
@@ -333,6 +389,9 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
 
   const getClubDisplayName = (club: EAClubSearchResult | null) =>
     club ? String(club.name || club.clubName || '').trim() : '';
+
+  const getPlatformLabel = (value: 'common-gen5' | 'common-gen4' | 'pc') =>
+    PLATFORM_LABELS[value] || value;
 
   const validateClubMutation = useMutation({
     mutationFn: () =>
@@ -551,7 +610,7 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
                         ID oficial: {getClubIdentifier(selectedClub)}
                       </span>
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-border bg-surface2">
-                        Plataforma: {platform}
+                        Plataforma: {getPlatformLabel(platform)}
                       </span>
                     </div>
                   </div>
