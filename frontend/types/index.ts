@@ -47,6 +47,96 @@ export interface TeamOwnerProfile {
   is_active: boolean;
 }
 
+export interface TeamPerformanceSummary {
+  team_id: number;
+  matches: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goals_scored: number;
+  goals_conceded: number;
+  goal_difference: number;
+  win_rate: number;
+  clean_sheets: number;
+  advanced_matches: number;
+  basic_matches: number;
+  avg_team_rating: number | null;
+  passes_made: number;
+  pass_attempts: number;
+  pass_accuracy: number | null;
+  tackles_made: number;
+  tackle_attempts: number;
+  tackle_accuracy: number | null;
+  saves: number;
+}
+
+export interface TeamPerformancePlayer {
+  player_id: number | null;
+  player_name: string;
+  position: string;
+  matches_played: number;
+  advanced_matches: number;
+  basic_matches: number;
+  average_rating: number | null;
+  goals: number;
+  assists: number;
+  goal_contributions: number;
+  passes_made: number;
+  passes_missed: number;
+  pass_accuracy: number | null;
+  tackles_made: number;
+  tackles_missed: number;
+  tackle_accuracy: number | null;
+  saves: number;
+  cards: number;
+  has_advanced_data: boolean;
+}
+
+export interface TeamPerformanceMatch {
+  match_id: number;
+  played_at: string;
+  opponent: {
+    id: number;
+    name: string;
+    abbreviation: string;
+    logo?: string | null;
+  };
+  championship: { id: number; name: string } | null;
+  context: 'championship' | 'friendly';
+  result: 'W' | 'D' | 'L';
+  goals_scored: number;
+  goals_conceded: number;
+  clean_sheet: boolean;
+  has_advanced_data: boolean;
+  advanced_players: number;
+  lineup_players: number;
+  average_rating: number | null;
+  passes_made: number;
+  pass_attempts: number;
+  pass_accuracy: number | null;
+  tackles_made: number;
+  tackle_attempts: number;
+  tackle_accuracy: number | null;
+  saves: number;
+}
+
+export interface TeamPerformancePayload {
+  summary: TeamPerformanceSummary;
+  leaders: {
+    best_rating?: TeamPerformancePlayer | null;
+    top_scorer?: TeamPerformancePlayer | null;
+    top_assister?: TeamPerformancePlayer | null;
+    best_passer?: TeamPerformancePlayer | null;
+    best_tackler?: TeamPerformancePlayer | null;
+    most_matches?: TeamPerformancePlayer | null;
+  };
+  players: TeamPerformancePlayer[];
+  matches: TeamPerformanceMatch[];
+  filters: {
+    championships: { id: number; name: string }[];
+  };
+}
+
 // Auth Types
 export interface LoginRequest {
   email: string;
@@ -141,6 +231,16 @@ export interface TeamEAClub {
   name: string;
 }
 
+export interface TeamLineupStyle {
+  outfield_primary: string;
+  outfield_secondary: string;
+  goalkeeper_primary: string;
+  text_color: string;
+  accent_color: string;
+  title: string;
+  subtitle: string;
+}
+
 export interface EAClubSearchResult {
   ea_club_id: string;
   name: string;
@@ -168,6 +268,7 @@ export interface Team {
   foundation_date: string;
   owner: User;
   ea_club?: TeamEAClub | null;
+  lineup_visual_preferences?: TeamLineupStyle;
   player_count: number;
   has_active_championship: boolean;
   members?: TeamMembership[];

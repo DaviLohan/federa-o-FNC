@@ -858,12 +858,14 @@ class MatchReportEAService:
         try:
             from fnc_matches.services import (
                 update_player_statistics,
+                update_team_performance,
                 update_team_statistics,
                 update_standings,
                 update_top_scorers,
             )
             update_player_statistics(match)
             update_team_statistics(match)
+            update_team_performance(match)
             update_standings(match)
             update_top_scorers(match)
             logger.info('Estatísticas atualizadas para Match PK=%d', match.pk)

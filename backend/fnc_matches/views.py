@@ -165,6 +165,7 @@ class MatchViewSet(viewsets.ModelViewSet):
         # Atualizar estatísticas automaticamente
         from .services import (
             update_player_statistics,
+            update_team_performance,
             update_team_statistics,
             update_standings,
             update_top_scorers
@@ -172,6 +173,7 @@ class MatchViewSet(viewsets.ModelViewSet):
         
         update_player_statistics(match)
         update_team_statistics(match)
+        update_team_performance(match)
         update_standings(match)
         update_top_scorers(match)
         

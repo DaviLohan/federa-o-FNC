@@ -103,6 +103,7 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['championship'] });
       queryClient.invalidateQueries({ queryKey: ['match', match.id] });
+      queryClient.invalidateQueries({ queryKey: ['team-performance'] });
       handleClose();
     },
     onError: (err: any) => {

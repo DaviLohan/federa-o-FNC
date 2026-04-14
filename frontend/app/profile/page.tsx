@@ -41,6 +41,8 @@ export default function ProfilePage() {
     country: user?.player_profile?.country || '',
     language: user?.player_profile?.language || 'pt-br',
   });
+  const shouldShowMissingPlayerProfileState =
+    !user?.player_profile && (user?.user_type === 'PLAYER' || user?.user_type === 'TEAM_OWNER');
 
   // Update account mutation
   const updateAccountMutation = useMutation({
@@ -269,6 +271,41 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {shouldShowMissingPlayerProfileState && (
+        <Card title="Perfil de Jogador">
+          <div className="rounded-2xl border border-warning/30 bg-warning/5 p-5">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning/10">
+                <AlertTriangle className="h-5 w-5 text-warning" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-semibold text-text">
+                  Perfil de jogador indisponivel no momento
+                </h3>
+                <p className="mt-1 text-sm text-muted">
+                  Sua conta esta autenticada, mas o vinculo com o perfil de jogador nao foi carregado.
+                  Se isso persistir, existe uma inconsistencia de dados que precisa ser corrigida no backend.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Button
+                    variant="primary"
+                    onClick={() => window.location.reload()}
+                  >
+                    Recarregar dados
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => showToast('Se o problema continuar, rode a verificacao de integridade dos perfis no backend.', 'warning')}
+                  >
+                    Ver orientacao
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
       )}
 
       {/* Player Profile (only for users with player profile) */}

@@ -178,7 +178,7 @@ class NotificationService:
             action_url=f'/matches/{match.id}',
             related_match_id=match.id,
             related_team_id=match.home_team.id,
-            related_championship_id=match.championship.id,
+            related_championship_id=match.championship.id if match.championship_id else None,
         )
         
         # Notificar jogadores do time visitante
@@ -197,7 +197,7 @@ class NotificationService:
             action_url=f'/matches/{match.id}',
             related_match_id=match.id,
             related_team_id=match.away_team.id,
-            related_championship_id=match.championship.id,
+            related_championship_id=match.championship.id if match.championship_id else None,
         )
     
     @staticmethod

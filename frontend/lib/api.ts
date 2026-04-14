@@ -37,6 +37,8 @@ import type {
   EnrollmentCheckoutResponse,
   EAReportPreview,
   EAReportContestRequest,
+  TeamPerformancePayload,
+  TeamLineupStyle,
 } from '@/types';
 
 // Auth API
@@ -136,6 +138,22 @@ export const teamsAPI = {
   
   getMyTeam: () =>
     apiClient.get<Team>('/api/v1/teams/my-team/'),
+
+  getPerformance: (
+    id: number,
+    params?: {
+      championship_id?: number;
+      context?: 'all' | 'championship' | 'friendly';
+      date_from?: string;
+      date_to?: string;
+    }
+  ) => apiClient.get<TeamPerformancePayload>(`/api/v1/teams/${id}/performance/`, params),
+
+  getLineupStyle: (id: number) =>
+    apiClient.get<TeamLineupStyle>(`/api/v1/teams/${id}/lineup-style/`),
+
+  updateLineupStyle: (id: number, data: Partial<TeamLineupStyle>) =>
+    apiClient.patch<TeamLineupStyle>(`/api/v1/teams/${id}/lineup-style/`, data),
 };
 
 export const eaAPI = {

@@ -91,6 +91,7 @@ class WalkOverService:
         import fnc_matches.services as match_services
         match_services.update_player_statistics(self.match)
         match_services.update_team_statistics(self.match)
+        match_services.update_team_performance(self.match)
         match_services.update_standings(self.match)
         match_services.update_top_scorers(self.match)
         
@@ -137,6 +138,7 @@ class WalkOverService:
         import fnc_matches.services as match_services
         match_services.update_player_statistics(self.match)
         match_services.update_team_statistics(self.match)
+        match_services.update_team_performance(self.match)
         match_services.update_standings(self.match)
         match_services.update_top_scorers(self.match)
         

@@ -4,6 +4,16 @@ from users.serializers import UserSerializer, PlayerProfileListSerializer
 from ea_integration.ea_client import EAApiError, EAProClubsClient
 from ea_integration.models import EAClub
 
+DEFAULT_LINEUP_STYLE = {
+    'outfield_primary': '#D6A11E',
+    'outfield_secondary': '#111827',
+    'goalkeeper_primary': '#22C55E',
+    'text_color': '#FFFFFF',
+    'accent_color': '#F3D36B',
+    'title': 'Titular',
+    'subtitle': '',
+}
+
 
 class TeamEAClubSerializer(serializers.ModelSerializer):
     platform_display = serializers.CharField(source='get_platform_display', read_only=True)
@@ -11,6 +21,32 @@ class TeamEAClubSerializer(serializers.ModelSerializer):
     class Meta:
         model = EAClub
         fields = ['ea_club_id', 'platform', 'platform_display', 'name']
+
+
+class TeamLineupStyleSerializer(serializers.Serializer):
+    outfield_primary = serializers.RegexField(r'^#(?:[0-9a-fA-F]{6})$', required=False)
+    outfield_secondary = serializers.RegexField(r'^#(?:[0-9a-fA-F]{6})$', required=False)
+    goalkeeper_primary = serializers.RegexField(r'^#(?:[0-9a-fA-F]{6})$', required=False)
+    text_color = serializers.RegexField(r'^#(?:[0-9a-fA-F]{6})$', required=False)
+    accent_color = serializers.RegexField(r'^#(?:[0-9a-fA-F]{6})$', required=False)
+    title = serializers.CharField(required=False, allow_blank=False, max_length=40)
+    subtitle = serializers.CharField(required=False, allow_blank=True, max_length=60)
+
+    def validate_title(self, value):
+        return value.strip()
+
+    def validate_subtitle(self, value):
+        return value.strip()
+
+
+class TeamLineupStyleResponseSerializer(serializers.Serializer):
+    outfield_primary = serializers.CharField()
+    outfield_secondary = serializers.CharField()
+    goalkeeper_primary = serializers.CharField()
+    text_color = serializers.CharField()
+    accent_color = serializers.CharField()
+    title = serializers.CharField()
+    subtitle = serializers.CharField(allow_blank=True)
 
 
 class TeamSerializer(serializers.ModelSerializer):
@@ -26,6 +62,7 @@ class TeamSerializer(serializers.ModelSerializer):
         required=False,
         choices=EAClub.Platform.choices,
     )
+    lineup_visual_preferences = serializers.SerializerMethodField()
     
     # Campos calculados
     player_count = serializers.IntegerField(read_only=True)
@@ -49,6 +86,7 @@ class TeamSerializer(serializers.ModelSerializer):
             'ea_club',
             'ea_club_id',
             'ea_platform',
+            'lineup_visual_preferences',
             'is_active',
             'player_count',
             'has_active_championship',
@@ -172,6 +210,9 @@ class TeamSerializer(serializers.ModelSerializer):
         )
         return team
 
+    def get_lineup_visual_preferences(self, obj):
+        return {**DEFAULT_LINEUP_STYLE, **(obj.lineup_visual_preferences or {})}
+
 
 class TeamListSerializer(serializers.ModelSerializer):
     """
@@ -181,6 +222,7 @@ class TeamListSerializer(serializers.ModelSerializer):
     owner_name = serializers.CharField(source='owner.get_full_name', read_only=True)
     player_count = serializers.IntegerField(read_only=True)
     ea_club = TeamEAClubSerializer(read_only=True)
+    lineup_visual_preferences = serializers.SerializerMethodField()
     
     class Meta:
         model = Team
@@ -192,11 +234,15 @@ class TeamListSerializer(serializers.ModelSerializer):
             'owner',
             'owner_name',
             'ea_club',
+            'lineup_visual_preferences',
             'player_count',
             'is_active',
             'foundation_date'
         ]
         read_only_fields = ['id', 'is_active', 'foundation_date']
+
+    def get_lineup_visual_preferences(self, obj):
+        return {**DEFAULT_LINEUP_STYLE, **(obj.lineup_visual_preferences or {})}
 
 
 class TeamMembershipSerializer(serializers.ModelSerializer):
@@ -418,6 +464,7 @@ class TeamDetailSerializer(serializers.ModelSerializer):
     """
     owner = UserSerializer(read_only=True)
     ea_club = TeamEAClubSerializer(read_only=True)
+    lineup_visual_preferences = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
     formations = FormationSerializer(many=True, read_only=True)
     
@@ -435,6 +482,7 @@ class TeamDetailSerializer(serializers.ModelSerializer):
             'description',
             'foundation_date',
             'ea_club',
+            'lineup_visual_preferences',
             'is_active',
             'player_count',
             'has_active_championship',
@@ -454,6 +502,9 @@ class TeamDetailSerializer(serializers.ModelSerializer):
                 is_active=True
             ).select_related('player', 'player__user')
         return TeamMembershipSerializer(memberships, many=True).data
+
+    def get_lineup_visual_preferences(self, obj):
+        return {**DEFAULT_LINEUP_STYLE, **(obj.lineup_visual_preferences or {})}
 
 
 class TeamLeaveRequestSerializer(serializers.ModelSerializer):

@@ -5,6 +5,7 @@ from django.db.models import Sum, Count, Q, F
 from django.utils import timezone
 from fnc_matches.models import Match, Goal, Card
 from player_stats.models import PlayerStatistics, TeamStatistics, TopScorer
+from player_stats.team_performance_sync import TeamPerformanceSyncService
 from fnc_championships.models import Standings
 from fnc_teams.models import TeamMembership
 
@@ -680,3 +681,10 @@ def _reverse_standings(match, original_winner, original_is_draw, original_home_s
         
     except Standings.DoesNotExist:
         pass
+
+
+def update_team_performance(match):
+    """Atualiza snapshots persistidos de desempenho do time para a partida."""
+    if not match or match.status != Match.Status.FINISHED:
+        return
+    TeamPerformanceSyncService.sync_match(match)

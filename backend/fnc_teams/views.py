@@ -21,12 +21,16 @@ from .serializers import (
     TeamSerializer,
     TeamListSerializer,
     TeamDetailSerializer,
+    DEFAULT_LINEUP_STYLE,
+    TeamLineupStyleSerializer,
+    TeamLineupStyleResponseSerializer,
     TeamMembershipSerializer,
     TeamInvitationSerializer,
     TeamLeaveRequestSerializer,
     FormationSerializer,
     FormationCreateSerializer
 )
+from .performance_service import TeamPerformanceService
 
 
 class TeamViewSet(viewsets.ModelViewSet):
@@ -80,6 +84,10 @@ class TeamViewSet(viewsets.ModelViewSet):
     
     def get_serializer_class(self):
         """Retorna o serializer apropriado para cada ação."""
+        if self.action == 'lineup_style':
+            if self.request.method in ['PATCH', 'PUT']:
+                return TeamLineupStyleSerializer
+            return TeamLineupStyleResponseSerializer
         if self.action == 'list':
             return TeamListSerializer
         elif self.action == 'retrieve':
@@ -112,6 +120,23 @@ class TeamViewSet(viewsets.ModelViewSet):
             )
         
         return self._get_optimized_queryset(queryset).distinct()
+
+    def _get_lineup_style(self, team: Team):
+        prefs = team.lineup_visual_preferences or {}
+        return {
+            **DEFAULT_LINEUP_STYLE,
+            **{key: value for key, value in prefs.items() if value not in [None, '']},
+        }
+
+    def _can_manage_lineup_style(self, user, team: Team):
+        if team.owner_id == user.id:
+            return True
+        return TeamMembership.objects.filter(
+            team=team,
+            player__user=user,
+            role__in=[TeamMembership.Role.OWNER, TeamMembership.Role.CAPTAIN],
+            is_active=True,
+        ).exists()
     
     def perform_create(self, serializer):
         """
@@ -182,6 +207,43 @@ class TeamViewSet(viewsets.ModelViewSet):
         
         serializer = FormationSerializer(formations, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def performance(self, request, pk=None):
+        """Retorna analytics de desempenho do time para a nova aba."""
+        team = self.get_object()
+        payload = TeamPerformanceService.get_team_performance(
+            team,
+            championship_id=request.query_params.get('championship_id'),
+            context=request.query_params.get('context'),
+            date_from=request.query_params.get('date_from'),
+            date_to=request.query_params.get('date_to'),
+        )
+        return Response(payload)
+
+    @action(detail=True, methods=['get', 'patch'], url_path='lineup-style')
+    def lineup_style(self, request, pk=None):
+        team = self.get_object()
+
+        if request.method == 'GET':
+            return Response(self._get_lineup_style(team))
+
+        if not self._can_manage_lineup_style(request.user, team):
+            return Response(
+                {'error': 'Apenas o dono ou capitão pode editar o estilo da escalação.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = self.get_serializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        merged = {
+            **self._get_lineup_style(team),
+            **serializer.validated_data,
+        }
+        team.lineup_visual_preferences = merged
+        team.save(update_fields=['lineup_visual_preferences', 'updated_at'])
+        return Response(self._get_lineup_style(team))
     
     @action(detail=False, methods=['get'], url_path='my-team')
     def my_team(self, request):

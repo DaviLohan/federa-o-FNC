@@ -12,6 +12,7 @@ import { Button, Card, Badge, Input, useToast, TermsModal } from '@/components/s
 import { MembersTab } from '@/components/teams/MembersTab';
 import { InvitePlayerTab } from '@/components/teams/InvitePlayerTab';
 import { TeamMatchesTab } from '@/components/teams/tabs/TeamMatchesTab';
+import { TeamPerformanceTab } from '@/components/teams/tabs/TeamPerformanceTab';
 import type { TeamMembership, TeamLeaveRequest } from '@/types';
 import {
   ArrowLeft,
@@ -26,6 +27,7 @@ import {
   LogOut,
   Crown,
   FileText,
+  BarChart3,
 } from 'lucide-react';
 import { statisticsAPI } from '@/lib/api';
 
@@ -52,7 +54,7 @@ interface TeamOverallStats {
   current_form: ('W' | 'D' | 'L')[];
 }
 
-type TabId = 'members' | 'tactical' | 'stats' | 'matches';
+type TabId = 'members' | 'tactical' | 'stats' | 'matches' | 'performance';
 
 // ─── Framer Motion variants ───────────────────────────────────────────────────
 
@@ -467,6 +469,7 @@ export default function TeamDetailPage() {
     { id: 'members',  label: 'Membros',       icon: <Users      className="w-4 h-4" /> },
     { id: 'tactical', label: 'Campo Tático',  icon: <Crosshair  className="w-4 h-4" /> },
     { id: 'stats',    label: 'Estatísticas',  icon: <Trophy     className="w-4 h-4" /> },
+    { id: 'performance', label: 'Desempenho', icon: <BarChart3  className="w-4 h-4" /> },
     { id: 'matches',  label: 'Partidas',      icon: <CalendarDays className="w-4 h-4" /> },
   ];
 
@@ -847,6 +850,9 @@ export default function TeamDetailPage() {
 
                 {/* Estatísticas */}
                 {activeTab === 'stats' && <StatsTab teamStats={teamStats} />}
+
+                {/* Desempenho */}
+                {activeTab === 'performance' && <TeamPerformanceTab teamId={teamId} />}
 
                 {/* Partidas */}
                 {activeTab === 'matches' && (

@@ -317,3 +317,149 @@ class TopScorer(models.Model):
         if self.matches_played > 0:
             return round(self.goals / self.matches_played, 2)
         return 0.0
+
+
+class TeamPerformanceMatch(models.Model):
+    """Snapshot de desempenho coletivo de um time em uma partida."""
+
+    class Context(models.TextChoices):
+        CHAMPIONSHIP = 'championship', 'Campeonato'
+        FRIENDLY = 'friendly', 'Amistoso'
+
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name='performance_matches',
+        verbose_name='time',
+    )
+    match = models.ForeignKey(
+        Match,
+        on_delete=models.CASCADE,
+        related_name='team_performance_snapshots',
+        verbose_name='partida',
+    )
+    championship = models.ForeignKey(
+        Championship,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='team_performance_matches',
+        verbose_name='campeonato',
+    )
+
+    context = models.CharField('contexto', max_length=20, choices=Context.choices)
+    is_home = models.BooleanField('jogou em casa', default=False)
+    played_at = models.DateTimeField('jogada em')
+
+    opponent_team = models.ForeignKey(
+        Team,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='opponent_performance_matches',
+        verbose_name='adversário',
+    )
+    opponent_name = models.CharField('nome do adversário', max_length=200)
+
+    goals_scored = models.PositiveIntegerField('gols marcados', default=0)
+    goals_conceded = models.PositiveIntegerField('gols sofridos', default=0)
+    result = models.CharField('resultado', max_length=1, choices=[('W', 'Vitória'), ('D', 'Empate'), ('L', 'Derrota')])
+    clean_sheet = models.BooleanField('clean sheet', default=False)
+
+    has_advanced_data = models.BooleanField('tem dados avançados', default=False)
+    advanced_players = models.PositiveIntegerField('jogadores com dados avançados', default=0)
+    lineup_players = models.PositiveIntegerField('jogadores escalados', default=0)
+
+    average_rating = models.DecimalField('nota média', max_digits=5, decimal_places=2, null=True, blank=True)
+    passes_made = models.PositiveIntegerField('passes certos', default=0)
+    pass_attempts = models.PositiveIntegerField('passes tentados', default=0)
+    tackles_made = models.PositiveIntegerField('desarmes certos', default=0)
+    tackle_attempts = models.PositiveIntegerField('desarmes tentados', default=0)
+    saves = models.PositiveIntegerField('defesas', default=0)
+
+    created_at = models.DateTimeField('criado em', auto_now_add=True)
+    updated_at = models.DateTimeField('atualizado em', auto_now=True)
+
+    class Meta:
+        verbose_name = 'desempenho do time por partida'
+        verbose_name_plural = 'desempenhos do time por partida'
+        ordering = ['-played_at']
+        constraints = [
+            models.UniqueConstraint(fields=['team', 'match'], name='unique_team_performance_match'),
+        ]
+
+    def __str__(self):
+        return f'{self.team} vs {self.opponent_name} ({self.played_at:%d/%m/%Y})'
+
+
+class TeamPlayerPerformance(models.Model):
+    """Snapshot de desempenho individual de um jogador em uma partida pelo time."""
+
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name='player_performance_matches',
+        verbose_name='time',
+    )
+    match = models.ForeignKey(
+        Match,
+        on_delete=models.CASCADE,
+        related_name='player_performance_snapshots',
+        verbose_name='partida',
+    )
+    team_performance_match = models.ForeignKey(
+        TeamPerformanceMatch,
+        on_delete=models.CASCADE,
+        related_name='players',
+        verbose_name='snapshot do time',
+    )
+    championship = models.ForeignKey(
+        Championship,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='player_performance_matches',
+        verbose_name='campeonato',
+    )
+    player = models.ForeignKey(
+        PlayerProfile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='team_performance_matches',
+        verbose_name='jogador',
+    )
+
+    player_name_snapshot = models.CharField('nome do jogador', max_length=200)
+    position = models.CharField('posição', max_length=20, blank=True)
+    has_advanced_data = models.BooleanField('tem dados avançados', default=False)
+
+    matches_played = models.PositiveIntegerField('partidas consideradas', default=1)
+    rating = models.DecimalField('nota', max_digits=5, decimal_places=2, null=True, blank=True)
+    goals = models.PositiveIntegerField('gols', default=0)
+    assists = models.PositiveIntegerField('assistências', default=0)
+    passes_made = models.PositiveIntegerField('passes certos', default=0)
+    pass_attempts = models.PositiveIntegerField('passes tentados', default=0)
+    shots = models.PositiveIntegerField('finalizações', default=0)
+    tackles_made = models.PositiveIntegerField('desarmes certos', default=0)
+    tackle_attempts = models.PositiveIntegerField('desarmes tentados', default=0)
+    saves = models.PositiveIntegerField('defesas', default=0)
+    seconds_played = models.PositiveIntegerField('segundos jogados', default=0)
+    cards = models.PositiveIntegerField('cartões', default=0)
+
+    created_at = models.DateTimeField('criado em', auto_now_add=True)
+    updated_at = models.DateTimeField('atualizado em', auto_now=True)
+
+    class Meta:
+        verbose_name = 'desempenho do jogador por partida'
+        verbose_name_plural = 'desempenhos dos jogadores por partida'
+        ordering = ['-match__scheduled_date', 'player_name_snapshot']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['team', 'match', 'player_name_snapshot'],
+                name='unique_team_player_performance_match',
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.player_name_snapshot} - {self.team} ({self.match_id})'

@@ -28,16 +28,17 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react
 import { createPortal } from 'react-dom';
 import { motion, useMotionValue } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { matchesAPI, matchLineupsAPI } from '@/lib/api';
+import { matchesAPI, matchLineupsAPI, teamsAPI } from '@/lib/api';
 import { FORMATION_POSITIONS, AVAILABLE_FORMATIONS } from '@/lib/formations';
 import { useToast } from '@/components/shared/ui';
 import type {
   Team,
   TeamMembership,
+  TeamLineupStyle,
   TacticalFormation,
   MatchLineupPlayerData,
 } from '@/types';
-import { ChevronDown, User, Check, X, Loader2, Swords, Trash2, AlertTriangle, ImageIcon, Pencil, MousePointer, Circle, Eraser, Eye, EyeOff, Move } from 'lucide-react';
+import { ChevronDown, User, Check, X, Loader2, Swords, Trash2, AlertTriangle, ImageIcon, Pencil, MousePointer, Circle, Eraser, Eye, EyeOff, Move, Shirt, Save } from 'lucide-react';
 import { formatToday, formatDayMonth, formatDateTimeShort } from '@/lib/utils/date';
 
 // ---------------------------------------------------------------------------
@@ -633,9 +634,32 @@ function SoccerField({ children, fieldRef }: { children: React.ReactNode; fieldR
 interface LineupPlayerInfo {
   name: string;
   position: string;
-  avatar: string | null;
   x: number; // 0–100 (formations.ts)
   y: number; // 0–100 (formations.ts)
+}
+
+interface LineupArtStyle extends TeamLineupStyle {}
+
+const DEFAULT_LINEUP_STYLE: LineupArtStyle = {
+  outfield_primary: '#D6A11E',
+  outfield_secondary: '#111827',
+  goalkeeper_primary: '#22C55E',
+  text_color: '#FFFFFF',
+  accent_color: '#F3D36B',
+  title: 'Titular',
+  subtitle: '',
+};
+
+interface GenerateLineupImageOptions {
+  teamName: string;
+  teamLogo: string | null;
+  formation: string;
+  players: LineupPlayerInfo[];
+  style: LineupArtStyle;
+  opponentName?: string;
+  matchLabel?: string;
+  targetCanvas?: HTMLCanvasElement;
+  download?: boolean;
 }
 
 async function loadImage(src: string): Promise<HTMLImageElement | null> {
@@ -648,272 +672,464 @@ async function loadImage(src: string): Promise<HTMLImageElement | null> {
   });
 }
 
-async function generateLineupImage(
-  teamName: string,
-  teamLogo: string | null,
-  formation: string,
-  players: LineupPlayerInfo[],
-  opponentName?: string,
-): Promise<void> {
-  // ── Dimensões do canvas ────────────────────────────────────────────────────
-  const W = 1080;
-  const H = 1350;
+function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, height, radius);
+}
 
-  const canvas  = document.createElement('canvas');
+function drawSoftGlow(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, color: string, alpha = 0.18) {
+  const glow = ctx.createRadialGradient(x, y, radius * 0.1, x, y, radius);
+  glow.addColorStop(0, `${color}${Math.round(alpha * 255).toString(16).padStart(2, '0')}`);
+  glow.addColorStop(1, `${color}00`);
+  ctx.save();
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawShirt(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number,
+  primaryColor: string,
+  secondaryColor: string,
+  textColor: string,
+  label: string,
+) {
+  const width = 52 * scale;
+  const height = 68 * scale;
+  const sleeveWidth = 11 * scale;
+  const sleeveDrop = 14 * scale;
+  const bodyInset = 6 * scale;
+  const neckWidth = 10 * scale;
+  const neckDepth = 6 * scale;
+  const hemCurve = 2 * scale;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.shadowColor = 'rgba(0,0,0,0.28)';
+  ctx.shadowBlur = 18 * scale;
+  ctx.shadowOffsetY = 10 * scale;
+
+  const bodyGrad = ctx.createLinearGradient(0, -height / 2, 0, height / 2);
+  bodyGrad.addColorStop(0, primaryColor);
+  bodyGrad.addColorStop(0.62, primaryColor);
+  bodyGrad.addColorStop(1, secondaryColor === primaryColor ? primaryColor : `${primaryColor}F0`);
+
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.moveTo(-neckWidth, -height / 2 + neckDepth);
+  ctx.quadraticCurveTo(-width * 0.19, -height / 2 + 1 * scale, -width / 2 + bodyInset, -height / 2 + 11 * scale);
+  ctx.lineTo(-width / 2 - sleeveWidth, -height / 2 + sleeveDrop);
+  ctx.lineTo(-width / 2 - sleeveWidth + 5 * scale, -height / 2 + sleeveDrop + 14 * scale);
+  ctx.lineTo(-width / 2 + bodyInset, -height / 2 + 22 * scale);
+  ctx.lineTo(-width / 2 + bodyInset, height / 2 - 3 * scale);
+  ctx.quadraticCurveTo(-width * 0.16, height / 2 + hemCurve, 0, height / 2 + hemCurve);
+  ctx.quadraticCurveTo(width * 0.16, height / 2 + hemCurve, width / 2 - bodyInset, height / 2 - 3 * scale);
+  ctx.lineTo(width / 2 - bodyInset, -height / 2 + 22 * scale);
+  ctx.lineTo(width / 2 + sleeveWidth - 5 * scale, -height / 2 + sleeveDrop + 14 * scale);
+  ctx.lineTo(width / 2 + sleeveWidth, -height / 2 + sleeveDrop);
+  ctx.lineTo(width / 2 - bodyInset, -height / 2 + 11 * scale);
+  ctx.quadraticCurveTo(width * 0.19, -height / 2 + 1 * scale, neckWidth, -height / 2 + neckDepth);
+  ctx.quadraticCurveTo(0, -height / 2 + neckDepth + 5 * scale, -neckWidth, -height / 2 + neckDepth);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+  ctx.lineWidth = 1.5 * scale;
+  ctx.stroke();
+
+  const highlight = ctx.createLinearGradient(0, -height / 2, 0, 0);
+  highlight.addColorStop(0, 'rgba(255,255,255,0.10)');
+  highlight.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = highlight;
+  ctx.beginPath();
+  ctx.moveTo(-width / 2 + bodyInset + 2 * scale, -height / 2 + 15 * scale);
+  ctx.quadraticCurveTo(0, -height / 2 + 8 * scale, width / 2 - bodyInset - 2 * scale, -height / 2 + 15 * scale);
+  ctx.lineTo(width / 2 - bodyInset - 4 * scale, -height / 2 + 24 * scale);
+  ctx.quadraticCurveTo(0, -height / 2 + 17 * scale, -width / 2 + bodyInset + 4 * scale, -height / 2 + 24 * scale);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = secondaryColor;
+  drawRoundedRect(ctx, -width / 2 + bodyInset + 1 * scale, -height / 2 + 19 * scale, width - (bodyInset + 1 * scale) * 2, 5 * scale, 4 * scale);
+  ctx.fill();
+
+  ctx.fillStyle = `${secondaryColor}99`;
+  drawRoundedRect(ctx, -width / 2 - sleeveWidth + 5 * scale, -height / 2 + sleeveDrop + 5 * scale, 8 * scale, 3 * scale, 2 * scale);
+  ctx.fill();
+  drawRoundedRect(ctx, width / 2 + sleeveWidth - 13 * scale, -height / 2 + sleeveDrop + 5 * scale, 8 * scale, 3 * scale, 2 * scale);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(-neckWidth + 2 * scale, -height / 2 + neckDepth + 1 * scale);
+  ctx.quadraticCurveTo(0, -height / 2 + neckDepth + 8 * scale, neckWidth - 2 * scale, -height / 2 + neckDepth + 1 * scale);
+  ctx.lineTo(neckWidth - 3 * scale, -height / 2 + 3 * scale);
+  ctx.quadraticCurveTo(0, -height / 2 + neckDepth + 3 * scale, -neckWidth + 3 * scale, -height / 2 + 3 * scale);
+  ctx.closePath();
+  ctx.fillStyle = secondaryColor;
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth = 1 * scale;
+  ctx.beginPath();
+  ctx.moveTo(-neckWidth + 3 * scale, -height / 2 + neckDepth + 2 * scale);
+  ctx.quadraticCurveTo(0, -height / 2 + neckDepth + 8 * scale, neckWidth - 3 * scale, -height / 2 + neckDepth + 2 * scale);
+  ctx.stroke();
+
+  ctx.shadowColor = 'transparent';
+  ctx.fillStyle = textColor;
+  ctx.font = `800 ${10.5 * scale}px system-ui, -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (label) {
+    ctx.fillText(label, 0, 8 * scale);
+  }
+  ctx.restore();
+}
+
+async function renderLineupArtwork({
+  teamName,
+  teamLogo,
+  formation,
+  players,
+  style,
+  opponentName,
+  matchLabel,
+  targetCanvas,
+  download = false,
+}: GenerateLineupImageOptions): Promise<void> {
+  const W = 1080;
+  const H = 1080;
+
+  const canvas = targetCanvas ?? document.createElement('canvas');
   canvas.width  = W;
   canvas.height = H;
   const ctx     = canvas.getContext('2d')!;
 
-  // ── Fundo escuro degradê ───────────────────────────────────────────────────
+  const drawStar = (x: number, y: number, size: number, alpha: number) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.beginPath();
+    ctx.moveTo(0, -size);
+    ctx.lineTo(size * 0.28, -size * 0.28);
+    ctx.lineTo(size, 0);
+    ctx.lineTo(size * 0.28, size * 0.28);
+    ctx.lineTo(0, size);
+    ctx.lineTo(-size * 0.28, size * 0.28);
+    ctx.lineTo(-size, 0);
+    ctx.lineTo(-size * 0.28, -size * 0.28);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  };
+
   const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
-  bgGrad.addColorStop(0,   '#0a0f14');
-  bgGrad.addColorStop(0.5, '#091a10');
-  bgGrad.addColorStop(1,   '#050c08');
+  bgGrad.addColorStop(0, '#315866');
+  bgGrad.addColorStop(0.45, '#224554');
+  bgGrad.addColorStop(1, '#152C3B');
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
 
-  // ── Campo de futebol flat (sem perspectiva, perfeito para imagem) ──────────
-  const FIELD_MARGIN_X = 60;
-  const HEADER_H       = 200;
-  const FOOTER_H       = 100;
-  const FIELD_X        = FIELD_MARGIN_X;
-  const FIELD_Y        = HEADER_H;
-  const FIELD_W        = W - FIELD_MARGIN_X * 2;
-  const FIELD_H        = H - HEADER_H - FOOTER_H;
+  const ambient = ctx.createRadialGradient(W / 2, 120, 40, W / 2, 120, 420);
+  ambient.addColorStop(0, 'rgba(255,255,255,0.08)');
+  ambient.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = ambient;
+  ctx.fillRect(0, 0, W, H);
 
-  // Grama base
-  const grassGrad = ctx.createLinearGradient(FIELD_X, FIELD_Y, FIELD_X, FIELD_Y + FIELD_H);
-  grassGrad.addColorStop(0,   '#1a6b2f');
-  grassGrad.addColorStop(0.5, '#155a27');
-  grassGrad.addColorStop(1,   '#1a6b2f');
-  ctx.fillStyle = grassGrad;
-  ctx.beginPath();
-  ctx.roundRect(FIELD_X, FIELD_Y, FIELD_W, FIELD_H, 16);
-  ctx.fill();
+  [
+    [55, 42, 9, 0.35], [130, 128, 13, 0.95], [310, 248, 10, 0.45], [412, 35, 10, 0.9],
+    [660, 28, 11, 0.8], [845, 52, 10, 0.7], [1010, 76, 9, 0.8], [980, 306, 8, 0.8],
+    [750, 258, 11, 0.9], [22, 260, 8, 0.65], [678, 150, 8, 0.4], [823, 117, 8, 0.55],
+  ].forEach(([x, y, size, alpha]) => drawStar(x as number, y as number, size as number, alpha as number));
 
-  // Listras do gramado
-  const stripeW = FIELD_W / 12;
-  for (let i = 0; i < 12; i++) {
-    ctx.fillStyle = i % 2 === 0 ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.03)';
-    ctx.fillRect(FIELD_X + i * stripeW, FIELD_Y, stripeW, FIELD_H);
+  const horizonY = 338;
+  const fieldTopY = 404;
+  const fieldBottomY = 980;
+  const topLeftX = 160;
+  const topRightX = W - 160;
+  const bottomLeftX = 42;
+  const bottomRightX = W - 42;
+  const centerX = W / 2;
+
+  if (teamLogo) {
+    const watermark = await loadImage(teamLogo);
+    if (watermark) {
+      ctx.save();
+      ctx.globalAlpha = 0.035;
+      ctx.filter = 'blur(0.8px)';
+      const wmSize = 340;
+      ctx.drawImage(watermark, centerX - wmSize / 2, 490, wmSize, wmSize);
+      ctx.restore();
+    }
   }
 
-  // Borda do campo
-  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-  ctx.lineWidth   = 2.5;
-  const bm = 20; // border margin
-  ctx.strokeRect(FIELD_X + bm, FIELD_Y + bm, FIELD_W - bm * 2, FIELD_H - bm * 2);
+  const glow = ctx.createRadialGradient(centerX, horizonY + 24, 40, centerX, horizonY + 24, 310);
+  glow.addColorStop(0, `${style.accent_color}25`);
+  glow.addColorStop(1, `${style.accent_color}00`);
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, 420);
 
-  // Linha central
-  ctx.beginPath();
-  ctx.moveTo(FIELD_X + FIELD_W / 2, FIELD_Y + bm);
-  ctx.lineTo(FIELD_X + FIELD_W / 2, FIELD_Y + FIELD_H - bm);
-  ctx.stroke();
-
-  // Círculo central
-  ctx.beginPath();
-  ctx.arc(FIELD_X + FIELD_W / 2, FIELD_Y + FIELD_H / 2, FIELD_H * 0.12, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // Ponto central
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.beginPath();
-  ctx.arc(FIELD_X + FIELD_W / 2, FIELD_Y + FIELD_H / 2, 5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Área grande defesa (esquerda)
-  const agW = FIELD_W * 0.16;
-  const agH = FIELD_H * 0.55;
-  ctx.strokeStyle = 'rgba(255,255,255,0.30)';
-  ctx.strokeRect(FIELD_X + bm, FIELD_Y + FIELD_H / 2 - agH / 2, agW, agH);
-
-  // Área pequena defesa
-  const apW = FIELD_W * 0.07;
-  const apH = FIELD_H * 0.32;
-  ctx.strokeRect(FIELD_X + bm, FIELD_Y + FIELD_H / 2 - apH / 2, apW, apH);
-
-  // Área grande ataque (direita)
-  ctx.strokeRect(FIELD_X + FIELD_W - bm - agW, FIELD_Y + FIELD_H / 2 - agH / 2, agW, agH);
-
-  // Área pequena ataque
-  ctx.strokeRect(FIELD_X + FIELD_W - bm - apW, FIELD_Y + FIELD_H / 2 - apH / 2, apW, apH);
-
-  // ── Cabeçalho ─────────────────────────────────────────────────────────────
-  // Linha dourada no topo
-  const goldGrad = ctx.createLinearGradient(0, 0, W, 0);
-  goldGrad.addColorStop(0,   'transparent');
-  goldGrad.addColorStop(0.3, '#D6A11E');
-  goldGrad.addColorStop(0.7, '#D6A11E');
-  goldGrad.addColorStop(1,   'transparent');
-  ctx.fillStyle = goldGrad;
-  ctx.fillRect(0, 0, W, 3);
-
-  // Logo do time
-  const LOGO_SIZE = 72;
-  const LOGO_X    = W / 2 - LOGO_SIZE / 2;
-  const LOGO_Y    = 20;
+  const logoSize = 76;
+  const logoX = centerX - logoSize / 2;
+  const logoY = 38;
 
   if (teamLogo) {
     const logoImg = await loadImage(teamLogo);
     if (logoImg) {
       ctx.save();
       ctx.beginPath();
-      ctx.arc(LOGO_X + LOGO_SIZE / 2, LOGO_Y + LOGO_SIZE / 2, LOGO_SIZE / 2, 0, Math.PI * 2);
+      ctx.arc(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
       ctx.clip();
-      ctx.drawImage(logoImg, LOGO_X, LOGO_Y, LOGO_SIZE, LOGO_SIZE);
+      ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
       ctx.restore();
     } else {
-      drawTeamLogoPlaceholder(ctx, LOGO_X, LOGO_Y, LOGO_SIZE, teamName);
+      drawTeamLogoPlaceholder(ctx, logoX, logoY, logoSize, teamName);
     }
   } else {
-    drawTeamLogoPlaceholder(ctx, LOGO_X, LOGO_Y, LOGO_SIZE, teamName);
+    drawTeamLogoPlaceholder(ctx, logoX, logoY, logoSize, teamName);
   }
 
-  // Nome do time
-  ctx.fillStyle   = '#FFFFFF';
-  ctx.font        = 'bold 36px system-ui, -apple-system, sans-serif';
-  ctx.textAlign   = 'center';
+  ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillText(teamName.toUpperCase(), W / 2, LOGO_Y + LOGO_SIZE + 10);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '900 40px system-ui, -apple-system, sans-serif';
+  ctx.shadowColor = 'rgba(0,0,0,0.18)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 4;
+  ctx.fillText(teamName.toUpperCase(), centerX, 116);
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
 
-  // Subtítulo: formação + adversário
-  ctx.fillStyle = '#D6A11E';
-  ctx.font      = '500 18px system-ui, -apple-system, sans-serif';
-  const subtitle = opponentName
-    ? `ESCALAÇÃO · ${formation} · vs ${opponentName.toUpperCase()}`
-    : `ESCALAÇÃO DA TEMPORADA · ${formation} · ${new Date().getFullYear()}`;
-  ctx.fillText(subtitle, W / 2, LOGO_Y + LOGO_SIZE + 52);
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.font = '400 24px system-ui, -apple-system, sans-serif';
+  ctx.fillText((style.title || 'Escalação oficial').toUpperCase(), centerX, 194);
 
-  // ── Jogadores no campo ────────────────────────────────────────────────────
-  const CIRCLE_R  = 38;
-  const IMG_R     = 30;
+  const subtitle = style.subtitle?.trim() || (opponentName ? `VS ${opponentName.toUpperCase()}` : 'LINEUP OFICIAL');
+  ctx.fillStyle = 'rgba(255,255,255,0.58)';
+  ctx.font = '600 13px system-ui, -apple-system, sans-serif';
+  ctx.fillText(subtitle, centerX, 232);
 
-  // Avatares pré-carregados
-  const avatarImgs: (HTMLImageElement | null)[] = await Promise.all(
-    players.map((p) => (p.avatar ? loadImage(p.avatar) : Promise.resolve(null)))
-  );
+  const chipText = formation;
+  const chipW = Math.max(86, chipText.length * 10 + 28);
+  const chipH = 30;
+  const chipX = centerX - chipW / 2;
+  const chipY = 256;
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  drawRoundedRect(ctx, chipX, chipY, chipW, chipH, 17);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+  ctx.lineWidth = 1;
+  drawRoundedRect(ctx, chipX, chipY, chipW, chipH, 17);
+  ctx.stroke();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '700 14px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(chipText, centerX, chipY + chipH / 2 + 0.5);
+
+  // Goal backdrop
+  const goalW = 210;
+  const goalH = 82;
+  const goalX = centerX - goalW / 2;
+  const goalY = 300;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(232,240,244,0.68)';
+  ctx.lineWidth = 6;
+  drawRoundedRect(ctx, goalX, goalY, goalW, goalH, 20);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  drawRoundedRect(ctx, goalX + 6, goalY + 6, goalW - 12, goalH - 12, 16);
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  for (let i = 0; i <= 10; i++) {
+    const x = goalX + 18 + i * ((goalW - 36) / 10);
+    ctx.beginPath();
+    ctx.moveTo(x, goalY + 12);
+    ctx.lineTo(x, goalY + goalH - 12);
+    ctx.stroke();
+  }
+  for (let i = 0; i <= 5; i++) {
+    const y = goalY + 14 + i * ((goalH - 28) / 5);
+    ctx.beginPath();
+    ctx.moveTo(goalX + 14, y);
+    ctx.lineTo(goalX + goalW - 14, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Sponsor bars backdrop like reference
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  drawRoundedRect(ctx, 204, 318, 188, 54, 0);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(10,14,20,0.7)';
+  drawRoundedRect(ctx, 688, 318, 184, 54, 0);
+  ctx.fill();
+
+  // Perspective field base
+  const fieldGrad = ctx.createLinearGradient(centerX, fieldTopY, centerX, fieldBottomY);
+  fieldGrad.addColorStop(0, 'rgba(38,74,82,0.90)');
+  fieldGrad.addColorStop(0.55, 'rgba(27,55,68,0.94)');
+  fieldGrad.addColorStop(1, 'rgba(22,43,58,0.98)');
+  ctx.fillStyle = fieldGrad;
+  ctx.beginPath();
+  ctx.moveTo(topLeftX, fieldTopY);
+  ctx.lineTo(topRightX, fieldTopY);
+  ctx.lineTo(bottomRightX, fieldBottomY);
+  ctx.lineTo(bottomLeftX, fieldBottomY);
+  ctx.closePath();
+  ctx.fill();
+
+  const fieldShine = ctx.createLinearGradient(0, fieldTopY, W, fieldBottomY);
+  fieldShine.addColorStop(0, 'rgba(255,255,255,0.035)');
+  fieldShine.addColorStop(0.5, 'rgba(255,255,255,0)');
+  fieldShine.addColorStop(1, 'rgba(0,0,0,0.08)');
+  ctx.fillStyle = fieldShine;
+  ctx.beginPath();
+  ctx.moveTo(topLeftX, fieldTopY);
+  ctx.lineTo(topRightX, fieldTopY);
+  ctx.lineTo(bottomRightX, fieldBottomY);
+  ctx.lineTo(bottomLeftX, fieldBottomY);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(topLeftX, fieldTopY);
+  ctx.lineTo(topRightX, fieldTopY);
+  ctx.lineTo(bottomRightX, fieldBottomY);
+  ctx.lineTo(bottomLeftX, fieldBottomY);
+  ctx.closePath();
+  ctx.stroke();
+
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  const leftEdge = (t: number) => lerp(topLeftX, bottomLeftX, t);
+  const rightEdge = (t: number) => lerp(topRightX, bottomRightX, t);
+  const yAt = (t: number) => lerp(fieldTopY, fieldBottomY, t);
+
+  for (let i = 0; i < 4; i++) {
+    const t = i / 3;
+    const y = yAt(t);
+    ctx.strokeStyle = `rgba(255,255,255,${0.045 - i * 0.008})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(leftEdge(t), y);
+    ctx.lineTo(rightEdge(t), y);
+    ctx.stroke();
+  }
+
+  const midT = 0.53;
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(leftEdge(midT), yAt(midT));
+  ctx.lineTo(rightEdge(midT), yAt(midT));
+  ctx.stroke();
+
+  const centerCircleY = yAt(0.58);
+  ctx.beginPath();
+  ctx.ellipse(centerX, centerCircleY, 72, 36, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Bottom penalty area
+  const bottomPenaltyTopT = 0.83;
+  const bottomPenaltyBottomT = 0.98;
+  const bottomPenaltyInset = 160;
+  ctx.beginPath();
+  ctx.moveTo(leftEdge(bottomPenaltyTopT) + bottomPenaltyInset, yAt(bottomPenaltyTopT));
+  ctx.lineTo(rightEdge(bottomPenaltyTopT) - bottomPenaltyInset, yAt(bottomPenaltyTopT));
+  ctx.lineTo(rightEdge(bottomPenaltyBottomT) - 110, yAt(bottomPenaltyBottomT));
+  ctx.lineTo(leftEdge(bottomPenaltyBottomT) + 110, yAt(bottomPenaltyBottomT));
+  ctx.closePath();
+  ctx.stroke();
+
+  // player projection into perspective field
+  const projectPlayer = (player: LineupPlayerInfo) => {
+    const normalizedX = Math.min(92, Math.max(8, player.x));
+    const normalizedY = Math.min(88, Math.max(12, player.y));
+    const depth = 0.12 + (1 - normalizedX / 100) * 0.76;
+    const lateral = normalizedY / 100;
+    const laneCenterX = lerp(leftEdge(depth), rightEdge(depth), lateral);
+    const laneWidth = rightEdge(depth) - leftEdge(depth);
+    const centeredX = laneCenterX + (lateral - 0.5) * laneWidth * 0.025;
+    const y = yAt(depth);
+    return { x: centeredX, y, depth };
+  };
 
   for (let i = 0; i < players.length; i++) {
-    const p   = players[i];
-    const img = avatarImgs[i];
+    const player = players[i];
+    const projected = projectPlayer(player);
+    const isGoalkeeper = player.position === 'GK';
+    const scale = 1.1 - projected.depth * 0.18;
 
-    // As coordenadas x/y de formations.ts têm:
-    //   x: 0 = GK (esquerda no campo DOM), 100 = ataque (direita)
-    //   y: 0 = topo, 100 = base
-    // Na imagem, campo va de FIELD_X+bm até FIELD_X+FIELD_W-bm
-    const px = FIELD_X + bm + (p.x / 100) * (FIELD_W - bm * 2);
-    const py = FIELD_Y + bm + (p.y / 100) * (FIELD_H - bm * 2);
+    drawSoftGlow(ctx, projected.x, projected.y + 16, 28 * scale, '#000000', 0.14);
+    drawShirt(
+      ctx,
+      projected.x,
+      projected.y,
+      scale,
+      isGoalkeeper ? style.goalkeeper_primary : style.outfield_primary,
+      style.outfield_secondary,
+      style.text_color,
+      '',
+    );
 
-    // Sombra do círculo
-    ctx.save();
-    ctx.shadowColor   = 'rgba(0,0,0,0.6)';
-    ctx.shadowBlur    = 12;
-    ctx.shadowOffsetY = 4;
-
-    // Círculo de fundo (dourado)
-    const circleGrad = ctx.createRadialGradient(px, py - 8, 2, px, py, CIRCLE_R);
-    circleGrad.addColorStop(0, '#e8b224');
-    circleGrad.addColorStop(1, '#a07010');
-    ctx.fillStyle = circleGrad;
-    ctx.beginPath();
-    ctx.arc(px, py, CIRCLE_R, 0, Math.PI * 2);
+    const badgeW = 32 * scale;
+    const badgeH = 14 * scale;
+    const badgeX = projected.x - badgeW / 2;
+    const badgeY = projected.y - 43 * scale;
+    ctx.fillStyle = 'rgba(7, 9, 13, 0.62)';
+    drawRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 8 * scale);
     ctx.fill();
-    ctx.restore();
-
-    // Borda branca do círculo
-    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-    ctx.lineWidth   = 2;
-    ctx.beginPath();
-    ctx.arc(px, py, CIRCLE_R, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    drawRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 8 * scale);
     ctx.stroke();
-
-    // Avatar ou placeholder com silhueta
-    if (img) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(px, py, IMG_R, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.drawImage(img, px - IMG_R, py - IMG_R, IMG_R * 2, IMG_R * 2);
-      ctx.restore();
-    } else {
-      // Silhueta de jogador
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(px, py, IMG_R, 0, Math.PI * 2);
-      ctx.clip();
-      // Fundo
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      ctx.fillRect(px - IMG_R, py - IMG_R, IMG_R * 2, IMG_R * 2);
-      // Cabeça da silhueta
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.beginPath();
-      ctx.arc(px, py - 10, 10, 0, Math.PI * 2);
-      ctx.fill();
-      // Corpo da silhueta
-      ctx.beginPath();
-      ctx.ellipse(px, py + 16, 14, 11, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // Badge de posição (acima do círculo)
-    const badgeW = 42;
-    const badgeH = 18;
-    const badgeX = px - badgeW / 2;
-    const badgeY = py - CIRCLE_R - badgeH - 4;
-    ctx.fillStyle = '#0a0f14';
-    ctx.beginPath();
-    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 5);
-    ctx.fill();
-    ctx.strokeStyle = '#D6A11E';
-    ctx.lineWidth   = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 5);
-    ctx.stroke();
-    ctx.fillStyle    = '#D6A11E';
-    ctx.font         = 'bold 11px system-ui, -apple-system, sans-serif';
-    ctx.textAlign    = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.82)';
+    ctx.font = `700 ${8 * scale}px system-ui, -apple-system, sans-serif`;
+    ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(p.position, px, badgeY + badgeH / 2);
+    ctx.fillText(player.position, projected.x, badgeY + badgeH / 2 + 0.5);
 
-    // Nome do jogador (abaixo do círculo)
-    const firstName = p.name.split(' ')[0];
-    ctx.fillStyle    = '#FFFFFF';
-    ctx.font         = 'bold 13px system-ui, -apple-system, sans-serif';
-    ctx.textAlign    = 'center';
+    const label = player.name.toUpperCase();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `900 ${11 + scale * 7.2}px system-ui, -apple-system, sans-serif`;
+    ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-
-    // Sombra no texto para legibilidade
-    ctx.shadowColor   = 'rgba(0,0,0,0.9)';
-    ctx.shadowBlur    = 6;
-    ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 1;
-    ctx.fillText(firstName.length > 10 ? firstName.slice(0, 9) + '…' : firstName, px, py + CIRCLE_R + 6);
+    ctx.shadowColor = 'rgba(0,0,0,0.34)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 3;
+    const maxChars = projected.depth > 0.6 ? 10 : 14;
+    ctx.fillText(label.length > maxChars ? `${label.slice(0, maxChars - 1)}…` : label, projected.x, projected.y + 47 * scale);
     ctx.shadowColor = 'transparent';
-    ctx.shadowBlur  = 0;
+    ctx.shadowBlur = 0;
   }
 
-  // ── Rodapé ────────────────────────────────────────────────────────────────
-  // Linha dourada separadora
-  ctx.fillStyle = goldGrad;
-  ctx.fillRect(0, H - FOOTER_H, W, 2);
-
-  // Branding
-  ctx.fillStyle    = 'rgba(255,255,255,0.3)';
-  ctx.font         = '500 15px system-ui, -apple-system, sans-serif';
-  ctx.textAlign    = 'left';
+  // footer
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  ctx.fillRect(58, H - 76, W - 116, 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.28)';
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText('FNC — Federação Nacional de Clubs', FIELD_X, H - FOOTER_H / 2);
-
-  ctx.fillStyle = 'rgba(214,161,30,0.6)';
+  ctx.font = '600 13px system-ui, -apple-system, sans-serif';
+  ctx.fillText('FNC · Federação Nacional de Clubs', 58, H - 42);
   ctx.textAlign = 'right';
-  ctx.fillText(formatToday(), W - FIELD_X, H - FOOTER_H / 2);
+  ctx.font = '600 12px system-ui, -apple-system, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText(formatToday(), W - 58, H - 42);
 
-  // ── Download ──────────────────────────────────────────────────────────────
-  const link    = document.createElement('a');
-  link.download = `escalacao-${teamName.toLowerCase().replace(/\s+/g, '-')}.png`;
-  link.href     = canvas.toDataURL('image/png');
-  link.click();
+  if (download) {
+    const link    = document.createElement('a');
+    link.download = `escalacao-${teamName.toLowerCase().replace(/\s+/g, '-')}.png`;
+    link.href     = canvas.toDataURL('image/png');
+    link.click();
+  }
 }
 
 function drawTeamLogoPlaceholder(
@@ -1128,6 +1344,7 @@ function DrawingCanvas({ tool, color, strokes, onStrokesChange, active }: Drawin
 export function TacticalBoard({ team, members, readOnly = false }: TacticalBoardProps) {
   const { showToast } = useToast();
   const queryClient  = useQueryClient();
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [selectedMatchId, setSelectedMatchId] = useState<number | null>(null);
   const [formation,       setFormation]        = useState<TacticalFormation>('4-3-3');
@@ -1137,6 +1354,9 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
   // Controla se a escalação foi confirmada (libera o botão de download)
   const [lineupConfirmed,  setLineupConfirmed]  = useState(false);
   const [isGenerating,     setIsGenerating]     = useState(false);
+  const [lineupStyle,      setLineupStyle]      = useState<LineupArtStyle>(
+    team.lineup_visual_preferences ?? DEFAULT_LINEUP_STYLE
+  );
 
   // Drag & drop entre slots
   const [dragSourceSlot, setDragSourceSlot]   = useState<number | null>(null);
@@ -1163,6 +1383,12 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
   });
   const scheduledMatches = matchesData?.results ?? [];
 
+  const { data: lineupStyleData } = useQuery({
+    queryKey: ['team-lineup-style', team.id],
+    queryFn: () => teamsAPI.getLineupStyle(team.id),
+    staleTime: 60_000,
+  });
+
   const { data: existingLineup, isLoading: isLoadingLineup } = useQuery({
     queryKey: ['match-lineup', selectedMatchId, team.id],
     queryFn:  () => matchLineupsAPI.get(selectedMatchId!),
@@ -1186,6 +1412,11 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
     // Se já tem escalação salva, libera o download imediatamente
     setLineupConfirmed(true);
   }, [existingLineup]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!lineupStyleData) return;
+    setLineupStyle({ ...DEFAULT_LINEUP_STYLE, ...lineupStyleData });
+  }, [lineupStyleData]);
 
   // Resetar confirmação ao trocar de partida ou formação
   useEffect(() => { setLineupConfirmed(false); }, [selectedMatchId]);
@@ -1221,6 +1452,19 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
     queryFn:  () => matchLineupsAPI.getOpponent(selectedMatchId!),
     enabled:  !!selectedMatchId && showAdversary,
     retry:    false,
+  });
+
+  const saveLineupStyleMutation = useMutation({
+    mutationFn: (data: Partial<LineupArtStyle>) => teamsAPI.updateLineupStyle(team.id, data),
+    onSuccess: (data) => {
+      setLineupStyle({ ...DEFAULT_LINEUP_STYLE, ...data });
+      queryClient.invalidateQueries({ queryKey: ['team-lineup-style', team.id] });
+      queryClient.invalidateQueries({ queryKey: ['team', team.id] });
+      showToast('Estilo da arte salvo com sucesso!', 'success');
+    },
+    onError: (error: any) => {
+      showToast(error?.response?.data?.error || 'Erro ao salvar estilo da escalação.', 'error');
+    },
   });
 
   const handleFormationChange = (f: TacticalFormation) => {
@@ -1267,6 +1511,40 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
   }, []);
 
   const hasCustomPositions = Object.keys(customPositions).length > 0;
+  const selectedMatch = scheduledMatches.find((m) => m.id === selectedMatchId);
+  const opponentTeam  = selectedMatch
+    ? (selectedMatch.home_team?.id === team.id ? selectedMatch.away_team : selectedMatch.home_team)
+    : null;
+
+  const getPlayersInfo = useCallback((): LineupPlayerInfo[] => {
+    return slots
+      .map((slot, idx) => {
+        const memberId = lineup[idx];
+        const member = memberId ? members.find((m) => m.player.id === memberId) : null;
+        if (!member) return null;
+        const customPosition = customPositions[idx];
+        return {
+          name: member.player.player_name ?? member.player.gamer_tag ?? '—',
+          position: slot.position,
+          x: customPosition?.x ?? slot.x,
+          y: customPosition?.y ?? slot.y,
+        };
+      })
+      .filter((player): player is LineupPlayerInfo => !!player);
+  }, [customPositions, lineup, members, slots]);
+
+  const getArtworkSubtitle = useCallback(() => {
+    if (lineupStyle.subtitle?.trim()) return lineupStyle.subtitle.trim();
+    if (opponentTeam?.name) return `vs ${opponentTeam.name}`;
+    return formation;
+  }, [formation, lineupStyle.subtitle, opponentTeam?.name]);
+
+  const getArtworkMatchLabel = useCallback(() => {
+    if (selectedMatch?.scheduled_date) {
+      return `${formatDayMonth(selectedMatch.scheduled_date)} · ${formation}`;
+    }
+    return `Formação ${formation}`;
+  }, [formation, selectedMatch?.scheduled_date]);
   const handleResetPositions = useCallback(() => {
     setCustomPositions({});
   }, []);
@@ -1290,11 +1568,6 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
     const member = members.find((m) => m.player.id === lineup[idx]);
     return member && getCompatibility(slot.position, member.player.primary_position) === 'incompatible' ? acc + 1 : acc;
   }, 0);
-
-  const selectedMatch = scheduledMatches.find((m) => m.id === selectedMatchId);
-  const opponentTeam  = selectedMatch
-    ? (selectedMatch.home_team?.id === team.id ? selectedMatch.away_team : selectedMatch.home_team)
-    : null;
 
   const submitMutation = useMutation({
     mutationFn: (data: { matchId: number; payload: import('@/types').SubmitLineupRequest }) =>
@@ -1331,25 +1604,16 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
   const handleDownloadImage = async () => {
     setIsGenerating(true);
     try {
-      const playersInfo: LineupPlayerInfo[] = slots.map((slot, idx) => {
-        const memberId = lineup[idx];
-        const member   = memberId ? members.find((m) => m.player.id === memberId) : null;
-        return {
-          name:     member?.player.player_name ?? '—',
-          position: slot.position,
-          avatar:   member?.player.avatar ?? null,
-          x:        slot.x,
-          y:        slot.y,
-        };
-      });
-
-      await generateLineupImage(
-        team.name,
-        team.logo ?? null,
+      await renderLineupArtwork({
+        teamName: team.name,
+        teamLogo: team.logo ?? null,
         formation,
-        playersInfo,
-        opponentTeam?.name,
-      );
+        players: getPlayersInfo(),
+        style: lineupStyle,
+        opponentName: opponentTeam?.name,
+        matchLabel: getArtworkMatchLabel(),
+        download: true,
+      });
     } catch (err) {
       console.error('Erro ao gerar imagem:', err);
       showToast('Erro ao gerar a imagem da escalação.', 'error');
@@ -1357,6 +1621,40 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
       setIsGenerating(false);
     }
   };
+
+  useEffect(() => {
+    if (!previewCanvasRef.current) return;
+    if (filledCount === 0) {
+      const ctx = previewCanvasRef.current.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, previewCanvasRef.current.width, previewCanvasRef.current.height);
+      return;
+    }
+
+    let cancelled = false;
+    const renderPreview = async () => {
+      try {
+        await renderLineupArtwork({
+          teamName: team.name,
+          teamLogo: team.logo ?? null,
+          formation,
+          players: getPlayersInfo(),
+          style: lineupStyle,
+          opponentName: opponentTeam?.name,
+          matchLabel: getArtworkMatchLabel(),
+          targetCanvas: previewCanvasRef.current ?? undefined,
+        });
+      } catch {
+        if (!cancelled) {
+          const ctx = previewCanvasRef.current?.getContext('2d');
+          ctx?.clearRect(0, 0, previewCanvasRef.current!.width, previewCanvasRef.current!.height);
+        }
+      }
+    };
+    renderPreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [filledCount, formation, getArtworkMatchLabel, getPlayersInfo, lineupStyle, opponentTeam?.name, team.logo, team.name]);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -1493,6 +1791,140 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
           </div>
         </div>
       )}
+
+      {/* Painel de arte da escalação */}
+      <div className="rounded-2xl border border-border bg-surface1/80 p-4 md:p-5">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-gold/10 border border-gold/20 flex items-center justify-center text-gold flex-shrink-0">
+            <Shirt className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-text">Arte da Escalação</h4>
+            <p className="text-xs text-muted mt-1">
+              Ajuste o uniforme, confira a prévia e baixe a escalação em PNG. As preferências ficam salvas no time.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { key: 'outfield_primary', label: 'Camisa linha', hint: 'Jogadores de linha' },
+                { key: 'outfield_secondary', label: 'Detalhes', hint: 'Faixa/gola' },
+                { key: 'goalkeeper_primary', label: 'Camisa goleiro', hint: 'Goleiro' },
+                { key: 'text_color', label: 'Texto', hint: 'Nome e camisa' },
+              ].map((item) => (
+                <label key={item.key} className="rounded-xl border border-border bg-surface2 p-3">
+                  <span className="block text-xs font-semibold text-text">{item.label}</span>
+                  <span className="block text-[11px] text-muted mt-0.5">{item.hint}</span>
+                  <div className="mt-3 flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={lineupStyle[item.key as keyof LineupArtStyle] as string}
+                      onChange={(e) => setLineupStyle((prev) => ({ ...prev, [item.key]: e.target.value.toUpperCase() }))}
+                      className="h-10 w-14 rounded-lg border border-border bg-transparent cursor-pointer"
+                    />
+                    <span className="text-xs font-mono text-muted">
+                      {String(lineupStyle[item.key as keyof LineupArtStyle]).toUpperCase()}
+                    </span>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <label className="block rounded-xl border border-border bg-surface2 p-3">
+              <span className="block text-xs font-semibold text-text">Cor de destaque</span>
+              <span className="block text-[11px] text-muted mt-0.5">Usada nos badges e linhas douradas da arte</span>
+              <div className="mt-3 flex items-center gap-3">
+                <input
+                  type="color"
+                  value={lineupStyle.accent_color}
+                  onChange={(e) => setLineupStyle((prev) => ({ ...prev, accent_color: e.target.value.toUpperCase() }))}
+                  className="h-10 w-14 rounded-lg border border-border bg-transparent cursor-pointer"
+                />
+                <span className="text-xs font-mono text-muted">{lineupStyle.accent_color.toUpperCase()}</span>
+              </div>
+            </label>
+
+            <div className="space-y-3 rounded-xl border border-border bg-surface2 p-3">
+              <div>
+                <label className="block text-xs font-semibold text-text mb-1.5">Título da arte</label>
+                <input
+                  type="text"
+                  value={lineupStyle.title}
+                  onChange={(e) => setLineupStyle((prev) => ({ ...prev, title: e.target.value.slice(0, 40) }))}
+                  className="w-full rounded-xl border border-border bg-surface1 px-3 py-2 text-sm text-text focus:border-gold/50 focus:outline-none"
+                  placeholder="Titular"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text mb-1.5">Subtítulo opcional</label>
+                <input
+                  type="text"
+                  value={lineupStyle.subtitle}
+                  onChange={(e) => setLineupStyle((prev) => ({ ...prev, subtitle: e.target.value.slice(0, 60) }))}
+                  className="w-full rounded-xl border border-border bg-surface1 px-3 py-2 text-sm text-text focus:border-gold/50 focus:outline-none"
+                  placeholder="Amistoso · Escalação oficial"
+                />
+                <p className="mt-1 text-[11px] text-muted">
+                  Se ficar vazio, o sistema usa automaticamente o adversário ou a formação atual.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => saveLineupStyleMutation.mutate(lineupStyle)}
+                  disabled={saveLineupStyleMutation.isPending}
+                  className="inline-flex items-center gap-2 rounded-xl border border-gold/30 bg-gold/10 px-4 py-2.5 text-sm font-semibold text-gold transition-colors hover:bg-gold/15 disabled:opacity-50"
+                >
+                  {saveLineupStyleMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Salvar estilo
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleDownloadImage}
+                disabled={isGenerating || filledCount === 0}
+                className="inline-flex items-center gap-2 rounded-xl bg-gold px-4 py-2.5 text-sm font-bold text-black transition-all hover:bg-gold2 disabled:opacity-50"
+              >
+                {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+                Baixar PNG
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gold">Preview</p>
+                <p className="text-xs text-muted mt-1">A prévia reflete posições, cores, logo e texto antes do download.</p>
+              </div>
+              <div className="rounded-full border border-border bg-surface2 px-3 py-1 text-[11px] text-muted">
+                1080 x 1080 PNG
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-border bg-[#04070C] p-3 shadow-2xl shadow-black/30">
+              {filledCount > 0 ? (
+                <canvas
+                  ref={previewCanvasRef}
+                  width={1080}
+                  height={1080}
+                  className="w-full rounded-[22px] border border-white/5 bg-black"
+                />
+              ) : (
+                <div className="flex min-h-[360px] items-center justify-center rounded-[22px] border border-dashed border-border bg-surface2 text-center text-sm text-muted px-6">
+                  Escale ao menos um jogador para visualizar a arte antes de baixar.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* ── Linha 1: controles principais (sempre visíveis) ── */}
       <div className="flex flex-wrap items-center gap-2">
@@ -1733,28 +2165,6 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
             )}
           </button>
 
-          {/* Baixar escalação — aparece após confirmação */}
-          {lineupConfirmed && (
-            <button
-              type="button"
-              onClick={handleDownloadImage}
-              disabled={isGenerating}
-              className={`
-                w-full flex items-center justify-center gap-2 py-3 px-6 rounded-xl
-                text-sm font-bold tracking-wide border transition-all duration-200
-                ${isGenerating
-                  ? 'bg-white/[0.04] text-white/30 border-white/[0.06] cursor-not-allowed'
-                  : 'bg-transparent text-[#D6A11E] border-[#D6A11E]/50 hover:bg-[#D6A11E]/10 hover:border-[#D6A11E] active:scale-[0.98]'
-                }
-              `}
-            >
-              {isGenerating ? (
-                <><Loader2 className="w-4 h-4 animate-spin" />Gerando imagem...</>
-              ) : (
-                <><ImageIcon className="w-4 h-4" />Baixar Escalação como Imagem</>
-              )}
-            </button>
-          )}
         </div>
       )}
     </div>

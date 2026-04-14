@@ -27,6 +27,7 @@ class Team(models.Model):
     # Informações
     description = models.TextField(_('descrição'), blank=True)
     foundation_date = models.DateField(_('data de fundação'), auto_now_add=True)
+    lineup_visual_preferences = models.JSONField(_('preferências visuais da escalação'), default=dict, blank=True)
     
     # Jogadores
     players = models.ManyToManyField(

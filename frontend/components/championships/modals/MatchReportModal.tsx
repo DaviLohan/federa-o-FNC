@@ -35,6 +35,7 @@ export function MatchReportModal({ match, isOpen, onClose }: MatchReportModalPro
       showToast('Súmula enviada com sucesso!', 'success');
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['championship'] });
+      queryClient.invalidateQueries({ queryKey: ['team-performance'] });
       onClose();
       resetForm();
     },
