@@ -337,6 +337,12 @@ class TeamViewSet(viewsets.ModelViewSet):
         instance.is_active = False
         instance.save(update_fields=['is_active'])
 
+        # Liberar o vínculo oficial da EA para permitir novo cadastro futuro.
+        if hasattr(instance, 'ea_club') and instance.ea_club:
+            instance.ea_club.team = None
+            instance.ea_club.is_active = False
+            instance.ea_club.save(update_fields=['team', 'is_active', 'updated_at'])
+
         # Reverter owner para PLAYER — sem time ativo ele deixa de ser TEAM_OWNER
         owner = instance.owner
         owner.user_type = 'PLAYER'

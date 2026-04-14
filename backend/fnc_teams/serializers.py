@@ -1,8 +1,12 @@
+import logging
+
 from rest_framework import serializers
 from .models import Team, TeamMembership, TeamInvitation, TeamLeaveRequest, Formation, FormationPosition
 from users.serializers import UserSerializer, PlayerProfileListSerializer
 from ea_integration.ea_client import EAApiError, EAProClubsClient
 from ea_integration.models import EAClub
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_LINEUP_STYLE = {
     'outfield_primary': '#D6A11E',
@@ -140,16 +144,25 @@ class TeamSerializer(serializers.ModelSerializer):
         if errors:
             raise serializers.ValidationError(errors)
 
-        if EAClub.objects.filter(ea_club_id=ea_club_id, platform=ea_platform).exists():
-            existing = EAClub.objects.select_related('team').filter(
-                ea_club_id=ea_club_id,
-                platform=ea_platform,
-            ).first()
-            team_name = existing.team.name if existing and existing.team_id else None
-            detail = 'Este clube da EA já está vinculado a outro time.'
-            if team_name:
-                detail = f'Este clube da EA já está vinculado ao time "{team_name}".'
-            raise serializers.ValidationError({'ea_club_id': detail})
+        existing = EAClub.objects.select_related('team').filter(
+            ea_club_id=ea_club_id,
+            platform=ea_platform,
+        ).first()
+        if existing:
+            linked_team_is_active = bool(existing.team_id and existing.team and existing.team.is_active)
+            logger.info(
+                'EA club validation for create team: club_id=%s platform=%s existing_link_id=%s team_id=%s active=%s',
+                ea_club_id,
+                ea_platform,
+                existing.id,
+                existing.team_id,
+                linked_team_is_active,
+            )
+            if linked_team_is_active:
+                detail = 'Este clube da EA já está vinculado a outro time ativo.'
+                if existing.team:
+                    detail = f'Este clube da EA já está vinculado ao time ativo "{existing.team.name}".'
+                raise serializers.ValidationError({'ea_club_id': detail})
 
         client = EAProClubsClient()
         try:
@@ -169,6 +182,7 @@ class TeamSerializer(serializers.ModelSerializer):
             'ea_club_id': ea_club_id,
             'platform': ea_platform,
             'name': official_club.get('name') or official_club.get('clubName') or ea_club_id,
+            'existing_link_id': existing.id if existing else None,
         }
 
     def _extract_official_club(self, payload, ea_club_id):
@@ -201,13 +215,34 @@ class TeamSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('A validação do time na API é obrigatória antes do cadastro.')
 
         team = Team.objects.create(**validated_data)
-        EAClub.objects.create(
-            team=team,
-            ea_club_id=validated_ea_club['ea_club_id'],
-            platform=validated_ea_club['platform'],
-            name=validated_ea_club['name'],
-            is_active=True,
-        )
+        existing_link_id = validated_ea_club.get('existing_link_id')
+        if existing_link_id:
+            EAClub.objects.filter(id=existing_link_id).update(
+                team=team,
+                name=validated_ea_club['name'],
+                is_active=True,
+            )
+            logger.info(
+                'Reused legacy EA club link for new team: team_id=%s ea_club_id=%s platform=%s link_id=%s',
+                team.id,
+                validated_ea_club['ea_club_id'],
+                validated_ea_club['platform'],
+                existing_link_id,
+            )
+        else:
+            EAClub.objects.create(
+                team=team,
+                ea_club_id=validated_ea_club['ea_club_id'],
+                platform=validated_ea_club['platform'],
+                name=validated_ea_club['name'],
+                is_active=True,
+            )
+            logger.info(
+                'Created new EA club link for team: team_id=%s ea_club_id=%s platform=%s',
+                team.id,
+                validated_ea_club['ea_club_id'],
+                validated_ea_club['platform'],
+            )
         return team
 
     def get_lineup_visual_preferences(self, obj):

@@ -96,17 +96,22 @@ class EAClubViewSet(viewsets.ModelViewSet):
                     ea_club_id=ea_club_id,
                     platform=platform,
                 ).first()
+                existing_team_is_active = bool(
+                    existing_link and existing_link.team_id and existing_link.team and existing_link.team.is_active
+                )
 
                 enriched_results.append({
                     **result,
                     'ea_club_id': ea_club_id,
                     'name': club_name,
                     'platform': platform,
-                    'already_linked': bool(existing_link),
+                    'already_linked': existing_team_is_active,
+                    'has_legacy_link': bool(existing_link and not existing_team_is_active),
                     'existing_team': (
                         {
                             'id': existing_link.team_id,
                             'name': existing_link.team.name,
+                            'is_active': existing_link.team.is_active,
                         }
                         if existing_link and existing_link.team_id
                         else None

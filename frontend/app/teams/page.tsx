@@ -421,7 +421,9 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
       setSelectedClub(null);
       setValidationMessage(
         selectableResults.length > 0
-          ? 'Encontramos mais de um resultado. Selecione abaixo o time correto antes de concluir o cadastro.'
+          ? availableResults.some((result) => result.has_legacy_link)
+            ? 'Encontramos resultados válidos. Alguns possuem vínculo antigo com times inativos e podem ser reutilizados com segurança.'
+            : 'Encontramos mais de um resultado. Selecione abaixo o time correto antes de concluir o cadastro.'
           : 'Os resultados encontrados já estão vinculados a outros times. Escolha outro time ou revise os dados informados.'
       );
     },
@@ -686,7 +688,13 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
 
                         {isBlocked && result.existing_team && (
                           <p className="mt-3 text-xs text-error">
-                            Já vinculado ao time {result.existing_team.name}.
+                            Já vinculado ao time ativo {result.existing_team.name}.
+                          </p>
+                        )}
+
+                        {!isBlocked && result.has_legacy_link && result.existing_team && (
+                          <p className="mt-3 text-xs text-warning">
+                            Vínculo legado encontrado com o time inativo {result.existing_team.name}. O sistema vai reutilizar esse identificador oficial no novo cadastro.
                           </p>
                         )}
                       </button>

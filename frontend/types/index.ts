@@ -253,9 +253,11 @@ export interface EAClubSearchResult {
   overallRank?: number | string;
   skillRating?: number | string;
   already_linked?: boolean;
+  has_legacy_link?: boolean;
   existing_team?: {
     id: number;
     name: string;
+    is_active?: boolean;
   } | null;
 }
 
