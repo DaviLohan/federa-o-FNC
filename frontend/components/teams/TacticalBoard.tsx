@@ -701,12 +701,17 @@ function drawShirt(
 ) {
   const width = 52 * scale;
   const height = 68 * scale;
-  const sleeveWidth = 11 * scale;
-  const sleeveDrop = 14 * scale;
-  const bodyInset = 6 * scale;
+  const sleeveWidth = 12 * scale;
+  const sleeveOuterDrop = 11 * scale;
+  const sleeveInnerDrop = 18 * scale;
+  const shoulderInset = 9 * scale;
+  const bodyInset = 7 * scale;
   const neckWidth = 10 * scale;
   const neckDepth = 6 * scale;
   const hemCurve = 2 * scale;
+  const shoulderY = -height / 2 + 9 * scale;
+  const underarmY = -height / 2 + 24 * scale;
+  const hemY = height / 2 - 3 * scale;
 
   ctx.save();
   ctx.translate(x, y);
@@ -722,18 +727,20 @@ function drawShirt(
   ctx.fillStyle = bodyGrad;
   ctx.beginPath();
   ctx.moveTo(-neckWidth, -height / 2 + neckDepth);
-  ctx.quadraticCurveTo(-width * 0.19, -height / 2 + 1 * scale, -width / 2 + bodyInset, -height / 2 + 11 * scale);
-  ctx.lineTo(-width / 2 - sleeveWidth, -height / 2 + sleeveDrop);
-  ctx.lineTo(-width / 2 - sleeveWidth + 5 * scale, -height / 2 + sleeveDrop + 14 * scale);
-  ctx.lineTo(-width / 2 + bodyInset, -height / 2 + 22 * scale);
-  ctx.lineTo(-width / 2 + bodyInset, height / 2 - 3 * scale);
+  ctx.lineTo(-shoulderInset, -height / 2 + neckDepth);
+  ctx.lineTo(-width / 2 + shoulderInset + 1 * scale, shoulderY);
+  ctx.lineTo(-width / 2 - sleeveWidth + 2 * scale, shoulderY + sleeveOuterDrop);
+  ctx.lineTo(-width / 2 - sleeveWidth + 6 * scale, shoulderY + sleeveInnerDrop);
+  ctx.lineTo(-width / 2 + bodyInset, underarmY);
+  ctx.lineTo(-width / 2 + bodyInset, hemY);
   ctx.quadraticCurveTo(-width * 0.16, height / 2 + hemCurve, 0, height / 2 + hemCurve);
-  ctx.quadraticCurveTo(width * 0.16, height / 2 + hemCurve, width / 2 - bodyInset, height / 2 - 3 * scale);
-  ctx.lineTo(width / 2 - bodyInset, -height / 2 + 22 * scale);
-  ctx.lineTo(width / 2 + sleeveWidth - 5 * scale, -height / 2 + sleeveDrop + 14 * scale);
-  ctx.lineTo(width / 2 + sleeveWidth, -height / 2 + sleeveDrop);
-  ctx.lineTo(width / 2 - bodyInset, -height / 2 + 11 * scale);
-  ctx.quadraticCurveTo(width * 0.19, -height / 2 + 1 * scale, neckWidth, -height / 2 + neckDepth);
+  ctx.quadraticCurveTo(width * 0.16, height / 2 + hemCurve, width / 2 - bodyInset, hemY);
+  ctx.lineTo(width / 2 - bodyInset, underarmY);
+  ctx.lineTo(width / 2 + sleeveWidth - 6 * scale, shoulderY + sleeveInnerDrop);
+  ctx.lineTo(width / 2 + sleeveWidth - 2 * scale, shoulderY + sleeveOuterDrop);
+  ctx.lineTo(width / 2 - shoulderInset - 1 * scale, shoulderY);
+  ctx.lineTo(shoulderInset, -height / 2 + neckDepth);
+  ctx.lineTo(neckWidth, -height / 2 + neckDepth);
   ctx.quadraticCurveTo(0, -height / 2 + neckDepth + 5 * scale, -neckWidth, -height / 2 + neckDepth);
   ctx.closePath();
   ctx.fill();
@@ -747,10 +754,11 @@ function drawShirt(
   highlight.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = highlight;
   ctx.beginPath();
-  ctx.moveTo(-width / 2 + bodyInset + 2 * scale, -height / 2 + 15 * scale);
-  ctx.quadraticCurveTo(0, -height / 2 + 8 * scale, width / 2 - bodyInset - 2 * scale, -height / 2 + 15 * scale);
-  ctx.lineTo(width / 2 - bodyInset - 4 * scale, -height / 2 + 24 * scale);
-  ctx.quadraticCurveTo(0, -height / 2 + 17 * scale, -width / 2 + bodyInset + 4 * scale, -height / 2 + 24 * scale);
+  ctx.moveTo(-width / 2 + bodyInset + 1 * scale, -height / 2 + 15 * scale);
+  ctx.lineTo(-width / 2 + bodyInset + 1 * scale, -height / 2 + 24 * scale);
+  ctx.quadraticCurveTo(0, -height / 2 + 18 * scale, width / 2 - bodyInset - 1 * scale, -height / 2 + 24 * scale);
+  ctx.lineTo(width / 2 - bodyInset - 1 * scale, -height / 2 + 15 * scale);
+  ctx.quadraticCurveTo(0, -height / 2 + 9 * scale, -width / 2 + bodyInset + 1 * scale, -height / 2 + 15 * scale);
   ctx.closePath();
   ctx.fill();
 
@@ -758,10 +766,24 @@ function drawShirt(
   drawRoundedRect(ctx, -width / 2 + bodyInset + 1 * scale, -height / 2 + 19 * scale, width - (bodyInset + 1 * scale) * 2, 5 * scale, 4 * scale);
   ctx.fill();
 
-  ctx.fillStyle = `${secondaryColor}99`;
-  drawRoundedRect(ctx, -width / 2 - sleeveWidth + 5 * scale, -height / 2 + sleeveDrop + 5 * scale, 8 * scale, 3 * scale, 2 * scale);
+  const shoulderShade = ctx.createLinearGradient(0, -height / 2 + 10 * scale, 0, -height / 2 + 30 * scale);
+  shoulderShade.addColorStop(0, 'rgba(0,0,0,0.08)');
+  shoulderShade.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = shoulderShade;
+  ctx.beginPath();
+  ctx.moveTo(-width / 2 + shoulderInset + 1 * scale, shoulderY + 1 * scale);
+  ctx.lineTo(-width / 2 + bodyInset + 1 * scale, -height / 2 + 23 * scale);
+  ctx.lineTo(width / 2 - bodyInset - 1 * scale, -height / 2 + 23 * scale);
+  ctx.lineTo(width / 2 - shoulderInset - 1 * scale, shoulderY + 1 * scale);
+  ctx.lineTo(shoulderInset, shoulderY - 1 * scale);
+  ctx.lineTo(-shoulderInset, shoulderY - 1 * scale);
+  ctx.closePath();
   ctx.fill();
-  drawRoundedRect(ctx, width / 2 + sleeveWidth - 13 * scale, -height / 2 + sleeveDrop + 5 * scale, 8 * scale, 3 * scale, 2 * scale);
+
+  ctx.fillStyle = `${secondaryColor}99`;
+  drawRoundedRect(ctx, -width / 2 - sleeveWidth + 4 * scale, shoulderY + sleeveOuterDrop + 1 * scale, 8 * scale, 3 * scale, 2 * scale);
+  ctx.fill();
+  drawRoundedRect(ctx, width / 2 + sleeveWidth - 12 * scale, shoulderY + sleeveOuterDrop + 1 * scale, 8 * scale, 3 * scale, 2 * scale);
   ctx.fill();
 
   ctx.beginPath();
@@ -778,6 +800,15 @@ function drawShirt(
   ctx.beginPath();
   ctx.moveTo(-neckWidth + 3 * scale, -height / 2 + neckDepth + 2 * scale);
   ctx.quadraticCurveTo(0, -height / 2 + neckDepth + 8 * scale, neckWidth - 3 * scale, -height / 2 + neckDepth + 2 * scale);
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+  ctx.lineWidth = 1 * scale;
+  ctx.beginPath();
+  ctx.moveTo(-width / 2 + shoulderInset + 1 * scale, shoulderY + 1 * scale);
+  ctx.lineTo(-width / 2 - sleeveWidth + 2 * scale, shoulderY + sleeveOuterDrop);
+  ctx.moveTo(width / 2 - shoulderInset - 1 * scale, shoulderY + 1 * scale);
+  ctx.lineTo(width / 2 + sleeveWidth - 2 * scale, shoulderY + sleeveOuterDrop);
   ctx.stroke();
 
   ctx.shadowColor = 'transparent';
@@ -829,22 +860,101 @@ async function renderLineupArtwork({
   };
 
   const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
-  bgGrad.addColorStop(0, '#315866');
-  bgGrad.addColorStop(0.45, '#224554');
-  bgGrad.addColorStop(1, '#152C3B');
+  bgGrad.addColorStop(0, '#0B1220');
+  bgGrad.addColorStop(0.42, '#123040');
+  bgGrad.addColorStop(1, '#0A141F');
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
 
+  const sideVignette = ctx.createLinearGradient(0, 0, W, 0);
+  sideVignette.addColorStop(0, 'rgba(0,0,0,0.24)');
+  sideVignette.addColorStop(0.12, 'rgba(0,0,0,0.06)');
+  sideVignette.addColorStop(0.5, 'rgba(0,0,0,0)');
+  sideVignette.addColorStop(0.88, 'rgba(0,0,0,0.06)');
+  sideVignette.addColorStop(1, 'rgba(0,0,0,0.24)');
+  ctx.fillStyle = sideVignette;
+  ctx.fillRect(0, 0, W, H);
+
+  const frameGrad = ctx.createLinearGradient(0, 0, W, 0);
+  frameGrad.addColorStop(0, 'rgba(243,211,107,0.10)');
+  frameGrad.addColorStop(0.5, 'rgba(255,255,255,0.02)');
+  frameGrad.addColorStop(1, 'rgba(243,211,107,0.10)');
+  ctx.strokeStyle = frameGrad;
+  ctx.lineWidth = 1;
+  drawRoundedRect(ctx, 20, 20, W - 40, H - 40, 26);
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 1;
+  drawRoundedRect(ctx, 34, 34, W - 68, H - 68, 22);
+  ctx.stroke();
+
   const ambient = ctx.createRadialGradient(W / 2, 120, 40, W / 2, 120, 420);
-  ambient.addColorStop(0, 'rgba(255,255,255,0.08)');
+  ambient.addColorStop(0, 'rgba(243,211,107,0.11)');
   ambient.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = ambient;
   ctx.fillRect(0, 0, W, H);
 
+  const topInstitutional = ctx.createLinearGradient(0, 0, 0, 260);
+  topInstitutional.addColorStop(0, 'rgba(243,211,107,0.06)');
+  topInstitutional.addColorStop(0.35, 'rgba(255,255,255,0.02)');
+  topInstitutional.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = topInstitutional;
+  ctx.fillRect(0, 0, W, 260);
+
+  const federationPattern = (offsetX: number, offsetY: number, alpha: number) => {
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    ctx.strokeStyle = `rgba(243,211,107,${alpha})`;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 6; i++) {
+      const x = i * 28;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + 18, 18);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x + 18, 18);
+      ctx.lineTo(x, 36);
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+
+  federationPattern(84, 116, 0.05);
+  federationPattern(W - 258, 134, 0.045);
+  federationPattern(96, H - 190, 0.03);
+  federationPattern(W - 280, H - 216, 0.028);
+
+  const drawChevronStrip = (x: number, y: number, count: number, direction: 'left' | 'right', alpha: number) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < count; i++) {
+      const offset = i * 16;
+      ctx.beginPath();
+      if (direction === 'right') {
+        ctx.moveTo(offset, -8);
+        ctx.lineTo(offset + 8, 0);
+        ctx.lineTo(offset, 8);
+      } else {
+        ctx.moveTo(offset + 8, -8);
+        ctx.lineTo(offset, 0);
+        ctx.lineTo(offset + 8, 8);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+
+  drawChevronStrip(214, 196, 4, 'right', 0.05);
+  drawChevronStrip(W - 278, 212, 4, 'left', 0.05);
+
   [
-    [55, 42, 9, 0.35], [130, 128, 13, 0.95], [310, 248, 10, 0.45], [412, 35, 10, 0.9],
-    [660, 28, 11, 0.8], [845, 52, 10, 0.7], [1010, 76, 9, 0.8], [980, 306, 8, 0.8],
-    [750, 258, 11, 0.9], [22, 260, 8, 0.65], [678, 150, 8, 0.4], [823, 117, 8, 0.55],
+    [55, 42, 7, 0.28], [128, 124, 12, 0.92], [304, 248, 9, 0.38], [410, 34, 9, 0.78],
+    [658, 28, 10, 0.74], [844, 54, 9, 0.58], [1006, 76, 8, 0.68], [978, 306, 7, 0.64],
+    [748, 258, 10, 0.78], [22, 260, 7, 0.5], [678, 150, 7, 0.3], [823, 117, 7, 0.42],
   ].forEach(([x, y, size, alpha]) => drawStar(x as number, y as number, size as number, alpha as number));
 
   const horizonY = 338;
@@ -874,9 +984,15 @@ async function renderLineupArtwork({
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, 420);
 
-  const logoSize = 76;
+  const federationSealGlow = ctx.createRadialGradient(centerX, H * 0.58, 10, centerX, H * 0.58, 240);
+  federationSealGlow.addColorStop(0, 'rgba(243,211,107,0.025)');
+  federationSealGlow.addColorStop(1, 'rgba(243,211,107,0)');
+  ctx.fillStyle = federationSealGlow;
+  ctx.fillRect(0, 0, W, H);
+
+  const logoSize = 68;
   const logoX = centerX - logoSize / 2;
-  const logoY = 38;
+  const logoY = 62;
 
   if (teamLogo) {
     const logoImg = await loadImage(teamLogo);
@@ -897,85 +1013,95 @@ async function renderLineupArtwork({
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = '900 40px system-ui, -apple-system, sans-serif';
+  ctx.font = '900 34px system-ui, -apple-system, sans-serif';
   ctx.shadowColor = 'rgba(0,0,0,0.18)';
   ctx.shadowBlur = 10;
   ctx.shadowOffsetY = 4;
-  ctx.fillText(teamName.toUpperCase(), centerX, 116);
+  ctx.fillText(teamName.toUpperCase(), centerX, 144);
   ctx.shadowColor = 'transparent';
   ctx.shadowBlur = 0;
 
   ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  ctx.font = '400 24px system-ui, -apple-system, sans-serif';
-  ctx.fillText((style.title || 'Escalação oficial').toUpperCase(), centerX, 194);
+  ctx.font = '500 18px system-ui, -apple-system, sans-serif';
+  ctx.fillText((style.title || 'Escalação oficial').toUpperCase(), centerX, 210);
 
   const subtitle = style.subtitle?.trim() || (opponentName ? `VS ${opponentName.toUpperCase()}` : 'LINEUP OFICIAL');
   ctx.fillStyle = 'rgba(255,255,255,0.58)';
-  ctx.font = '600 13px system-ui, -apple-system, sans-serif';
-  ctx.fillText(subtitle, centerX, 232);
+  ctx.font = '600 12px system-ui, -apple-system, sans-serif';
+  ctx.fillText(subtitle, centerX, 240);
 
   const chipText = formation;
-  const chipW = Math.max(86, chipText.length * 10 + 28);
-  const chipH = 30;
+  const chipW = Math.max(74, chipText.length * 9 + 22);
+  const chipH = 24;
   const chipX = centerX - chipW / 2;
-  const chipY = 256;
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  drawRoundedRect(ctx, chipX, chipY, chipW, chipH, 17);
+  const chipY = 264;
+  ctx.fillStyle = 'rgba(255,255,255,0.07)';
+  drawRoundedRect(ctx, chipX, chipY, chipW, chipH, 12);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
   ctx.lineWidth = 1;
-  drawRoundedRect(ctx, chipX, chipY, chipW, chipH, 17);
+  drawRoundedRect(ctx, chipX, chipY, chipW, chipH, 12);
   ctx.stroke();
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = '700 14px system-ui, -apple-system, sans-serif';
+  ctx.font = '700 12px system-ui, -apple-system, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(chipText, centerX, chipY + chipH / 2 + 0.5);
 
+  const haze = ctx.createLinearGradient(0, 288, 0, 390);
+  haze.addColorStop(0, 'rgba(255,255,255,0.05)');
+  haze.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = haze;
+  ctx.fillRect(120, 286, W - 240, 120);
+
   // Goal backdrop
-  const goalW = 210;
-  const goalH = 82;
+  const goalW = 170;
+  const goalH = 60;
   const goalX = centerX - goalW / 2;
-  const goalY = 300;
+  const goalY = 314;
   ctx.save();
-  ctx.strokeStyle = 'rgba(232,240,244,0.68)';
-  ctx.lineWidth = 6;
-  drawRoundedRect(ctx, goalX, goalY, goalW, goalH, 20);
+  ctx.strokeStyle = 'rgba(228,236,239,0.54)';
+  ctx.lineWidth = 4;
+  drawRoundedRect(ctx, goalX, goalY, goalW, goalH, 16);
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.06)';
-  drawRoundedRect(ctx, goalX + 6, goalY + 6, goalW - 12, goalH - 12, 16);
+  ctx.fillStyle = 'rgba(255,255,255,0.04)';
+  drawRoundedRect(ctx, goalX + 4, goalY + 4, goalW - 8, goalH - 8, 12);
   ctx.fill();
   ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-  for (let i = 0; i <= 10; i++) {
-    const x = goalX + 18 + i * ((goalW - 36) / 10);
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  for (let i = 0; i <= 8; i++) {
+    const x = goalX + 16 + i * ((goalW - 32) / 8);
     ctx.beginPath();
-    ctx.moveTo(x, goalY + 12);
-    ctx.lineTo(x, goalY + goalH - 12);
+    ctx.moveTo(x, goalY + 10);
+    ctx.lineTo(x, goalY + goalH - 10);
     ctx.stroke();
   }
-  for (let i = 0; i <= 5; i++) {
-    const y = goalY + 14 + i * ((goalH - 28) / 5);
+  for (let i = 0; i <= 4; i++) {
+    const y = goalY + 11 + i * ((goalH - 22) / 4);
     ctx.beginPath();
-    ctx.moveTo(goalX + 14, y);
-    ctx.lineTo(goalX + goalW - 14, y);
+    ctx.moveTo(goalX + 12, y);
+    ctx.lineTo(goalX + goalW - 12, y);
     ctx.stroke();
   }
   ctx.restore();
 
-  // Sponsor bars backdrop like reference
-  ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  drawRoundedRect(ctx, 204, 318, 188, 54, 0);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(10,14,20,0.7)';
-  drawRoundedRect(ctx, 688, 318, 184, 54, 0);
+  // Perspective field base
+  const fieldShadow = ctx.createLinearGradient(0, fieldTopY - 10, 0, fieldBottomY + 20);
+  fieldShadow.addColorStop(0, 'rgba(0,0,0,0.08)');
+  fieldShadow.addColorStop(1, 'rgba(0,0,0,0.16)');
+  ctx.fillStyle = fieldShadow;
+  ctx.beginPath();
+  ctx.moveTo(topLeftX - 10, fieldTopY - 8);
+  ctx.lineTo(topRightX + 10, fieldTopY - 8);
+  ctx.lineTo(bottomRightX + 18, fieldBottomY + 8);
+  ctx.lineTo(bottomLeftX - 18, fieldBottomY + 8);
+  ctx.closePath();
   ctx.fill();
 
-  // Perspective field base
   const fieldGrad = ctx.createLinearGradient(centerX, fieldTopY, centerX, fieldBottomY);
-  fieldGrad.addColorStop(0, 'rgba(38,74,82,0.90)');
-  fieldGrad.addColorStop(0.55, 'rgba(27,55,68,0.94)');
-  fieldGrad.addColorStop(1, 'rgba(22,43,58,0.98)');
+  fieldGrad.addColorStop(0, 'rgba(40,84,90,0.74)');
+  fieldGrad.addColorStop(0.4, 'rgba(28,60,70,0.9)');
+  fieldGrad.addColorStop(1, 'rgba(15,33,46,0.98)');
   ctx.fillStyle = fieldGrad;
   ctx.beginPath();
   ctx.moveTo(topLeftX, fieldTopY);
@@ -986,8 +1112,9 @@ async function renderLineupArtwork({
   ctx.fill();
 
   const fieldShine = ctx.createLinearGradient(0, fieldTopY, W, fieldBottomY);
-  fieldShine.addColorStop(0, 'rgba(255,255,255,0.035)');
-  fieldShine.addColorStop(0.5, 'rgba(255,255,255,0)');
+  fieldShine.addColorStop(0, 'rgba(255,255,255,0.024)');
+  fieldShine.addColorStop(0.35, 'rgba(255,255,255,0.012)');
+  fieldShine.addColorStop(0.75, 'rgba(0,0,0,0.02)');
   fieldShine.addColorStop(1, 'rgba(0,0,0,0.08)');
   ctx.fillStyle = fieldShine;
   ctx.beginPath();
@@ -998,8 +1125,34 @@ async function renderLineupArtwork({
   ctx.closePath();
   ctx.fill();
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-  ctx.lineWidth = 5;
+  const institutionalWash = ctx.createLinearGradient(0, fieldTopY, W, fieldBottomY);
+  institutionalWash.addColorStop(0, 'rgba(243,211,107,0.024)');
+  institutionalWash.addColorStop(0.5, 'rgba(255,255,255,0)');
+  institutionalWash.addColorStop(1, 'rgba(243,211,107,0.02)');
+  ctx.fillStyle = institutionalWash;
+  ctx.beginPath();
+  ctx.moveTo(topLeftX, fieldTopY);
+  ctx.lineTo(topRightX, fieldTopY);
+  ctx.lineTo(bottomRightX, fieldBottomY);
+  ctx.lineTo(bottomLeftX, fieldBottomY);
+  ctx.closePath();
+  ctx.fill();
+
+  const fieldInnerGlow = ctx.createLinearGradient(0, fieldTopY, 0, fieldBottomY);
+  fieldInnerGlow.addColorStop(0, 'rgba(255,255,255,0.018)');
+  fieldInnerGlow.addColorStop(0.28, 'rgba(255,255,255,0.01)');
+  fieldInnerGlow.addColorStop(1, 'rgba(0,0,0,0.05)');
+  ctx.fillStyle = fieldInnerGlow;
+  ctx.beginPath();
+  ctx.moveTo(topLeftX, fieldTopY);
+  ctx.lineTo(topRightX, fieldTopY);
+  ctx.lineTo(bottomRightX, fieldBottomY);
+  ctx.lineTo(bottomLeftX, fieldBottomY);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.055)';
+  ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(topLeftX, fieldTopY);
   ctx.lineTo(topRightX, fieldTopY);
@@ -1013,39 +1166,50 @@ async function renderLineupArtwork({
   const rightEdge = (t: number) => lerp(topRightX, bottomRightX, t);
   const yAt = (t: number) => lerp(fieldTopY, fieldBottomY, t);
 
-  for (let i = 0; i < 4; i++) {
-    const t = i / 3;
+  for (let i = 0; i < 10; i++) {
+    const topX = lerp(topLeftX, topRightX, i / 9);
+    const bottomX = lerp(bottomLeftX, bottomRightX, i / 9);
+    ctx.strokeStyle = i === 0 || i === 9 ? 'rgba(255,255,255,0.018)' : 'rgba(255,255,255,0.012)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(topX, fieldTopY + 2);
+    ctx.lineTo(bottomX, fieldBottomY - 2);
+    ctx.stroke();
+  }
+
+  for (let i = 0; i < 5; i++) {
+    const t = i / 4;
     const y = yAt(t);
-    ctx.strokeStyle = `rgba(255,255,255,${0.045 - i * 0.008})`;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = `rgba(255,255,255,${0.034 - i * 0.004})`;
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
     ctx.moveTo(leftEdge(t), y);
     ctx.lineTo(rightEdge(t), y);
     ctx.stroke();
   }
 
-  const midT = 0.53;
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-  ctx.lineWidth = 2;
+  const midT = 0.56;
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 1.8;
   ctx.beginPath();
   ctx.moveTo(leftEdge(midT), yAt(midT));
   ctx.lineTo(rightEdge(midT), yAt(midT));
   ctx.stroke();
 
-  const centerCircleY = yAt(0.58);
+  const centerCircleY = yAt(0.60);
   ctx.beginPath();
-  ctx.ellipse(centerX, centerCircleY, 72, 36, 0, 0, Math.PI * 2);
+  ctx.ellipse(centerX, centerCircleY, 62, 28, 0, 0, Math.PI * 2);
   ctx.stroke();
 
   // Bottom penalty area
-  const bottomPenaltyTopT = 0.83;
-  const bottomPenaltyBottomT = 0.98;
-  const bottomPenaltyInset = 160;
+  const bottomPenaltyTopT = 0.84;
+  const bottomPenaltyBottomT = 0.985;
+  const bottomPenaltyInset = 170;
   ctx.beginPath();
   ctx.moveTo(leftEdge(bottomPenaltyTopT) + bottomPenaltyInset, yAt(bottomPenaltyTopT));
   ctx.lineTo(rightEdge(bottomPenaltyTopT) - bottomPenaltyInset, yAt(bottomPenaltyTopT));
-  ctx.lineTo(rightEdge(bottomPenaltyBottomT) - 110, yAt(bottomPenaltyBottomT));
-  ctx.lineTo(leftEdge(bottomPenaltyBottomT) + 110, yAt(bottomPenaltyBottomT));
+  ctx.lineTo(rightEdge(bottomPenaltyBottomT) - 118, yAt(bottomPenaltyBottomT));
+  ctx.lineTo(leftEdge(bottomPenaltyBottomT) + 118, yAt(bottomPenaltyBottomT));
   ctx.closePath();
   ctx.stroke();
 
