@@ -7,6 +7,7 @@ import { ReportStatusBar } from '@/components/matches/ReportStatusBar';
 import type { Match, Championship } from '@/types';
 import { usePermissions } from '@/lib/hooks';
 import { MatchReportModal, ContestationModal, EAReportModal } from '../modals';
+import { Swords } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,7 +29,7 @@ export function MatchesTab({ matches, championship }: MatchesTabProps) {
   if (matches.length === 0) {
     return (
       <EmptyState
-        icon="⚽"
+        icon={<Swords className="mx-auto h-14 w-14 text-gold/40" />}
         title="Nenhuma partida agendada"
         description="As partidas serao exibidas assim que o campeonato comecar."
         size="lg"

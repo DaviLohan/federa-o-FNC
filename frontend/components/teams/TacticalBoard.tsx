@@ -1509,6 +1509,7 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
   const { showToast } = useToast();
   const queryClient  = useQueryClient();
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const restoringFormationRef = useRef(false);
 
   const [selectedMatchId, setSelectedMatchId] = useState<number | null>(null);
   const [formation,       setFormation]        = useState<TacticalFormation>('4-3-3');
@@ -1562,20 +1563,53 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
 
   useEffect(() => {
     if (!existingLineup) { setLineup({}); return; }
+    const nextFormation =
+      existingLineup.formation && AVAILABLE_FORMATIONS.includes(existingLineup.formation as TacticalFormation)
+        ? (existingLineup.formation as TacticalFormation)
+        : formation;
+
+    const targetSlots = FORMATION_POSITIONS[nextFormation];
     const restored: LineupState = {};
+    const restoredCustomPositions: CustomPositions = {};
+    const usedIndexes = new Set<number>();
+    const positionOccurrence = new Map<string, number>();
+
     existingLineup.players.forEach((lp) => {
-      const idx = slots.findIndex(
-        (s) => s.position === lp.position && Math.abs(s.x - lp.x_position) < 5 && Math.abs(s.y - lp.y_position) < 5
-      );
-      if (idx !== -1) restored[idx] = lp.player.id;
+      const currentOccurrence = positionOccurrence.get(lp.position) ?? 0;
+      positionOccurrence.set(lp.position, currentOccurrence + 1);
+
+      const candidateIndexes = targetSlots
+        .map((slot, index) => ({ slot, index }))
+        .filter(({ slot, index }) => slot.position === lp.position && !usedIndexes.has(index));
+
+      const chosenCandidate =
+        candidateIndexes[currentOccurrence] ||
+        candidateIndexes.find(({ slot }) => Math.abs(slot.x - lp.x_position) < 5 && Math.abs(slot.y - lp.y_position) < 5) ||
+        candidateIndexes[0];
+
+      if (!chosenCandidate) return;
+
+      const idx = chosenCandidate.index;
+      usedIndexes.add(idx);
+      restored[idx] = lp.player.id;
+
+      if (Math.abs(chosenCandidate.slot.x - lp.x_position) > 0.5 || Math.abs(chosenCandidate.slot.y - lp.y_position) > 0.5) {
+        restoredCustomPositions[idx] = {
+          x: lp.x_position,
+          y: lp.y_position,
+        };
+      }
     });
-    setLineup(restored);
-    if (existingLineup.formation && AVAILABLE_FORMATIONS.includes(existingLineup.formation as TacticalFormation)) {
-      setFormation(existingLineup.formation as TacticalFormation);
+
+    restoringFormationRef.current = nextFormation !== formation;
+    if (nextFormation !== formation) {
+      setFormation(nextFormation);
     }
+    setLineup(restored);
+    setCustomPositions(restoredCustomPositions);
     // Se já tem escalação salva, libera o download imediatamente
     setLineupConfirmed(true);
-  }, [existingLineup]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [existingLineup, formation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!lineupStyleData) return;
@@ -1607,6 +1641,10 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
 
   // Quando trocar de formação, limpar posições customizadas
   useEffect(() => {
+    if (restoringFormationRef.current) {
+      restoringFormationRef.current = false;
+      return;
+    }
     setCustomPositions({});
   }, [formation]);
 
@@ -1758,8 +1796,8 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
         players: slots.map((slot, idx) => ({
           player_id:  lineup[idx]!,
           position:   slot.position,
-          x_position: slot.x,
-          y_position: slot.y,
+          x_position: customPositions[idx]?.x ?? slot.x,
+          y_position: customPositions[idx]?.y ?? slot.y,
         } as MatchLineupPlayerData)),
       },
     });

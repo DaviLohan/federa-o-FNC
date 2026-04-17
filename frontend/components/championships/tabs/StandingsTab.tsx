@@ -2,7 +2,7 @@
 
 import { Card, Table, EmptyState } from '@/components/shared/ui';
 import type { Standings } from '@/types';
-import { Trophy, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Trophy, TrendingUp, TrendingDown, Minus, LoaderCircle, AlertTriangle, BarChart3 } from 'lucide-react';
 
 interface StandingsTabProps {
   standings: Standings[];
@@ -15,7 +15,7 @@ export function StandingsTab({ standings, error, isLoading }: StandingsTabProps)
   if (isLoading) {
     return (
       <EmptyState
-        icon="⏳"
+        icon={<LoaderCircle className="mx-auto h-14 w-14 text-gold/40 animate-spin" />}
         title="Carregando classificação..."
         description="Aguarde enquanto buscamos os dados."
         size="lg"
@@ -27,7 +27,7 @@ export function StandingsTab({ standings, error, isLoading }: StandingsTabProps)
   if (error) {
     return (
       <EmptyState
-        icon="⚠️"
+        icon={<AlertTriangle className="mx-auto h-14 w-14 text-warning" />}
         title="Erro ao carregar classificação"
         description={error.message || "Não foi possível buscar a classificação. Tente novamente."}
         size="lg"
@@ -38,7 +38,7 @@ export function StandingsTab({ standings, error, isLoading }: StandingsTabProps)
   if (standings.length === 0) {
     return (
       <EmptyState
-        icon="📊"
+        icon={<BarChart3 className="mx-auto h-14 w-14 text-gold/40" />}
         title="Classificação ainda não disponível"
         description="A classificação será exibida assim que as partidas começarem."
         size="lg"

@@ -7,7 +7,7 @@ import { matchesAPI } from '@/lib/api';
 import { Card, Badge, Button, EmptyState } from '@/components/shared/ui';
 import { MatchReportModal } from '@/components/championships/modals/MatchReportModal';
 import type { Match } from '@/types';
-import { Calendar, Clock, ChevronRight } from 'lucide-react';
+import { Calendar, Clock, ChevronRight, Swords } from 'lucide-react';
 import { formatDate, formatTime } from '@/lib/utils/date';
 
 interface TeamMatchesTabProps {
@@ -102,7 +102,7 @@ export function TeamMatchesTab({ teamId, isOwner }: TeamMatchesTabProps) {
       {/* ── Empty state ──────────────────────────────────────────────────────── */}
       {sorted.length === 0 && (
         <EmptyState
-          icon="⚽"
+          icon={<Swords className="mx-auto h-14 w-14 text-gold/40" />}
           title="Nenhuma partida encontrada"
           description={
             activeFilter === 'all'

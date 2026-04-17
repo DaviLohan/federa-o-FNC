@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, EmptyState, Badge, Skeleton, Button, useToast } from '@/components/shared/ui';
 import { contestationsAPI } from '@/lib/api';
 import { usePermissions } from '@/lib/hooks';
-import { AlertCircle, CheckCircle, Clock, XCircle, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, XCircle, ThumbsUp, ThumbsDown, ClipboardList } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils/date';
 
 interface ReportsTabProps {
@@ -84,7 +84,7 @@ export function ReportsTab({ championshipId }: ReportsTabProps) {
   if (contestations.length === 0) {
     return (
       <EmptyState
-        icon="📋"
+        icon={<ClipboardList className="mx-auto h-14 w-14 text-gold/40" />}
         title="Nenhuma contestação registrada"
         description="As contestações de partidas aparecerão aqui quando forem criadas pelos times."
         size="lg"

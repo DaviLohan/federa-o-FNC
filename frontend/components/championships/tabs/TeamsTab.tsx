@@ -41,7 +41,7 @@ export function TeamsTab({ enrollments, championship }: TeamsTabProps) {
     return (
       <>
         <EmptyState
-          icon="👥"
+          icon={<Users className="mx-auto h-14 w-14 text-gold/40" />}
           title="Nenhum time inscrito"
           description={
             championship.status === 'OPEN'
