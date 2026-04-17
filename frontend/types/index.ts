@@ -7,6 +7,7 @@ export interface User {
   full_name: string;
   user_type: 'PLAYER' | 'TEAM_OWNER' | 'SUPERVISOR' | 'ADMIN';
   user_type_display: string;
+  is_supervisor: boolean;
   platform: 'PS' | 'XBOX' | 'PC';
   cpf: string | null;
   is_active: boolean;

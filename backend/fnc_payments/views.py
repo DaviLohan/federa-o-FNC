@@ -23,7 +23,7 @@ class IsPaymentOwnerOrAdmin(BasePermission):
         return bool(request.user and request.user.is_authenticated)
 
     def has_object_permission(self, request, view, obj):
-        if request.user.user_type in ['ADMIN', 'SUPERVISOR']:
+        if request.user.has_supervisor_access:
             return True
         return obj.team.owner_id == request.user.id
 

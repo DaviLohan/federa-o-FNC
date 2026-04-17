@@ -278,7 +278,7 @@ class ChampionshipEnrollmentSerializer(serializers.ModelSerializer):
         try:
             team = Team.objects.get(id=team_id)
 
-            if request and request.user.user_type not in ['ADMIN', 'SUPERVISOR'] and team.owner_id != request.user.id:
+            if request and not request.user.has_supervisor_access and team.owner_id != request.user.id:
                 raise serializers.ValidationError('Você só pode inscrever um time que pertença à sua conta.')
             
             # ✅ NOVA VALIDAÇÃO: Verifica se o time tem mínimo de 5 jogadores ativos

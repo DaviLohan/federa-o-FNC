@@ -306,9 +306,7 @@ class MatchReportEAService:
 
     def _validate_user_permission(self, match: Match, user: User) -> None:
         """Valida que o usuário tem permissão para reportar/confirmar/contestar."""
-        if user.is_superuser:
-            return
-        if user.user_type in [User.UserType.ADMIN, User.UserType.SUPERVISOR]:
+        if user.has_supervisor_access:
             return
 
         is_home_owner = match.home_team.owner_id == user.pk
@@ -712,9 +710,7 @@ class MatchReportEAService:
 
     def _get_user_team(self, match: Match, user: User):
         """Determina qual time o usuário representa."""
-        if user.is_superuser or user.user_type in [
-            User.UserType.ADMIN, User.UserType.SUPERVISOR
-        ]:
+        if user.has_supervisor_access:
             # Admin/supervisor — usar home_team como padrão
             return match.home_team
 
@@ -899,6 +895,8 @@ class MatchReportEAService:
 
             # Admins e supervisores
             admins = User.objects.filter(
+                is_supervisor=True,
+            ) | User.objects.filter(
                 user_type__in=[User.UserType.ADMIN, User.UserType.SUPERVISOR],
                 is_active=True,
             )

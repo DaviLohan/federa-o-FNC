@@ -80,6 +80,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Status
     is_active = models.BooleanField(_('ativo'), default=True)
     is_staff = models.BooleanField(_('staff'), default=False)
+    is_supervisor = models.BooleanField(_('acesso de supervisor'), default=False)
     
     # Timestamps
     date_joined = models.DateTimeField(_('data de cadastro'), default=timezone.now)
@@ -108,6 +109,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     def get_short_name(self):
         return self.first_name
+
+    @property
+    def has_supervisor_access(self):
+        """Permissão acumulativa de supervisão sem substituir o papel principal."""
+        return self.is_superuser or self.user_type == self.UserType.ADMIN or self.user_type == self.UserType.SUPERVISOR or self.is_supervisor
 
 
 class PlayerProfile(models.Model):

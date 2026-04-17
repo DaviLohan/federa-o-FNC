@@ -573,9 +573,8 @@ class MatchValidationService:
         reason = self._map_issue_to_reason(error_issues[0] if error_issues else None)
 
         # Buscar um admin/supervisor como "contestado por" (sistema)
-        system_user = User.objects.filter(
-            user_type__in=[User.UserType.ADMIN, User.UserType.SUPERVISOR],
-            is_active=True,
+        system_user = User.objects.filter(is_active=True).filter(
+            Q(user_type__in=[User.UserType.ADMIN, User.UserType.SUPERVISOR]) | Q(is_supervisor=True)
         ).first()
 
         if not system_user:
@@ -634,9 +633,8 @@ class MatchValidationService:
                     recipients.add(team.owner.email)
 
             # Admins e supervisores
-            admin_emails = User.objects.filter(
-                user_type__in=[User.UserType.ADMIN, User.UserType.SUPERVISOR],
-                is_active=True,
+            admin_emails = User.objects.filter(is_active=True).filter(
+                Q(user_type__in=[User.UserType.ADMIN, User.UserType.SUPERVISOR]) | Q(is_supervisor=True)
             ).values_list('email', flat=True)
             recipients.update(admin_emails)
 

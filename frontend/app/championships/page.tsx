@@ -35,7 +35,7 @@ export default function ChampionshipsPage() {
   const user = useAuthStore((state) => state.user);
   
   // Permission checks based on user type
-  const canManageChampionships = user?.user_type === 'ADMIN' || user?.user_type === 'SUPERVISOR';
+  const canManageChampionships = user?.user_type === 'ADMIN' || user?.user_type === 'SUPERVISOR' || !!user?.is_supervisor;
   const isTeamOwner = user?.user_type === 'TEAM_OWNER';
   const isPlayer = user?.user_type === 'PLAYER';
   const [showCreateModal, setShowCreateModal] = useState(false);

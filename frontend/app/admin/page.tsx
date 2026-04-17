@@ -118,7 +118,7 @@ function CustomTooltip({ active, payload, label }: any) {
 
 export default function AdminPage() {
   const user = useAuthStore((state) => state.user);
-  const isAdmin = user?.user_type === 'ADMIN' || user?.user_type === 'SUPERVISOR';
+  const isAdmin = user?.user_type === 'ADMIN' || user?.user_type === 'SUPERVISOR' || !!user?.is_supervisor;
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['admin', 'stats'],

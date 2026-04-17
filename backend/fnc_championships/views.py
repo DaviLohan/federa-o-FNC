@@ -341,7 +341,7 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
         championship = self.get_object()
         
         # Verifica permissão (apenas Admin e Supervisor)
-        if request.user.user_type not in ['ADMIN', 'SUPERVISOR']:
+        if not request.user.has_supervisor_access:
             return Response(
                 {'error': 'Apenas administradores e supervisores podem gerar chaveamento.'},
                 status=status.HTTP_403_FORBIDDEN
@@ -506,7 +506,7 @@ class ChampionshipEnrollmentViewSet(viewsets.ModelViewSet):
     
     def destroy(self, request, *args, **kwargs):
         enrollment = self.get_object()
-        if request.user.user_type not in ['ADMIN', 'SUPERVISOR'] and enrollment.team.owner_id != request.user.id:
+        if not request.user.has_supervisor_access and enrollment.team.owner_id != request.user.id:
             return Response({'error': 'Você não pode cancelar esta inscrição.'}, status=status.HTTP_403_FORBIDDEN)
 
         enrollment.status = ChampionshipEnrollment.Status.CANCELLED

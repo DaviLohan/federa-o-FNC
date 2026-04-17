@@ -22,6 +22,7 @@ class UserSerializer(serializers.ModelSerializer):
             'full_name',
             'user_type',
             'user_type_display',
+            'is_supervisor',
             'platform',
             'cpf',
             'is_active',
@@ -29,7 +30,7 @@ class UserSerializer(serializers.ModelSerializer):
             'date_joined',
             'last_login'
         ]
-        read_only_fields = ['id', 'date_joined', 'last_login', 'is_email_verified']
+        read_only_fields = ['id', 'date_joined', 'last_login', 'is_email_verified', 'is_supervisor']
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
@@ -341,6 +342,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'full_name',
             'user_type',
             'user_type_display',
+            'is_supervisor',
             'platform',
             'cpf',
             'is_active',
@@ -350,7 +352,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'player_profile',
             'team_owner_profile'
         ]
-        read_only_fields = ['id', 'date_joined', 'last_login', 'is_email_verified']
+        read_only_fields = ['id', 'date_joined', 'last_login', 'is_email_verified', 'is_supervisor']
 
 
 class ChangePasswordSerializer(serializers.Serializer):

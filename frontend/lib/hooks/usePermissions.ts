@@ -14,7 +14,7 @@ export function usePermissions() {
    */
   const canManageChampionships = (): boolean => {
     if (!user) return false;
-    return user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR';
+    return user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor;
   };
 
   /**
@@ -25,7 +25,7 @@ export function usePermissions() {
     if (!user) return false;
 
     // Admin e Supervisor sempre podem
-    if (user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR') {
+    if (user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor) {
       return true;
     }
 
@@ -47,7 +47,7 @@ export function usePermissions() {
     if (!user) return false;
 
     // Admin e Supervisor sempre podem
-    if (user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR') {
+    if (user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor) {
       return true;
     }
 
@@ -73,7 +73,7 @@ export function usePermissions() {
     if (!user) return false;
 
     // Admin e Supervisor sempre podem
-    if (user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR') {
+    if (user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor) {
       return true;
     }
 
@@ -90,7 +90,7 @@ export function usePermissions() {
    */
   const canViewReports = (): boolean => {
     if (!user) return false;
-    return user.user_type === 'ADMIN';
+    return user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor;
   };
 
   /**
@@ -98,7 +98,7 @@ export function usePermissions() {
    */
   const canReviewContestations = (): boolean => {
     if (!user) return false;
-    return user.user_type === 'ADMIN';
+    return user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor;
   };
 
   /**
@@ -114,7 +114,7 @@ export function usePermissions() {
    */
   const canViewAllTeams = (): boolean => {
     if (!user) return false;
-    return user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR';
+    return user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor;
   };
 
   /**
@@ -126,7 +126,7 @@ export function usePermissions() {
     if (!user || !team) return false;
     
     // Admin e Supervisor podem ver qualquer elenco
-    if (user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR') {
+    if (user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor) {
       return true;
     }
     
@@ -141,7 +141,7 @@ export function usePermissions() {
    */
   const canManageBracket = (championship?: Championship): boolean => {
     if (!user || !championship) return false;
-    return user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR';
+    return user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor;
   };
 
   /**

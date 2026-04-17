@@ -15,7 +15,7 @@ class IsAdminOrReadOnly(permissions.BasePermission):
         # Apenas ADMIN e SUPERVISOR podem criar/editar/deletar campeonatos
         return (
             request.user and 
-            request.user.user_type in ['ADMIN', 'SUPERVISOR']
+            request.user.has_supervisor_access
         )
     
     def has_object_permission(self, request, view, obj):
@@ -26,7 +26,7 @@ class IsAdminOrReadOnly(permissions.BasePermission):
         # Apenas ADMIN e SUPERVISOR podem editar/deletar campeonatos
         return (
             request.user and 
-            request.user.user_type in ['ADMIN', 'SUPERVISOR']
+            request.user.has_supervisor_access
         )
 
 
@@ -37,7 +37,7 @@ class CanManageEnrollment(permissions.BasePermission):
     
     def has_object_permission(self, request, view, obj):
         # Admins e Supervisors podem gerenciar qualquer inscrição
-        if request.user.user_type in ['ADMIN', 'SUPERVISOR']:
+        if request.user.has_supervisor_access:
             return True
         
         # Dono do time pode gerenciar apenas sua própria inscrição

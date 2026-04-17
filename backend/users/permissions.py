@@ -31,5 +31,5 @@ class IsAdminOrSupervisor(permissions.BasePermission):
         return (
             request.user
             and request.user.is_authenticated
-            and request.user.user_type in ['ADMIN', 'SUPERVISOR']
+            and request.user.has_supervisor_access
         )
