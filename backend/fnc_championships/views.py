@@ -233,8 +233,7 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
             )
         
         # Gerar chaveamento/tabela/partidas automaticamente
-        from .services import generate_knockout_bracket, generate_league_table
-        from .services.league_match_generator import generate_league_matches, can_generate_league_matches
+        from .services import generate_knockout_bracket, initialize_league_championship
         
         try:
             if championship.championship_type == 'KNOCKOUT':
@@ -245,33 +244,17 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
                 )
             
             elif championship.championship_type == 'LEAGUE':
-                # ✅ NOVA FUNCIONALIDADE: Gerar partidas round-robin
-                can_generate, error_msg = can_generate_league_matches(championship)
-                if not can_generate:
-                    return Response(
-                        {'error': error_msg},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                
-                # Iniciar campeonato ANTES de gerar partidas
-                championship.status = 'IN_PROGRESS'
-                championship.save()
-                
-                # Gerar tabela de classificação
-                standings_count = generate_league_table(championship)
-                
-                # Gerar todas as partidas (round-robin)
                 days_between_rounds = request.data.get('days_between_rounds', 7)  # Padrão: 1 semana
-                result = generate_league_matches(
+                result = initialize_league_championship(
                     championship=championship,
                     days_between_rounds=days_between_rounds
                 )
-                
-                summary = result['summary']
+
+                summary = result['matches_result']['summary']
                 message = (
                     f'Campeonato iniciado com sucesso! '
                     f'Geradas {summary["total_matches"]} partidas em {summary["num_rounds"]} rodadas. '
-                    f'Tabela criada com {standings_count} times.'
+                    f'Tabela criada com {result["standings_count"]} times.'
                 )
             
             elif championship.championship_type == 'GROUPS_KNOCKOUT':

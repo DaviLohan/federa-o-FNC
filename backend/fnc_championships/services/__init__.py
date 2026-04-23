@@ -1,11 +1,17 @@
 """
 Serviços para geração de chaveamento e tabela de campeonatos.
 """
+import logging
 import math
 import random
+from django.db import transaction
 from django.db.models import Q
 from fnc_championships.models import Championship, ChampionshipEnrollment, Bracket, Standings
 from fnc_matches.models import Match
+
+from .league_match_generator import generate_league_matches, can_generate_league_matches
+
+logger = logging.getLogger(__name__)
 
 
 def generate_knockout_bracket(championship):
@@ -209,10 +215,103 @@ def generate_league_table(championship):
         if created:
             standings_created += 1
     
-    # Opcionalmente: Gera todas as partidas do campeonato (ida e volta)
-    _create_league_matches(championship, [e.team for e in enrollments])
-    
     return standings_created
+
+
+@transaction.atomic
+def initialize_league_championship(championship, *, days_between_rounds: int = 7, source: str = 'manual'):
+    """Inicializa campeonato LEAGUE com standings e partidas de forma idempotente."""
+    can_generate, error_msg = can_generate_league_matches(championship)
+    if not can_generate:
+        raise ValueError(error_msg)
+
+    logger.info(
+        'Initializing LEAGUE championship id=%s name=%s source=%s status=%s',
+        championship.id,
+        championship.name,
+        source,
+        championship.status,
+    )
+
+    standings_count = generate_league_table(championship)
+    result = generate_league_matches(
+        championship=championship,
+        days_between_rounds=days_between_rounds,
+    )
+
+    championship.status = Championship.Status.IN_PROGRESS
+    championship.save(update_fields=['status', 'updated_at'])
+
+    return {
+        'standings_count': standings_count,
+        'matches_result': result,
+    }
+
+
+def auto_initialize_due_league_championships(*, now=None, days_between_rounds: int = 7):
+    """Inicializa automaticamente campeonatos LEAGUE elegíveis ao chegar a data de início."""
+    from django.utils import timezone
+
+    now = now or timezone.now()
+    eligible = Championship.objects.filter(
+        championship_type=Championship.Type.LEAGUE,
+    ).filter(
+        Q(status=Championship.Status.OPEN, start_date__lte=now) |
+        Q(status=Championship.Status.IN_PROGRESS)
+    )
+
+    initialized = []
+    skipped = []
+    errors = []
+
+    for championship in eligible:
+        has_matches = Match.objects.filter(championship=championship).exists()
+        has_standings = Standings.objects.filter(championship=championship).exists()
+        if has_matches:
+            skipped.append({'id': championship.id, 'reason': 'matches_already_exist'})
+            continue
+        if championship.status == Championship.Status.IN_PROGRESS and has_standings and not has_matches:
+            logger.warning(
+                'Championship id=%s is IN_PROGRESS with standings but no matches; attempting regeneration via official flow',
+                championship.id,
+            )
+        elif championship.status == Championship.Status.IN_PROGRESS and not has_standings:
+            logger.info(
+                'Recovering inconsistent league championship id=%s already IN_PROGRESS without generated data',
+                championship.id,
+            )
+        elif championship.status == Championship.Status.OPEN and championship.start_date > now:
+            skipped.append({'id': championship.id, 'reason': 'start_date_not_reached'})
+            continue
+
+        try:
+            result = initialize_league_championship(
+                championship,
+                days_between_rounds=days_between_rounds,
+                source='auto',
+            )
+            summary = result['matches_result']['summary']
+            initialized.append({
+                'id': championship.id,
+                'name': championship.name,
+                'standings_count': result['standings_count'],
+                'matches_created': summary['total_matches'],
+                'rounds': summary['num_rounds'],
+            })
+        except Exception as exc:
+            logger.exception(
+                'Automatic league initialization failed for championship id=%s name=%s',
+                championship.id,
+                championship.name,
+            )
+            errors.append({'id': championship.id, 'name': championship.name, 'error': str(exc)})
+
+    return {
+        'checked': eligible.count(),
+        'initialized': initialized,
+        'skipped': skipped,
+        'errors': errors,
+    }
 
 
 def _create_league_matches(championship, teams):

@@ -233,8 +233,9 @@ def can_generate_league_matches(championship: Championship) -> Tuple[bool, str]:
         return False, 'Campeonato não é do tipo LEAGUE'
     
     # Verifica status
-    if championship.status != 'OPEN':
-        return False, f'Campeonato não está OPEN (status atual: {championship.status})'
+    allowed_statuses = [Championship.Status.OPEN, Championship.Status.IN_PROGRESS]
+    if championship.status not in allowed_statuses:
+        return False, f'Campeonato não está em status elegível para geração (status atual: {championship.status})'
     
     # Verifica se já tem partidas
     if Match.objects.filter(championship=championship).exists():
