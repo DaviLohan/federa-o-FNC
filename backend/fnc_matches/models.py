@@ -136,7 +136,7 @@ class Match(models.Model):
     class Meta:
         verbose_name = 'partida'
         verbose_name_plural = 'partidas'
-        ordering = ['-scheduled_date']
+        ordering = ['round_number', 'scheduled_date', 'id']
     
     def __str__(self):
         return f'{self.home_team} {self.home_score} x {self.away_score} {self.away_team}'
@@ -164,6 +164,22 @@ class Match(models.Model):
             delta = self.finished_at - self.started_at
             return int(delta.total_seconds() / 60)
         return 0
+
+    def can_auto_start(self, now=None):
+        now = now or timezone.now()
+        return self.status == self.Status.SCHEDULED and self.scheduled_date <= now
+
+    def can_start_manually(self, now=None):
+        now = now or timezone.now()
+        return self.status == self.Status.SCHEDULED and self.scheduled_date <= now
+
+    def get_start_block_reason(self, now=None):
+        now = now or timezone.now()
+        if self.status != self.Status.SCHEDULED:
+            return 'Apenas partidas agendadas podem ser iniciadas.'
+        if self.scheduled_date > now:
+            return 'Esta partida ainda não chegou no horário de início.'
+        return ''
 
 
 class MatchReport(models.Model):

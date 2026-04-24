@@ -21,11 +21,13 @@ import { MatchCard } from '@/components/matches/MatchCard';
 import { EAReportModal } from '@/components/championships/modals/EAReportModal';
 import type { Match } from '@/types';
 import { Swords, Search, Clock3, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { usePermissions } from '@/lib/hooks';
 
 export default function MatchesPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { user } = usePermissions();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showResultDrawer, setShowResultDrawer] = useState<Match | null>(null);
@@ -69,9 +71,9 @@ export default function MatchesPage() {
 
   const startMutation = useMutation({
     mutationFn: (id: number) => matchesAPI.start(id),
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['matches'] });
-      showToast('Partida iniciada!', 'success');
+      showToast(data?.message || 'Partida liberada automaticamente no horário agendado.', 'success');
     },
     onError: (error: any) => {
       showToast(
@@ -279,16 +281,20 @@ export default function MatchesPage() {
         <Card>
           <EmptyState
             icon={<Swords className="mx-auto h-14 w-14 text-gold/40" />}
-            title={
-              hasActiveFilters
-                ? 'Nenhuma partida encontrada'
-                : 'Nenhuma partida agendada'
-            }
-            description={
-              hasActiveFilters
-                ? 'Tente ajustar os filtros de busca.'
-                : 'Comece agendando a primeira partida!'
-            }
+              title={
+                hasActiveFilters
+                  ? 'Nenhuma partida encontrada'
+                  : user?.user_type === 'TEAM_OWNER'
+                  ? 'Nenhuma partida do seu time encontrada'
+                  : 'Nenhuma partida agendada'
+              }
+              description={
+                hasActiveFilters
+                  ? 'Tente ajustar os filtros de busca.'
+                  : user?.user_type === 'TEAM_OWNER'
+                  ? 'Somente partidas dos seus times aparecem nesta área.'
+                  : 'Comece agendando a primeira partida!'
+              }
             action={
               !hasActiveFilters ? (
                 <Button

@@ -10,6 +10,24 @@ from fnc_championships.models import Standings
 from fnc_teams.models import TeamMembership
 
 
+def sync_matches_ready_to_start(now=None):
+    """Libera automaticamente partidas ao chegar o horário oficial agendado."""
+    now = now or timezone.now()
+
+    with_started_at = Match.objects.filter(
+        status=Match.Status.SCHEDULED,
+        scheduled_date__lte=now,
+        started_at__isnull=True,
+    ).update(status=Match.Status.IN_PROGRESS, started_at=F('scheduled_date'))
+
+    without_started_at = Match.objects.filter(
+        status=Match.Status.SCHEDULED,
+        scheduled_date__lte=now,
+    ).exclude(started_at__isnull=True).update(status=Match.Status.IN_PROGRESS)
+
+    return with_started_at + without_started_at
+
+
 def update_player_statistics(match):
     """
     Atualiza as estatísticas dos jogadores após a finalização de uma partida.

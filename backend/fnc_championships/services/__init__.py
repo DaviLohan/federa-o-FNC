@@ -10,6 +10,7 @@ from fnc_championships.models import Championship, ChampionshipEnrollment, Brack
 from fnc_matches.models import Match
 
 from .league_match_generator import generate_league_matches, can_generate_league_matches
+from .schedule_utils import resolve_championship_round_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ def generate_knockout_bracket(championship):
     
     # Cria a estrutura do bracket
     bracket_structure = {
+        'championship_id': championship.id,
         'rounds': [],
         'bracket_size': bracket_size,
         'num_teams': num_teams
@@ -160,7 +162,7 @@ def _create_knockout_matches(championship, bracket, first_round_data):
                 championship=championship,
                 match_type='CHAMPIONSHIP',
                 round_number=1,
-                scheduled_date=championship.start_date,
+                scheduled_date=resolve_championship_round_datetime(championship, 1),
                 status='SCHEDULED'
             )
             
@@ -333,11 +335,15 @@ def _create_league_matches(championship, teams):
     
     # Gera os confrontos usando algoritmo de round-robin
     matches_to_create = []
-    current_date = championship.start_date
-    
     # Algoritmo round-robin para gerar confrontos
     for round_num in range(1, num_rounds + 1):
         round_matches = _generate_round_robin_round(teams, round_num)
+        round_date = resolve_championship_round_datetime(
+            championship,
+            round_num,
+            start_date=championship.start_date,
+            days_between_rounds=7,
+        )
         
         for home_team, away_team in round_matches:
             matches_to_create.append(
@@ -347,13 +353,10 @@ def _create_league_matches(championship, teams):
                     championship=championship,
                     match_type='CHAMPIONSHIP',
                     round_number=round_num,
-                    scheduled_date=current_date,
+                    scheduled_date=round_date,
                     status='SCHEDULED'
                 )
             )
-        
-        # Avança uma semana para a próxima rodada
-        current_date += datetime.timedelta(days=7)
     
     # Cria todas as partidas de uma vez
     Match.objects.bulk_create(matches_to_create)
@@ -500,7 +503,7 @@ def _advance_winner_to_next_round(structure, current_round, current_match, winne
             championship=championship,
             match_type='PLAYOFF' if next_round_num < len(structure['rounds']) else 'FINAL',
             round_number=next_round_num,
-            scheduled_date=championship.start_date,  # Ajustar data depois
+            scheduled_date=resolve_championship_round_datetime(championship, next_round_num),
             status='SCHEDULED'
         )
         

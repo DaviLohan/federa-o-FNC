@@ -24,19 +24,34 @@ export function usePermissions() {
   const canReportMatch = (match: Match): boolean => {
     if (!user) return false;
 
+    if (match.can_report === false) return false;
+
     // Admin e Supervisor sempre podem
     if (user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor) {
-      return true;
+      return match.status === 'IN_PROGRESS' || match.status === 'FINISHED' || match.status === 'CONTESTED';
     }
 
     // Team Owner pode reportar se for dono de um dos times
     if (user.user_type === 'TEAM_OWNER') {
       const isHomeOwner = match.home_team.owner.id === user.id;
       const isAwayOwner = match.away_team.owner.id === user.id;
-      return isHomeOwner || isAwayOwner;
+      return (isHomeOwner || isAwayOwner) && (match.status === 'IN_PROGRESS' || match.status === 'FINISHED' || match.status === 'CONTESTED');
     }
 
     return false;
+  };
+
+  const canStartMatch = (match: Match): boolean => {
+    if (!user) return false;
+
+    const isSupervisor = user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor;
+    const isOwner = match.home_team.owner.id === user.id || match.away_team.owner.id === user.id;
+
+    if (!isSupervisor && !isOwner) {
+      return false;
+    }
+
+    return match.status === 'SCHEDULED' && !!match.can_start_now;
   };
 
   /**
@@ -163,6 +178,7 @@ export function usePermissions() {
     user,
     canManageChampionships: canManageChampionships(),
     canReportMatch,
+    canStartMatch,
     canContestMatch,
     canEnrollTeam,
     canViewReports: canViewReports(),

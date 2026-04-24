@@ -442,6 +442,9 @@ export interface Match {
   home_score: number;
   away_score: number;
   status: 'PENDING' | 'SCHEDULED' | 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED' | 'CONTESTED';
+  can_start_now?: boolean;
+  start_block_reason?: string;
+  can_report?: boolean;
   winner?: Team;
   is_draw: boolean;
   duration_minutes: number;

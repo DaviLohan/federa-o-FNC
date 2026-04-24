@@ -47,6 +47,7 @@ from .serializers import (
     MatchLineupInputSerializer,
     MatchLineupOutputSerializer,
 )
+from .services import sync_matches_ready_to_start
 
 
 class MatchViewSet(viewsets.ModelViewSet):
@@ -77,10 +78,32 @@ class MatchViewSet(viewsets.ModelViewSet):
         elif self.action == 'retrieve':
             return MatchDetailSerializer
         return MatchSerializer
+
+    def create(self, request, *args, **kwargs):
+        if not request.user.has_supervisor_access:
+            return Response(
+                {'error': 'Apenas administradores e supervisores podem criar partidas.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        match = serializer.save()
+
+        output = MatchDetailSerializer(match, context=self.get_serializer_context())
+        return Response(output.data, status=status.HTTP_201_CREATED)
     
     def get_queryset(self):
         """Filtra partidas."""
+        sync_matches_ready_to_start()
         queryset = Match.objects.all()
+        user = self.request.user
+
+        if getattr(user, 'is_authenticated', False) and not getattr(user, 'has_supervisor_access', False):
+            if user.user_type == 'TEAM_OWNER' or user.owned_teams.exists():
+                queryset = queryset.filter(
+                    Q(home_team__owner=user) | Q(away_team__owner=user)
+                )
         
         # Filtro por campeonato
         championship_id = self.request.query_params.get('championship', None)
@@ -103,11 +126,19 @@ class MatchViewSet(viewsets.ModelViewSet):
         round_number = self.request.query_params.get('round', None)
         if round_number:
             queryset = queryset.filter(round_number=round_number)
+
+        ordering = self.request.query_params.get('ordering', None)
+        if ordering:
+            queryset = queryset.order_by(*[field.strip() for field in ordering.split(',') if field.strip()])
+        else:
+            queryset = queryset.order_by('round_number', 'scheduled_date', 'id')
         
         return queryset.select_related(
             'championship',
             'home_team',
-            'away_team'
+            'away_team',
+            'home_team__owner',
+            'away_team__owner',
         ).prefetch_related('goals', 'cards', 'report')
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsMatchParticipantOrAdmin])
@@ -116,18 +147,27 @@ class MatchViewSet(viewsets.ModelViewSet):
         Inicia a partida.
         """
         match = self.get_object()
-        
-        if match.status != 'SCHEDULED':
+
+        if match.status == 'IN_PROGRESS' and match.scheduled_date <= timezone.now():
+            return Response({
+                'message': 'Partida liberada automaticamente no horário agendado.',
+                'match': MatchSerializer(match).data,
+            })
+
+        block_reason = match.get_start_block_reason()
+        if block_reason:
             return Response(
-                {'error': 'Apenas partidas agendadas podem ser iniciadas.'},
+                {'error': block_reason},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         match.status = 'IN_PROGRESS'
-        match.save()
-        
+        if not match.started_at:
+            match.started_at = match.scheduled_date
+        match.save(update_fields=['status', 'started_at', 'updated_at'])
+
         return Response({
-            'message': 'Partida iniciada.',
+            'message': 'Partida liberada automaticamente no horário agendado.',
             'match': MatchSerializer(match).data
         })
     
@@ -208,6 +248,15 @@ class MatchViewSet(viewsets.ModelViewSet):
         Submete a súmula da partida.
         """
         match = self.get_object()
+
+        if not request.user.has_supervisor_access and request.user.id not in [
+            match.home_team.owner_id,
+            match.away_team.owner_id,
+        ]:
+            return Response(
+                {'error': 'Você só pode reportar partidas do seu time.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         
         # Verificar se a partida está em andamento ou finalizada
         if match.status not in ['IN_PROGRESS', 'FINISHED']:
@@ -527,6 +576,13 @@ class MatchReportViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filtra súmulas."""
         queryset = MatchReport.objects.all()
+        user = self.request.user
+
+        if not getattr(user, 'has_supervisor_access', False):
+            if user.user_type == 'TEAM_OWNER' or user.owned_teams.exists():
+                queryset = queryset.filter(
+                    Q(match__home_team__owner=user) | Q(match__away_team__owner=user)
+                )
         
         # Filtro por partida
         match_id = self.request.query_params.get('match', None)
@@ -674,6 +730,13 @@ class ContestationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filtra contestações."""
         queryset = Contestation.objects.all()
+        user = self.request.user
+
+        if not getattr(user, 'has_supervisor_access', False):
+            if user.user_type == 'TEAM_OWNER' or user.owned_teams.exists():
+                queryset = queryset.filter(
+                    Q(match__home_team__owner=user) | Q(match__away_team__owner=user)
+                )
         
         # Filtro por partida
         match_id = self.request.query_params.get('match', None)

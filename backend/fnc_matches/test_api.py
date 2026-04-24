@@ -33,11 +33,23 @@ class TestMatchAPI:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
     
     def test_list_matches_authenticated(self):
-        """Usuários autenticados podem listar partidas."""
+        """Dono de time vê apenas partidas dos próprios times."""
         self.client.force_authenticate(user=self.user)
-        MatchFactory(championship=self.championship, home_team=self.team1, away_team=self.team2)
+        own_match = MatchFactory(championship=self.championship, home_team=self.team1, away_team=self.team2)
         MatchFactory(championship=self.championship)
         
+        response = self.client.get('/api/v1/matches/')
+        assert response.status_code == status.HTTP_200_OK
+        returned_ids = [item['id'] for item in response.data['results']]
+        assert own_match.id in returned_ids
+        assert len(response.data['results']) == 1
+
+    def test_admin_list_matches_sees_all(self):
+        """Admin/supervisor mantém visão completa das partidas."""
+        self.client.force_authenticate(user=self.admin)
+        MatchFactory(championship=self.championship, home_team=self.team1, away_team=self.team2)
+        MatchFactory(championship=self.championship)
+
         response = self.client.get('/api/v1/matches/')
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data['results']) >= 2
@@ -84,12 +96,75 @@ class TestMatchAPI:
         other_user = UserFactory(user_type='TEAM_OWNER')
         self.client.force_authenticate(user=other_user)
         response = self.client.post(f'/api/v1/matches/{match.id}/start/')
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]
         
         # Participante pode
         self.client.force_authenticate(user=self.user)
         response = self.client.post(f'/api/v1/matches/{match.id}/start/')
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
+
+    def test_start_match_before_scheduled_time_is_blocked(self):
+        """Partida não pode ser iniciada antes do horário agendado."""
+        future_match = MatchFactory(
+            championship=self.championship,
+            home_team=self.team1,
+            away_team=self.team2,
+            status='SCHEDULED',
+            scheduled_date=timezone.now() + timezone.timedelta(hours=2),
+        )
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(f'/api/v1/matches/{future_match.id}/start/')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['error'] == 'Esta partida ainda não chegou no horário de início.'
+
+    def test_due_match_is_auto_released_on_listing(self):
+        """Partida vencida no horário é liberada automaticamente ao sincronizar."""
+        due_match = MatchFactory(
+            championship=self.championship,
+            home_team=self.team1,
+            away_team=self.team2,
+            status='SCHEDULED',
+            started_at=None,
+            scheduled_date=timezone.now() - timezone.timedelta(minutes=5),
+        )
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get('/api/v1/matches/')
+        assert response.status_code == status.HTTP_200_OK
+
+        due_match.refresh_from_db()
+        assert due_match.status == 'IN_PROGRESS'
+        assert due_match.started_at is not None
+
+    def test_default_match_order_is_round_then_schedule(self):
+        """API entrega partidas em ordem crescente de rodada e horário."""
+        first = MatchFactory(
+            championship=self.championship,
+            home_team=self.team1,
+            away_team=self.team2,
+            round_number=1,
+            scheduled_date=timezone.now() + timezone.timedelta(days=1),
+        )
+        second = MatchFactory(
+            championship=self.championship,
+            round_number=2,
+            scheduled_date=timezone.now() + timezone.timedelta(days=2),
+        )
+        third = MatchFactory(
+            championship=self.championship,
+            home_team=self.team1,
+            away_team=self.team2,
+            round_number=1,
+            scheduled_date=timezone.now() + timezone.timedelta(days=1, hours=1),
+        )
+
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get('/api/v1/matches/')
+        assert response.status_code == status.HTTP_200_OK
+
+        returned_ids = [item['id'] for item in response.data['results'][:3]]
+        assert returned_ids == [first.id, third.id, second.id]
     
     def test_finish_match_participant_only(self):
         """Apenas participantes podem finalizar partida."""
@@ -104,7 +179,7 @@ class TestMatchAPI:
         other_user = UserFactory(user_type='TEAM_OWNER')
         self.client.force_authenticate(user=other_user)
         response = self.client.post(f'/api/v1/matches/{match.id}/finish/')
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]
         
         # Participante pode
         self.client.force_authenticate(user=self.user)
@@ -136,6 +211,23 @@ class TestMatchReportAPI:
         
         response = self.client.get('/api/v1/reports/')
         assert response.status_code == status.HTTP_200_OK
+
+    def test_submit_report_from_other_team_is_blocked(self):
+        """Dono de time não pode reportar partida de terceiros."""
+        outsider = UserFactory(user_type='TEAM_OWNER')
+        outsider_team = TeamFactory(owner=outsider)
+        other_match = FinishedMatchFactory(
+            championship=self.championship,
+            home_team=outsider_team,
+            away_team=TeamFactory(),
+        )
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            f'/api/v1/matches/{other_match.id}/submit_report/',
+            {'notes': 'Tentativa inválida'},
+        )
+        assert response.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]
     
     def test_approve_report_admin_only(self):
         """Apenas admins podem aprovar súmulas."""
@@ -309,4 +401,4 @@ class TestMatchWorkflowIntegration:
             # 3. Participante visualiza detalhes
             response = self.client.get(f'/api/v1/matches/{match_id}/')
             assert response.status_code == status.HTTP_200_OK
-            assert response.data['status'] == 'SCHEDULED'
+            assert response.data['status'] in ['SCHEDULED', 'IN_PROGRESS']

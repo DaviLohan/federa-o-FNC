@@ -30,7 +30,7 @@ export function useChampionship(championshipId: number | null) {
     queryFn: () =>
       matchesAPI.getAll({
         championship: championshipId,
-        ordering: '-scheduled_date',
+        ordering: 'round_number,scheduled_date,id',
       }),
     enabled: !!championshipId,
     staleTime: 30000,

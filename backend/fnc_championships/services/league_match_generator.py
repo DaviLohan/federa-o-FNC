@@ -9,6 +9,8 @@ from fnc_championships.models import Championship, ChampionshipEnrollment
 from fnc_matches.models import Match
 from fnc_teams.models import Team
 
+from .schedule_utils import resolve_championship_round_datetime
+
 
 class LeagueMatchGenerator:
     """
@@ -141,9 +143,13 @@ class LeagueMatchGenerator:
             start_date: Data de início da primeira rodada
             days_between_rounds: Intervalo em dias entre rodadas
         """
-        current_date = start_date
-        
         for round_number, round_matches in enumerate(rounds, start=1):
+            round_date = resolve_championship_round_datetime(
+                self.championship,
+                round_number,
+                start_date=start_date,
+                days_between_rounds=days_between_rounds,
+            )
             for home_team, away_team in round_matches:
                 match = Match.objects.create(
                     championship=self.championship,
@@ -151,13 +157,10 @@ class LeagueMatchGenerator:
                     away_team=away_team,
                     match_type='CHAMPIONSHIP',
                     round_number=round_number,
-                    scheduled_date=current_date,
+                    scheduled_date=round_date,
                     status='SCHEDULED'
                 )
                 self.matches.append(match)
-            
-            # Avançar para próxima rodada
-            current_date += timedelta(days=days_between_rounds)
     
     def get_schedule_summary(self) -> dict:
         """

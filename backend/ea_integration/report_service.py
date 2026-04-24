@@ -303,6 +303,8 @@ class MatchReportEAService:
                 f'Status atual: {status_display}. '
                 f'Apenas partidas agendadas ou em andamento podem ser reportadas.'
             )
+        if match.status == Match.Status.SCHEDULED and match.scheduled_date > timezone.now():
+            raise MatchReportEAError('Esta partida ainda não chegou no horário de início.')
 
     def _validate_user_permission(self, match: Match, user: User) -> None:
         """Valida que o usuário tem permissão para reportar/confirmar/contestar."""
@@ -314,9 +316,7 @@ class MatchReportEAService:
 
         if not (is_home_owner or is_away_owner):
             raise MatchReportEAError(
-                'Você não tem permissão para reportar esta partida. '
-                'Apenas donos dos times participantes, administradores '
-                'e supervisores podem reportar partidas.'
+                'Você só pode reportar partidas do seu time.'
             )
 
     def _get_ea_club(self, team, label: str) -> EAClub:

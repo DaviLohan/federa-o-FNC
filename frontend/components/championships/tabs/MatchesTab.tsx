@@ -30,8 +30,8 @@ export function MatchesTab({ matches, championship }: MatchesTabProps) {
     return (
       <EmptyState
         icon={<Swords className="mx-auto h-14 w-14 text-gold/40" />}
-        title="Nenhuma partida agendada"
-        description="As partidas serao exibidas assim que o campeonato comecar."
+        title={user?.user_type === 'TEAM_OWNER' ? 'Nenhuma partida do seu time encontrada nesta rodada.' : 'Nenhuma partida agendada'}
+        description={user?.user_type === 'TEAM_OWNER' ? 'Somente partidas dos seus times sao exibidas aqui.' : 'As partidas serao exibidas assim que o campeonato comecar.'}
         size="lg"
       />
     );
@@ -63,7 +63,7 @@ export function MatchesTab({ matches, championship }: MatchesTabProps) {
   return (
     <div className="space-y-6">
       {Object.entries(groupedMatches)
-        .sort(([a], [b]) => parseInt(b) - parseInt(a))
+        .sort(([a], [b]) => parseInt(a) - parseInt(b))
         .map(([round, roundMatches]) => (
           <div key={round}>
             {round !== '0' && (
@@ -71,7 +71,9 @@ export function MatchesTab({ matches, championship }: MatchesTabProps) {
             )}
 
             <div className="space-y-4">
-              {roundMatches.map((match) => (
+              {[...roundMatches]
+                .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime())
+                .map((match) => (
                 <MatchScorecard key={match.id} match={match}>
                   <ReportStatusBar
                     match={match}

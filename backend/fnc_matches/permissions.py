@@ -8,7 +8,7 @@ class IsMatchParticipantOrAdmin(permissions.BasePermission):
     
     def has_object_permission(self, request, view, obj):
         # Admins podem acessar tudo
-        if request.user.is_superuser:
+        if request.user.has_supervisor_access:
             return True
         
         # Permitir leitura para todos
@@ -34,7 +34,7 @@ class CanSubmitMatchReport(permissions.BasePermission):
     
     def has_permission(self, request, view):
         # Admins sempre podem
-        if request.user.is_superuser:
+        if request.user.has_supervisor_access:
             return True
         
         # Verificar se o usuário tem times
@@ -42,7 +42,7 @@ class CanSubmitMatchReport(permissions.BasePermission):
     
     def has_object_permission(self, request, view, obj):
         # Admins sempre podem
-        if request.user.is_superuser:
+        if request.user.has_supervisor_access:
             return True
         
         # Apenas times participantes podem editar
@@ -62,10 +62,10 @@ class CanManageMatchReport(permissions.BasePermission):
     """
     
     def has_permission(self, request, view):
-        return request.user and request.user.is_superuser
+        return request.user and request.user.has_supervisor_access
     
     def has_object_permission(self, request, view, obj):
-        return request.user and request.user.is_superuser
+        return request.user and request.user.has_supervisor_access
 
 
 class CanContestMatch(permissions.BasePermission):
@@ -79,7 +79,7 @@ class CanContestMatch(permissions.BasePermission):
     
     def has_object_permission(self, request, view, obj):
         # Admins sempre podem visualizar
-        if request.user.is_superuser:
+        if request.user.has_supervisor_access:
             return True
         
         # Apenas o time que contestou pode editar sua própria contestação
@@ -102,7 +102,7 @@ class CanReviewContestation(permissions.BasePermission):
     """
     
     def has_permission(self, request, view):
-        return request.user and request.user.is_superuser
+        return request.user and request.user.has_supervisor_access
     
     def has_object_permission(self, request, view, obj):
-        return request.user and request.user.is_superuser
+        return request.user and request.user.has_supervisor_access

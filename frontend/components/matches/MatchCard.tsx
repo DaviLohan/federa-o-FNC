@@ -4,6 +4,7 @@ import { Button } from '@/components/shared/ui';
 import { MatchScorecard } from './MatchScorecard';
 import { ReportStatusBar } from './ReportStatusBar';
 import type { Match } from '@/types';
+import { usePermissions } from '@/lib/hooks';
 import { Eye, Play } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -38,15 +39,11 @@ export function MatchCard({
   onReportManual,
   onContest,
 }: MatchCardProps) {
+  const { canReportMatch, canContestMatch, canStartMatch } = usePermissions();
   const borderAccent = statusBorderAccent[match.status] ?? '';
 
-  // canReport: partida pode ter resultado reportado (SCHEDULED ou IN_PROGRESS)
-  const canReport =
-    match.status === 'SCHEDULED' || match.status === 'IN_PROGRESS';
-
-  // canContest: resultado pode ser contestado
-  const canContest =
-    match.status === 'FINISHED' || match.status === 'CONTESTED';
+  const canReport = canReportMatch(match);
+  const canContest = canContestMatch(match);
 
   // Reporte manual: somente IN_PROGRESS (conforme decisão do usuário)
   const handleReportManual = () => {
@@ -99,7 +96,7 @@ export function MatchCard({
 
         {/* Botões de ação rápida */}
         <div className="flex items-center gap-2 shrink-0">
-          {match.status === 'SCHEDULED' && (
+          {canStartMatch(match) && (
             <Button
               variant="ghost"
               size="sm"

@@ -159,6 +159,9 @@ class MatchSerializer(serializers.ModelSerializer):
     winner = serializers.SerializerMethodField()
     is_draw = serializers.BooleanField(read_only=True)
     duration_minutes = serializers.IntegerField(read_only=True)
+    can_start_now = serializers.SerializerMethodField()
+    start_block_reason = serializers.SerializerMethodField()
+    can_report = serializers.SerializerMethodField()
     
     class Meta:
         model = Match
@@ -183,6 +186,9 @@ class MatchSerializer(serializers.ModelSerializer):
             'winner',
             'is_draw',
             'duration_minutes',
+            'can_start_now',
+            'start_block_reason',
+            'can_report',
             'created_at',
             'updated_at'
         ]
@@ -194,6 +200,22 @@ class MatchSerializer(serializers.ModelSerializer):
         if winner:
             return TeamListSerializer(winner).data
         return None
+
+    def get_can_start_now(self, obj):
+        return obj.can_start_manually()
+
+    def get_start_block_reason(self, obj):
+        return obj.get_start_block_reason()
+
+    def get_can_report(self, obj):
+        request = self.context.get('request')
+        if not request or not getattr(request, 'user', None) or not request.user.is_authenticated:
+            return False
+        user = request.user
+        if getattr(user, 'has_supervisor_access', False):
+            return obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
+        is_owner = obj.home_team.owner_id == user.id or obj.away_team.owner_id == user.id
+        return is_owner and obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
     
     def validate(self, data):
         """Validações da partida."""
@@ -216,6 +238,7 @@ class MatchListSerializer(serializers.ModelSerializer):
     
     match_type_display = serializers.CharField(source='get_match_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    can_start_now = serializers.SerializerMethodField()
     
     class Meta:
         model = Match
@@ -230,8 +253,12 @@ class MatchListSerializer(serializers.ModelSerializer):
             'match_type_display',
             'status',
             'status_display',
-            'scheduled_date'
+            'scheduled_date',
+            'can_start_now'
         ]
+
+    def get_can_start_now(self, obj):
+        return obj.can_start_manually()
 
 
 class MatchReportSerializer(serializers.ModelSerializer):
@@ -345,6 +372,9 @@ class MatchDetailSerializer(serializers.ModelSerializer):
     winner = serializers.SerializerMethodField()
     is_draw = serializers.BooleanField(read_only=True)
     duration_minutes = serializers.IntegerField(read_only=True)
+    can_start_now = serializers.SerializerMethodField()
+    start_block_reason = serializers.SerializerMethodField()
+    can_report = serializers.SerializerMethodField()
     
     class Meta:
         model = Match
@@ -363,6 +393,9 @@ class MatchDetailSerializer(serializers.ModelSerializer):
             'away_score',
             'status',
             'status_display',
+            'can_start_now',
+            'start_block_reason',
+            'can_report',
             'home_formation',
             'away_formation',
             'winner',
@@ -383,20 +416,43 @@ class MatchDetailSerializer(serializers.ModelSerializer):
             return TeamListSerializer(winner).data
         return None
 
+    def get_can_start_now(self, obj):
+        return obj.can_start_manually()
+
+    def get_start_block_reason(self, obj):
+        return obj.get_start_block_reason()
+
+    def get_can_report(self, obj):
+        request = self.context.get('request')
+        if not request or not getattr(request, 'user', None) or not request.user.is_authenticated:
+            return False
+        user = request.user
+        if getattr(user, 'has_supervisor_access', False):
+            return obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
+        is_owner = obj.home_team.owner_id == user.id or obj.away_team.owner_id == user.id
+        return is_owner and obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
+
 
 class MatchCreateSerializer(serializers.ModelSerializer):
     """
     Serializer para criar partida com eventos.
     """
+    home_team = serializers.PrimaryKeyRelatedField(queryset=Match._meta.get_field('home_team').remote_field.model.objects.all())
+    away_team = serializers.PrimaryKeyRelatedField(queryset=Match._meta.get_field('away_team').remote_field.model.objects.all())
+    championship = serializers.PrimaryKeyRelatedField(
+        queryset=Match._meta.get_field('championship').remote_field.model.objects.all(),
+        required=False,
+        allow_null=True,
+    )
     goals = GoalSerializer(many=True, required=False)
     cards = CardSerializer(many=True, required=False)
     
     class Meta:
         model = Match
         fields = [
-            'home_team_id',
-            'away_team_id',
-            'championship_id',
+            'home_team',
+            'away_team',
+            'championship',
             'match_type',
             'round_number',
             'scheduled_date',

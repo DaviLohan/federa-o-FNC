@@ -217,6 +217,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'fnc_championships.auto_initialize_league_championships',
         'schedule': 60.0,
     },
+    'auto-start-scheduled-matches-every-1-min': {
+        'task': 'fnc_matches.sync_matches_ready_to_start',
+        'schedule': 60.0,
+    },
     'sync-ea-matches-every-3-min': {
         'task': 'ea_integration.sync_all_matches',
         'schedule': 180.0,  # 3 minutos

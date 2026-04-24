@@ -28,7 +28,7 @@ const reportStatusConfig: Record<
   { icon: typeof CheckCircle2; label: string; className: string } | null
 > = {
   PENDING: { icon: Clock, label: 'Aguardando partida', className: 'text-muted2' },
-  SCHEDULED: { icon: Gamepad2, label: 'Reportar resultado da partida', className: 'text-brand' },
+  SCHEDULED: { icon: Clock, label: 'Esta partida ainda não chegou no horário de início.', className: 'text-muted2' },
   IN_PROGRESS: { icon: Gamepad2, label: 'Partida em andamento', className: 'text-brand' },
   FINISHED: { icon: CheckCircle2, label: 'Resultado confirmado', className: 'text-success' },
   CONTESTED: { icon: AlertTriangle, label: 'Resultado contestado', className: 'text-warning' },
@@ -46,12 +46,12 @@ export function ReportStatusBar({
   onContest,
 }: ReportStatusBarProps) {
   const hasReportActions =
-    canReport && (match.status === 'SCHEDULED' || match.status === 'IN_PROGRESS');
+    canReport && (match.status === 'IN_PROGRESS' || match.status === 'FINISHED' || match.status === 'CONTESTED');
   const hasContestActions =
     canContest && (match.status === 'FINISHED' || match.status === 'CONTESTED');
 
   // Only render if there are actions or a meaningful status to show
-  if (!hasReportActions && !hasContestActions) return null;
+  if (!hasReportActions && !hasContestActions && match.status !== 'SCHEDULED') return null;
 
   const statusInfo = reportStatusConfig[match.status];
   const StatusIcon = statusInfo?.icon || Clock;
@@ -74,7 +74,7 @@ export function ReportStatusBar({
               <Gamepad2 className="w-3.5 h-3.5 mr-1.5" />
               Reportar EA
             </Button>
-            {match.status === 'SCHEDULED' && (
+            {match.status === 'IN_PROGRESS' && (
               <Button
                 variant="ghost"
                 size="sm"
