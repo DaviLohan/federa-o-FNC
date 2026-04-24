@@ -373,6 +373,64 @@ def recompute_standings_for_championship(championship):
     Standings.objects.filter(championship=championship).exclude(team_id__in=touched_ids).delete()
 
 
+def recompute_team_statistics_for_championship(championship):
+    """Recalcula estatísticas agregadas dos times a partir das partidas finalizadas."""
+    if not championship:
+        return
+
+    team_ids = list(
+        ChampionshipEnrollment.objects.filter(
+            championship=championship,
+            status='APPROVED',
+        ).values_list('team_id', flat=True)
+    )
+
+    if not team_ids:
+        team_ids = list(
+            Match.objects.filter(championship=championship).values_list('home_team_id', flat=True)
+        ) + list(
+            Match.objects.filter(championship=championship).values_list('away_team_id', flat=True)
+        )
+
+    unique_team_ids = sorted(set(team_ids))
+    if not unique_team_ids:
+        TeamStatistics.objects.filter(championship=championship).delete()
+        return
+
+    TeamStatistics.objects.filter(championship=championship).delete()
+
+    finished_matches = Match.objects.filter(
+        championship=championship,
+        status=Match.Status.FINISHED,
+    ).order_by('finished_at', 'id')
+
+    for match in finished_matches:
+        update_team_statistics(match)
+
+
+def recompute_player_statistics_for_championship(championship):
+    """Recalcula estatísticas agregadas dos jogadores usando a regra atual de participação."""
+    if not championship:
+        return
+
+    PlayerStatistics.objects.filter(championship=championship).delete()
+
+    finished_matches = Match.objects.filter(
+        championship=championship,
+        status=Match.Status.FINISHED,
+    ).order_by('finished_at', 'id')
+
+    for match in finished_matches:
+        update_player_statistics(match)
+
+
+def recompute_match_derived_data_for_championship(championship):
+    """Recalcula os agregados recuperáveis de um campeonato a partir das partidas finalizadas."""
+    recompute_standings_for_championship(championship)
+    recompute_team_statistics_for_championship(championship)
+    recompute_player_statistics_for_championship(championship)
+
+
 def update_top_scorers(match):
     """
     Atualiza o ranking de artilheiros após a finalização de uma partida.

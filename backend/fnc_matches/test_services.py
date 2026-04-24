@@ -6,6 +6,7 @@ import pytest
 from django.utils import timezone
 from datetime import timedelta
 from fnc_matches.services import (
+    recompute_match_derived_data_for_championship,
     reverse_match_result,
     recompute_standings_for_championship,
     update_player_statistics,
@@ -18,7 +19,7 @@ from player_stats.models import PlayerStatistics, TeamStatistics, TopScorer
 from fnc_championships.models import Standings
 from conftest import (
     UserFactory, AdminUserFactory, PlayerProfileFactory, TeamFactory,
-    ChampionshipFactory, MatchFactory, FinishedMatchFactory, TeamMembershipFactory,
+    ChampionshipFactory, ChampionshipEnrollmentFactory, MatchFactory, FinishedMatchFactory, TeamMembershipFactory,
     GoalFactory, AssistFactory, CardFactory, StandingsFactory
 )
 
@@ -585,3 +586,41 @@ class TestUpdateStandings:
         assert away_standing.matches_played == 1
         assert away_standing.losses == 1
         assert away_standing.points == 0
+
+    def test_recompute_match_derived_data_populates_standings_and_stats(self):
+        """Retroactive recompute should rebuild standings and team/player stats from finished matches."""
+        championship = ChampionshipFactory(status='IN_PROGRESS')
+        owner = UserFactory(user_type='TEAM_OWNER')
+        opponent_owner = UserFactory(user_type='TEAM_OWNER')
+        home_team = TeamFactory(owner=owner)
+        away_team = TeamFactory(owner=opponent_owner)
+        home_player_user = UserFactory(user_type='PLAYER')
+        away_player_user = UserFactory(user_type='PLAYER')
+        home_player = PlayerProfileFactory(user=home_player_user)
+        away_player = PlayerProfileFactory(user=away_player_user)
+        TeamMembershipFactory(team=home_team, player=home_player)
+        TeamMembershipFactory(team=away_team, player=away_player)
+        ChampionshipEnrollmentFactory(championship=championship, team=home_team, status='APPROVED')
+        ChampionshipEnrollmentFactory(championship=championship, team=away_team, status='APPROVED')
+
+        FinishedMatchFactory(
+            championship=championship,
+            home_team=home_team,
+            away_team=away_team,
+            home_score=2,
+            away_score=1,
+        )
+
+        recompute_match_derived_data_for_championship(championship)
+
+        standing = Standings.objects.get(championship=championship, team=home_team)
+        team_stats = TeamStatistics.objects.get(championship=championship, team=home_team)
+        player_stats = PlayerStatistics.objects.get(championship=championship, team=home_team, player=home_player)
+
+        assert standing.points == 3
+        assert standing.matches_played == 1
+        assert team_stats.matches_played == 1
+        assert team_stats.matches_won == 1
+        assert team_stats.goals_scored == 2
+        assert player_stats.matches_played == 1
+        assert player_stats.matches_won == 1
