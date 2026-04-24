@@ -6,7 +6,7 @@ from django.utils import timezone
 from fnc_matches.models import Match, Goal, Card
 from player_stats.models import PlayerStatistics, TeamStatistics, TopScorer
 from player_stats.team_performance_sync import TeamPerformanceSyncService
-from fnc_championships.models import Standings
+from fnc_championships.models import Standings, ChampionshipEnrollment
 from fnc_teams.models import TeamMembership
 
 
@@ -262,23 +262,7 @@ def update_standings(match):
     if match.championship.championship_type != 'LEAGUE':
         return
     
-    # Atualiza standings do time da casa
-    _update_standing_for_match(
-        team=match.home_team,
-        championship=match.championship,
-        goals_for=match.home_score,
-        goals_against=match.away_score,
-        is_winner=(match.winner == match.home_team if match.winner else None)
-    )
-    
-    # Atualiza standings do time visitante
-    _update_standing_for_match(
-        team=match.away_team,
-        championship=match.championship,
-        goals_for=match.away_score,
-        goals_against=match.home_score,
-        is_winner=(match.winner == match.away_team if match.winner else None)
-    )
+    recompute_standings_for_championship(match.championship)
 
 
 def _update_standing_for_match(team, championship, goals_for, goals_against, is_winner):
@@ -314,6 +298,79 @@ def _update_standing_for_match(team, championship, goals_for, goals_against, is_
         standing.losses += 1
     
     standing.save()
+
+
+def recompute_standings_for_championship(championship):
+    """Recalcula a classificação completa do campeonato a partir das partidas válidas."""
+    if not championship or championship.championship_type != 'LEAGUE':
+        return
+
+    team_ids = list(
+        ChampionshipEnrollment.objects.filter(
+            championship=championship,
+            status='APPROVED',
+        ).values_list('team_id', flat=True)
+    )
+
+    if not team_ids:
+        team_ids = list(
+            Match.objects.filter(championship=championship).values_list('home_team_id', flat=True)
+        ) + list(
+            Match.objects.filter(championship=championship).values_list('away_team_id', flat=True)
+        )
+
+    unique_team_ids = sorted(set(team_ids))
+    if not unique_team_ids:
+        Standings.objects.filter(championship=championship).delete()
+        return
+
+    existing = {
+        standing.team_id: standing
+        for standing in Standings.objects.filter(championship=championship)
+    }
+
+    touched_ids = set()
+    for team_id in unique_team_ids:
+        standing = existing.get(team_id)
+        if not standing:
+            standing = Standings.objects.create(championship=championship, team_id=team_id)
+            existing[team_id] = standing
+
+        standing.matches_played = 0
+        standing.wins = 0
+        standing.draws = 0
+        standing.losses = 0
+        standing.goals_for = 0
+        standing.goals_against = 0
+        standing.points = 0
+        standing.save(update_fields=[
+            'matches_played', 'wins', 'draws', 'losses',
+            'goals_for', 'goals_against', 'points', 'updated_at',
+        ])
+        touched_ids.add(team_id)
+
+    finished_matches = Match.objects.filter(
+        championship=championship,
+        status=Match.Status.FINISHED,
+    ).order_by('finished_at', 'id')
+
+    for match in finished_matches:
+        _update_standing_for_match(
+            team=match.home_team,
+            championship=championship,
+            goals_for=match.home_score,
+            goals_against=match.away_score,
+            is_winner=(match.winner == match.home_team if match.winner else None),
+        )
+        _update_standing_for_match(
+            team=match.away_team,
+            championship=championship,
+            goals_for=match.away_score,
+            goals_against=match.home_score,
+            is_winner=(match.winner == match.away_team if match.winner else None),
+        )
+
+    Standings.objects.filter(championship=championship).exclude(team_id__in=touched_ids).delete()
 
 
 def update_top_scorers(match):
@@ -480,20 +537,19 @@ def reverse_match_result(match, admin_user):
     _reverse_team_stats(match.home_team, match)
     _reverse_team_stats(match.away_team, match)
     
-    # 3. Reverter classificação (standings)
-    _reverse_standings(match, original_winner, original_is_draw, original_home_score, original_away_score)
-    
-    # 4. Recalcular artilheiros
+    # 3. Recalcular artilheiros
     update_top_scorers(match)
-    
-    # 5. Resetar a partida
+
+    # 4. Resetar a partida
     match.status = 'SCHEDULED'
     match.home_score = 0
     match.away_score = 0
     match.finished_at = None
-    match.save()
-    
-    # 6. Remover súmula se existir
+    match.save(update_fields=['status', 'home_score', 'away_score', 'finished_at', 'updated_at'])
+
+    recompute_standings_for_championship(match.championship)
+
+    # 5. Remover súmula se existir
     try:
         if hasattr(match, 'report'):
             match.report.delete()

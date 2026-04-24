@@ -7,6 +7,7 @@ from django.utils import timezone
 from datetime import timedelta
 from fnc_matches.services import (
     reverse_match_result,
+    recompute_standings_for_championship,
     update_player_statistics,
     update_team_statistics,
     update_standings,
@@ -545,3 +546,42 @@ class TestUpdateStandings:
         assert home_standing.draws == 1
         assert away_standing.points == 1
         assert away_standing.draws == 1
+
+    def test_recompute_standings_resets_stale_values_from_finished_matches(self):
+        """Recompute must rebuild the table from finished matches instead of accumulating stale values."""
+        championship = ChampionshipFactory(status='IN_PROGRESS')
+        home_team = TeamFactory()
+        away_team = TeamFactory()
+
+        FinishedMatchFactory(
+            championship=championship,
+            home_team=home_team,
+            away_team=away_team,
+            home_score=4,
+            away_score=1,
+        )
+
+        StandingsFactory(
+            championship=championship,
+            team=home_team,
+            matches_played=9,
+            wins=9,
+            draws=0,
+            losses=0,
+            goals_for=27,
+            goals_against=3,
+            points=27,
+        )
+
+        recompute_standings_for_championship(championship)
+
+        home_standing = Standings.objects.get(championship=championship, team=home_team)
+        away_standing = Standings.objects.get(championship=championship, team=away_team)
+        assert home_standing.matches_played == 1
+        assert home_standing.wins == 1
+        assert home_standing.points == 3
+        assert home_standing.goals_for == 4
+        assert home_standing.goals_against == 1
+        assert away_standing.matches_played == 1
+        assert away_standing.losses == 1
+        assert away_standing.points == 0

@@ -47,7 +47,8 @@ from .serializers import (
     MatchLineupInputSerializer,
     MatchLineupOutputSerializer,
 )
-from .services import sync_matches_ready_to_start
+from .query_utils import filter_matches_for_user, filter_queryset_by_match_visibility
+from .services import sync_matches_ready_to_start, recompute_standings_for_championship
 
 
 class MatchViewSet(viewsets.ModelViewSet):
@@ -96,14 +97,7 @@ class MatchViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filtra partidas."""
         sync_matches_ready_to_start()
-        queryset = Match.objects.all()
-        user = self.request.user
-
-        if getattr(user, 'is_authenticated', False) and not getattr(user, 'has_supervisor_access', False):
-            if user.user_type == 'TEAM_OWNER' or user.owned_teams.exists():
-                queryset = queryset.filter(
-                    Q(home_team__owner=user) | Q(away_team__owner=user)
-                )
+        queryset = filter_matches_for_user(Match.objects.all(), self.request.user)
         
         # Filtro por campeonato
         championship_id = self.request.query_params.get('championship', None)
@@ -198,9 +192,27 @@ class MatchViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        home_score = request.data.get('home_score', match.home_score)
+        away_score = request.data.get('away_score', match.away_score)
+
+        try:
+            match.home_score = int(home_score)
+            match.away_score = int(away_score)
+        except (TypeError, ValueError):
+            return Response(
+                {'error': 'Placar inválido informado para a partida.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if match.home_score < 0 or match.away_score < 0:
+            return Response(
+                {'error': 'Placar inválido informado para a partida.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         match.status = 'FINISHED'
         match.finished_at = timezone.now()
-        match.save()
+        match.save(update_fields=['home_score', 'away_score', 'status', 'finished_at', 'updated_at'])
         
         # Atualizar estatísticas automaticamente
         from .services import (
@@ -214,7 +226,7 @@ class MatchViewSet(viewsets.ModelViewSet):
         update_player_statistics(match)
         update_team_statistics(match)
         update_team_performance(match)
-        update_standings(match)
+        recompute_standings_for_championship(match.championship)
         update_top_scorers(match)
         
         # Se for campeonato de mata-mata, atualiza o bracket
@@ -271,8 +283,15 @@ class MatchViewSet(viewsets.ModelViewSet):
         
         serializer = MatchReportSerializer(data=report_data)
         if serializer.is_valid():
-            serializer.save(reported_by=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            report = serializer.save(reported_by=request.user)
+            match.home_score = serializer.validated_data.get('home_score', match.home_score)
+            match.away_score = serializer.validated_data.get('away_score', match.away_score)
+            match.save(update_fields=['home_score', 'away_score', 'updated_at'])
+
+            if match.status == Match.Status.FINISHED:
+                recompute_standings_for_championship(match.championship)
+
+            return Response(MatchReportSerializer(report).data, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -417,7 +436,9 @@ class MatchViewSet(viewsets.ModelViewSet):
             ).exclude(
                 is_walkover=True
             ).select_related('home_team', 'away_team', 'championship')
-        
+
+        matches = filter_matches_for_user(matches, request.user)
+
         return Response({
             'count': matches.count(),
             'matches': MatchSerializer(matches, many=True).data
@@ -576,13 +597,7 @@ class MatchReportViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filtra súmulas."""
         queryset = MatchReport.objects.all()
-        user = self.request.user
-
-        if not getattr(user, 'has_supervisor_access', False):
-            if user.user_type == 'TEAM_OWNER' or user.owned_teams.exists():
-                queryset = queryset.filter(
-                    Q(match__home_team__owner=user) | Q(match__away_team__owner=user)
-                )
+        queryset = filter_queryset_by_match_visibility(queryset, self.request.user)
         
         # Filtro por partida
         match_id = self.request.query_params.get('match', None)
@@ -602,11 +617,11 @@ class MatchReportViewSet(viewsets.ModelViewSet):
         Aprova a súmula.
         """
         report = self.get_object()
-        
-        report.is_approved = True
+
+        report.status = MatchReport.Status.APPROVED
         report.approved_by = request.user
         report.approved_at = timezone.now()
-        report.save()
+        report.save(update_fields=['status', 'approved_by', 'approved_at', 'updated_at'])
         
         return Response({
             'message': 'Súmula aprovada.',
@@ -622,11 +637,11 @@ class MatchReportViewSet(viewsets.ModelViewSet):
         
         rejection_reason = request.data.get('rejection_reason', '')
         
-        report.is_approved = False
+        report.status = MatchReport.Status.REJECTED
         report.approved_by = request.user
         report.approved_at = timezone.now()
         report.rejection_reason = rejection_reason
-        report.save()
+        report.save(update_fields=['status', 'approved_by', 'approved_at', 'rejection_reason', 'updated_at'])
         
         return Response({
             'message': 'Súmula rejeitada.',
@@ -650,6 +665,7 @@ class GoalViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filtra gols."""
         queryset = Goal.objects.all()
+        queryset = filter_queryset_by_match_visibility(queryset, self.request.user)
         
         # Filtro por partida
         match_id = self.request.query_params.get('match', None)
@@ -680,6 +696,7 @@ class CardViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filtra cartões."""
         queryset = Card.objects.all()
+        queryset = filter_queryset_by_match_visibility(queryset, self.request.user)
         
         # Filtro por partida
         match_id = self.request.query_params.get('match', None)
@@ -730,13 +747,7 @@ class ContestationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filtra contestações."""
         queryset = Contestation.objects.all()
-        user = self.request.user
-
-        if not getattr(user, 'has_supervisor_access', False):
-            if user.user_type == 'TEAM_OWNER' or user.owned_teams.exists():
-                queryset = queryset.filter(
-                    Q(match__home_team__owner=user) | Q(match__away_team__owner=user)
-                )
+        queryset = filter_queryset_by_match_visibility(queryset, self.request.user)
         
         # Filtro por partida
         match_id = self.request.query_params.get('match', None)

@@ -3,10 +3,12 @@ Testes de API para endpoints de partidas.
 """
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework import status
 from fnc_matches.models import Match, MatchReport, Contestation
+from fnc_championships.models import Standings
 from conftest import (
     UserFactory, AdminUserFactory, TeamFactory, ChampionshipFactory,
     MatchFactory, FinishedMatchFactory, TeamMembershipFactory,
@@ -25,6 +27,9 @@ class TestMatchAPI:
         self.user = UserFactory(user_type='TEAM_OWNER')
         self.team1 = TeamFactory(owner=self.user)
         self.team2 = TeamFactory()
+        self.player_user = UserFactory(user_type='PLAYER')
+        self.player_profile = PlayerProfileFactory(user=self.player_user)
+        TeamMembershipFactory(team=self.team1, player=self.player_profile)
         self.championship = ChampionshipFactory(status='IN_PROGRESS')
     
     def test_list_matches_unauthenticated(self):
@@ -53,6 +58,17 @@ class TestMatchAPI:
         response = self.client.get('/api/v1/matches/')
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data['results']) >= 2
+
+    def test_player_list_matches_sees_only_team_matches(self):
+        """Jogador vê apenas partidas do time em que está vinculado."""
+        self.client.force_authenticate(user=self.player_user)
+        own_match = MatchFactory(championship=self.championship, home_team=self.team1, away_team=self.team2)
+        MatchFactory(championship=self.championship)
+
+        response = self.client.get('/api/v1/matches/')
+        assert response.status_code == status.HTTP_200_OK
+        returned_ids = [item['id'] for item in response.data['results']]
+        assert returned_ids == [own_match.id]
     
     def test_retrieve_match(self):
         """Usuários autenticados podem ver detalhes de uma partida."""
@@ -63,6 +79,14 @@ class TestMatchAPI:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['id'] == match.id
         assert response.data['home_team']['id'] == self.team1.id
+
+    def test_player_cannot_retrieve_third_party_match(self):
+        """Jogador não pode acessar detalhes de partida sem vínculo com seu time."""
+        unrelated_match = MatchFactory(championship=self.championship)
+        self.client.force_authenticate(user=self.player_user)
+
+        response = self.client.get(f'/api/v1/matches/{unrelated_match.id}/')
+        assert response.status_code == status.HTTP_404_NOT_FOUND
     
     def test_create_match_admin_only(self):
         """Apenas admins podem criar partidas."""
@@ -203,6 +227,13 @@ class TestMatchReportAPI:
             home_team=self.team,
             away_team=TeamFactory()
         )
+
+    def _fake_screenshot(self):
+        return SimpleUploadedFile(
+            'result.gif',
+            b'GIF87a\x01\x00\x01\x00\x80\x01\x00\x00\x00\x00ccc,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
+            content_type='image/gif',
+        )
     
     def test_list_match_reports(self):
         """Usuários autenticados podem listar súmulas."""
@@ -228,6 +259,63 @@ class TestMatchReportAPI:
             {'notes': 'Tentativa inválida'},
         )
         assert response.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]
+
+    def test_submit_report_persists_match_score(self):
+        """Súmula manual deve persistir o placar informado na partida."""
+        manual_match = MatchFactory(
+            championship=self.championship,
+            home_team=self.team,
+            away_team=TeamFactory(),
+            status='IN_PROGRESS',
+        )
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            f'/api/v1/matches/{manual_match.id}/submit_report/',
+            {
+                'home_score': '3',
+                'away_score': '1',
+                'notes': 'Placar confirmado',
+                'screenshot': self._fake_screenshot(),
+            },
+            format='multipart',
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        manual_match.refresh_from_db()
+        assert manual_match.home_score == 3
+        assert manual_match.away_score == 1
+        assert MatchReport.objects.get(match=manual_match).status == MatchReport.Status.SUBMITTED
+
+    def test_finish_match_recomputes_standings_with_reported_score(self):
+        """Finalização deve refletir o placar reportado corretamente na classificação."""
+        opponent = TeamFactory()
+        isolated_championship = ChampionshipFactory(status='IN_PROGRESS')
+        match = MatchFactory(
+            championship=isolated_championship,
+            home_team=self.team,
+            away_team=opponent,
+            status='IN_PROGRESS',
+        )
+        MatchReportFactory(match=match, reported_by=self.user)
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            f'/api/v1/matches/{match.id}/finish/',
+            {'home_score': 4, 'away_score': 2},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        home_standing = Standings.objects.get(championship=isolated_championship, team=self.team)
+        away_standing = Standings.objects.get(championship=isolated_championship, team=opponent)
+        assert home_standing.points == 3
+        assert home_standing.wins == 1
+        assert home_standing.goals_for == 4
+        assert home_standing.goals_against == 2
+        assert away_standing.points == 0
+        assert away_standing.losses == 1
+        assert away_standing.goals_for == 2
+        assert away_standing.goals_against == 4
     
     def test_approve_report_admin_only(self):
         """Apenas admins podem aprovar súmulas."""

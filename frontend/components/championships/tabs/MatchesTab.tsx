@@ -20,6 +20,7 @@ interface MatchesTabProps {
 
 export function MatchesTab({ matches, championship }: MatchesTabProps) {
   const { canReportMatch, canContestMatch, user } = usePermissions();
+  const isRestrictedViewer = user?.user_type === 'TEAM_OWNER' || user?.user_type === 'PLAYER';
 
   const [reportingMatch, setReportingMatch] = useState<Match | null>(null);
   const [eaReportingMatch, setEaReportingMatch] = useState<Match | null>(null);
@@ -28,13 +29,13 @@ export function MatchesTab({ matches, championship }: MatchesTabProps) {
 
   if (matches.length === 0) {
     return (
-      <EmptyState
-        icon={<Swords className="mx-auto h-14 w-14 text-gold/40" />}
-        title={user?.user_type === 'TEAM_OWNER' ? 'Nenhuma partida do seu time encontrada nesta rodada.' : 'Nenhuma partida agendada'}
-        description={user?.user_type === 'TEAM_OWNER' ? 'Somente partidas dos seus times sao exibidas aqui.' : 'As partidas serao exibidas assim que o campeonato comecar.'}
-        size="lg"
-      />
-    );
+        <EmptyState
+          icon={<Swords className="mx-auto h-14 w-14 text-gold/40" />}
+          title={isRestrictedViewer ? 'Nenhuma partida do seu time encontrada nesta rodada.' : 'Nenhuma partida agendada'}
+          description={isRestrictedViewer ? 'Somente partidas relacionadas ao seu time sao exibidas aqui.' : 'As partidas serao exibidas assim que o campeonato comecar.'}
+          size="lg"
+        />
+      );
   }
 
   // ── Handlers ────────────────────────────────────────────────────────

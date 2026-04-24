@@ -267,6 +267,8 @@ class MatchReportSerializer(serializers.ModelSerializer):
     """
     match = MatchListSerializer(read_only=True)
     match_id = serializers.IntegerField(write_only=True)
+    home_score = serializers.IntegerField(write_only=True, min_value=0, required=False)
+    away_score = serializers.IntegerField(write_only=True, min_value=0, required=False)
     reported_by = UserSerializer(read_only=True)
     approved_by = UserSerializer(read_only=True)
     
@@ -278,6 +280,8 @@ class MatchReportSerializer(serializers.ModelSerializer):
             'id',
             'match',
             'match_id',
+            'home_score',
+            'away_score',
             'reported_by',
             'screenshot',
             'notes',
@@ -304,6 +308,13 @@ class MatchReportSerializer(serializers.ModelSerializer):
             if MatchReport.objects.filter(match_id=value).exists():
                 raise serializers.ValidationError('Esta partida já possui uma súmula.')
         return value
+
+    def create(self, validated_data):
+        validated_data.pop('home_score', None)
+        validated_data.pop('away_score', None)
+        match_id = validated_data.pop('match_id')
+        validated_data.setdefault('status', MatchReport.Status.SUBMITTED)
+        return MatchReport.objects.create(match_id=match_id, **validated_data)
 
 
 class ContestationSerializer(serializers.ModelSerializer):

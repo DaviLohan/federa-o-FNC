@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db.models import F
 from django.core.exceptions import ObjectDoesNotExist
 import json
 from .models import Championship, ChampionshipEnrollment, ChampionshipPrize, Bracket, Standings, Group, GroupStandings
@@ -540,7 +541,9 @@ class ChampionshipDetailSerializer(serializers.ModelSerializer):
     def get_standings(self, obj):
         """Retorna classificação se for pontos corridos."""
         if obj.championship_type == 'LEAGUE':
-            standings = obj.standings.all().select_related('team').order_by('-points', '-wins', '-goals_for')
+            standings = obj.standings.all().select_related('team').annotate(
+                goal_difference=F('goals_for') - F('goals_against')
+            ).order_by('-points', '-goal_difference', '-goals_for', 'team__name')
             return StandingsSerializer(standings, many=True).data
         return None
 

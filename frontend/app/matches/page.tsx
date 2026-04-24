@@ -28,6 +28,7 @@ export default function MatchesPage() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const { user } = usePermissions();
+  const isRestrictedViewer = user?.user_type === 'TEAM_OWNER' || user?.user_type === 'PLAYER';
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showResultDrawer, setShowResultDrawer] = useState<Match | null>(null);
@@ -284,15 +285,15 @@ export default function MatchesPage() {
               title={
                 hasActiveFilters
                   ? 'Nenhuma partida encontrada'
-                  : user?.user_type === 'TEAM_OWNER'
+                  : isRestrictedViewer
                   ? 'Nenhuma partida do seu time encontrada'
                   : 'Nenhuma partida agendada'
               }
               description={
                 hasActiveFilters
                   ? 'Tente ajustar os filtros de busca.'
-                  : user?.user_type === 'TEAM_OWNER'
-                  ? 'Somente partidas dos seus times aparecem nesta área.'
+                  : isRestrictedViewer
+                  ? 'Somente partidas relacionadas ao seu time aparecem nesta área.'
                   : 'Comece agendando a primeira partida!'
               }
             action={
