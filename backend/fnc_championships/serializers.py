@@ -542,8 +542,8 @@ class ChampionshipDetailSerializer(serializers.ModelSerializer):
         """Retorna classificação se for pontos corridos."""
         if obj.championship_type == 'LEAGUE':
             standings = obj.standings.all().select_related('team').annotate(
-                goal_difference=F('goals_for') - F('goals_against')
-            ).order_by('-points', '-goal_difference', '-goals_for', 'team__name')
+                goal_difference_order=F('goals_for') - F('goals_against')
+            ).order_by('-points', '-goal_difference_order', '-goals_for', 'team__name')
             return StandingsSerializer(standings, many=True).data
         return None
 

@@ -177,8 +177,8 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
         standings = Standings.objects.filter(
             championship=championship
         ).select_related('team').annotate(
-            goal_difference=F('goals_for') - F('goals_against')
-        ).order_by('-points', '-goal_difference', '-goals_for')
+            goal_difference_order=F('goals_for') - F('goals_against')
+        ).order_by('-points', '-goal_difference_order', '-goals_for')
         
         serializer = StandingsSerializer(standings, many=True)
         return Response(serializer.data)
