@@ -10,7 +10,7 @@ from fnc_championships.models import Championship, ChampionshipEnrollment, Brack
 from fnc_matches.models import Match
 
 from .league_match_generator import generate_league_matches, can_generate_league_matches
-from .schedule_utils import resolve_championship_round_datetime
+from .schedule_utils import align_datetime_to_championship_schedule, resolve_championship_round_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +247,57 @@ def initialize_league_championship(championship, *, days_between_rounds: int = 7
     return {
         'standings_count': standings_count,
         'matches_result': result,
+    }
+
+
+@transaction.atomic
+def reschedule_championship_matches(championship, *, days_between_rounds: int = 7, include_finished: bool = True):
+    """Reaplica a agenda oficial do campeonato nas partidas já geradas."""
+    matches = Match.objects.filter(championship=championship).order_by('round_number', 'id')
+    if not include_finished:
+        matches = matches.exclude(status=Match.Status.FINISHED)
+
+    updated = []
+    for match in matches:
+        if match.round_number is None:
+            continue
+
+        new_scheduled_date = align_datetime_to_championship_schedule(match.scheduled_date, championship)
+        if new_scheduled_date is None:
+            new_scheduled_date = resolve_championship_round_datetime(
+                championship,
+                match.round_number,
+                start_date=championship.start_date,
+                days_between_rounds=days_between_rounds,
+            )
+
+        if match.scheduled_date == new_scheduled_date:
+            continue
+
+        previous = match.scheduled_date
+        match.scheduled_date = new_scheduled_date
+        match.save(update_fields=['scheduled_date', 'updated_at'])
+        updated.append({
+            'match_id': match.id,
+            'round_number': match.round_number,
+            'previous': previous,
+            'current': new_scheduled_date,
+            'status': match.status,
+        })
+
+    logger.info(
+        'Rescheduled %s matches for championship id=%s name=%s include_finished=%s',
+        len(updated),
+        championship.id,
+        championship.name,
+        include_finished,
+    )
+
+    return {
+        'championship_id': championship.id,
+        'championship_name': championship.name,
+        'updated_count': len(updated),
+        'updated_matches': updated,
     }
 
 

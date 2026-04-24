@@ -18,6 +18,24 @@ def championship_uses_official_schedule(championship) -> bool:
     return bool(championship.game_days and championship.game_start_time)
 
 
+def align_datetime_to_championship_schedule(reference_datetime, championship):
+    """Mantém a data da partida quando ela já cai em um dia válido da agenda oficial."""
+    if not championship_uses_official_schedule(championship):
+        return None
+
+    local_reference = _normalize_base_datetime(reference_datetime)
+    valid_weekdays = {
+        WEEKDAY_BY_CODE[code]
+        for code in championship.game_days
+        if code in WEEKDAY_BY_CODE
+    }
+
+    if local_reference.weekday() not in valid_weekdays:
+        return None
+
+    return _apply_start_time(local_reference, championship.game_start_time)
+
+
 def resolve_championship_round_datetime(championship, round_number: int, *, start_date=None, days_between_rounds: int = 7):
     """Resolve a data oficial de uma rodada com base na agenda do campeonato."""
     base = _normalize_base_datetime(start_date or championship.start_date)
