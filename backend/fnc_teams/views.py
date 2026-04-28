@@ -4,6 +4,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q, Count, Exists, OuterRef, Prefetch
 from django.shortcuts import get_object_or_404
@@ -485,48 +486,58 @@ class TeamInvitationViewSet(viewsets.ModelViewSet):
         """
         invitation = self.get_object()
 
-        # Verificar se o usuário é o jogador convidado
-        if invitation.player.user != request.user:
-            return Response(
-                {'error': 'Você não pode aceitar este convite.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        with transaction.atomic():
+            invitation = TeamInvitation.objects.select_related('team', 'player', 'player__user').select_for_update().get(pk=invitation.pk)
+            team = Team.objects.select_for_update().get(pk=invitation.team_id)
 
-        if invitation.status != 'PENDING':
-            return Response(
-                {'error': 'Este convite não está pendente.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            # Verificar se o usuário é o jogador convidado
+            if invitation.player.user != request.user:
+                return Response(
+                    {'error': 'Você não pode aceitar este convite.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
-        # Verificar se o jogador já pertence a outro time ativo
-        if TeamMembership.objects.filter(player=invitation.player, is_active=True).exists():
-            return Response(
-                {'error': 'Você já pertence a outro time. Solicite sua saída antes de aceitar um novo convite.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            if invitation.status != 'PENDING':
+                return Response(
+                    {'error': 'Este convite não está pendente.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        # Aceitar convite
-        invitation.status = 'ACCEPTED'
-        invitation.responded_at = timezone.now()
-        invitation.save()
+            # Verificar se o jogador já pertence a outro time ativo
+            if TeamMembership.objects.filter(player=invitation.player, is_active=True).exists():
+                return Response(
+                    {'error': 'Você já pertence a outro time. Solicite sua saída antes de aceitar um novo convite.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        # Adicionar jogador ao time
-        try:
-            TeamMembership.objects.create(
-                team=invitation.team,
-                player=invitation.player,
-                role='PLAYER'
-            )
-        except IntegrityError:
-            # Jogador já tem membership (possivelmente inativo) — reativar
             membership = TeamMembership.objects.filter(
-                team=invitation.team,
-                player=invitation.player
-            ).first()
+                team=team,
+                player=invitation.player,
+            ).select_for_update().first()
+
+            try:
+                team.ensure_has_capacity(exclude_membership_id=membership.pk if membership else None)
+            except DjangoValidationError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Aceitar convite
+            invitation.status = 'ACCEPTED'
+            invitation.responded_at = timezone.now()
+            invitation.save(update_fields=['status', 'responded_at'])
+
+            # Adicionar jogador ao time
             if membership:
                 membership.is_active = True
                 membership.left_at = None
-                membership.save(update_fields=['is_active', 'left_at'])
+                membership.role = TeamMembership.Role.PLAYER
+                membership.save(update_fields=['is_active', 'left_at', 'role'])
+            else:
+                TeamMembership.objects.create(
+                    team=team,
+                    player=invitation.player,
+                    role=TeamMembership.Role.PLAYER,
+                    is_active=True,
+                )
 
         return Response({
             'message': 'Convite aceito com sucesso.',

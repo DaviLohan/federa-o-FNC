@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.core.exceptions import ValidationError
 from django.utils.html import format_html
 from django.utils import timezone
 from .models import Team, TeamMembership, TeamInvitation, Formation, FormationPosition
@@ -463,25 +464,33 @@ class TeamInvitationAdmin(admin.ModelAdmin):
         """Aceita convites pendentes."""
         pending = queryset.filter(status='PENDING')
         count = 0
+        blocked = 0
         
         for invitation in pending:
-            # Aceita o convite
-            invitation.status = 'ACCEPTED'
-            invitation.responded_at = timezone.now()
-            invitation.save()
-            
-            # Cria o membership
-            TeamMembership.objects.get_or_create(
-                team=invitation.team,
-                player=invitation.player,
-                defaults={'role': TeamMembership.Role.PLAYER}
-            )
-            count += 1
+            try:
+                # Aceita o convite
+                invitation.status = 'ACCEPTED'
+                invitation.responded_at = timezone.now()
+                invitation.save()
+
+                # Cria o membership
+                TeamMembership.objects.get_or_create(
+                    team=invitation.team,
+                    player=invitation.player,
+                    defaults={'role': TeamMembership.Role.PLAYER}
+                )
+                count += 1
+            except ValidationError:
+                invitation.status = 'PENDING'
+                invitation.responded_at = None
+                invitation.save(update_fields=['status', 'responded_at'])
+                blocked += 1
         
-        self.message_user(
-            request,
-            f'{count} convite(s) aceito(s) e jogador(es) adicionado(s) ao time.'
-        )
+        message = f'{count} convite(s) aceito(s) e jogador(es) adicionado(s) ao time.'
+        if blocked:
+            message += f' {blocked} convite(s) permaneceram pendentes porque o time já atingiu o limite máximo de 20 jogadores.'
+
+        self.message_user(request, message)
     accept_invitations.short_description = 'Aceitar convites selecionados'
     
     def decline_invitations(self, request, queryset):

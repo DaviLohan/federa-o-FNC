@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users } from 'lucide-react';
 import { membershipsAPI } from '@/lib/api';
+import { TEAM_MAX_PLAYERS } from '@/lib/team-constants';
 import { useToast } from '@/components/shared/ui';
 import { MemberCard } from './MemberCard';
 import type { TeamMembership } from '@/types';
@@ -86,13 +87,13 @@ export function MembersTab({ teamId, members, isLoading, onMemberRemoved, readOn
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-muted text-sm">
           <Users className="w-4 h-4" />
-          <span><span className="text-text font-bold">{members.length}</span> / 15 jogadores</span>
+          <span><span className="text-text font-bold">{members.length}</span> / {TEAM_MAX_PLAYERS} jogadores</span>
         </div>
         {/* Barra de ocupação */}
         <div className="w-32 h-1.5 bg-surface2 rounded-full overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-gold to-gold2 rounded-full transition-all duration-500"
-            style={{ width: `${(members.length / 15) * 100}%` }}
+            style={{ width: `${Math.min((members.length / TEAM_MAX_PLAYERS) * 100, 100)}%` }}
           />
         </div>
       </div>

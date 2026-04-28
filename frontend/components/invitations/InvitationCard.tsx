@@ -1,6 +1,7 @@
 'use client';
 
 import { Card, Badge, Button } from '@/components/shared/ui';
+import { TEAM_MAX_PLAYERS } from '@/lib/team-constants';
 import type { TeamInvitation } from '@/types';
 
 interface InvitationCardProps {
@@ -61,7 +62,7 @@ export function InvitationCard({ invitation, onAccept, onDecline, isProcessing }
         <div className="flex gap-4 text-sm">
           <div>
             <span className="text-muted2">Jogadores:</span>
-            <span className="text-text ml-1 font-semibold">{invitation.team.player_count}/15</span>
+            <span className="text-text ml-1 font-semibold">{invitation.team.player_count}/{TEAM_MAX_PLAYERS}</span>
           </div>
           <div>
             <span className="text-muted2">Status:</span>

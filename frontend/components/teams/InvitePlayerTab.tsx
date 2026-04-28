@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamsAPI } from '@/lib/api';
+import { TEAM_MAX_PLAYERS } from '@/lib/team-constants';
 import { Button, Input, useToast } from '@/components/shared/ui';
 import { PlayerSearch } from './PlayerSearch';
 import type { PlayerSearchResult } from '@/types';
@@ -128,7 +129,7 @@ export function InvitePlayerTab({ teamId, isAtLimit, onInviteSent }: InvitePlaye
             <div>
               <p className="font-semibold text-warning">Limite atingido!</p>
               <p className="text-sm text-muted mt-1">
-                Sua equipe já possui 15 jogadores (limite máximo). Remova um jogador antes de enviar novos convites.
+                Sua equipe já possui {TEAM_MAX_PLAYERS} jogadores (limite máximo). Remova um jogador antes de enviar novos convites.
               </p>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import logging
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from .models import Team, TeamMembership, TeamInvitation, TeamLeaveRequest, Formation, FormationPosition
 from users.serializers import UserSerializer, PlayerProfileListSerializer
@@ -7,6 +8,20 @@ from ea_integration.ea_client import EAApiError, EAProClubsClient
 from ea_integration.models import EAClub
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_team_capacity(team):
+    try:
+        team.ensure_has_capacity()
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError(str(exc)) from exc
+
+
+def _get_team_or_validation_error(team_id):
+    try:
+        return Team.objects.get(pk=team_id)
+    except Team.DoesNotExist as exc:
+        raise serializers.ValidationError({'team_id': 'Time informado não existe.'}) from exc
 
 DEFAULT_LINEUP_STYLE = {
     'outfield_primary': '#D6A11E',
@@ -314,6 +329,8 @@ class TeamMembershipSerializer(serializers.ModelSerializer):
         
         if TeamMembership.objects.filter(team_id=team, player_id=player, is_active=True).exists():
             raise serializers.ValidationError('Este jogador já é membro deste time.')
+
+        _validate_team_capacity(_get_team_or_validation_error(team))
         
         return data
 
@@ -351,6 +368,7 @@ class TeamInvitationSerializer(serializers.ModelSerializer):
         """Valida se não existe convite pendente e se o jogador não está em outro time."""
         team = data.get('team_id')
         player = data.get('player_id')
+        team_instance = _get_team_or_validation_error(team)
 
         if TeamInvitation.objects.filter(
             team_id=team,
@@ -375,6 +393,8 @@ class TeamInvitationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 'Este jogador já pertence a outro time. Um jogador só pode fazer parte de 1 time.'
             )
+
+        _validate_team_capacity(team_instance)
 
         return data
 

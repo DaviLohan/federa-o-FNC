@@ -8,6 +8,7 @@ import { motion, AnimatePresence, useReducedMotion, type Variants } from 'framer
 import { teamsAPI, leaveRequestsAPI } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { usePermissions } from '@/lib/hooks';
+import { TEAM_MAX_PLAYERS } from '@/lib/team-constants';
 import { Button, Card, Badge, Input, useToast, TermsModal } from '@/components/shared/ui';
 import { MembersTab } from '@/components/teams/MembersTab';
 import { InvitePlayerTab } from '@/components/teams/InvitePlayerTab';
@@ -403,7 +404,7 @@ export default function TeamDetailPage() {
   const members: TeamMembership[] = Array.isArray(team?.members) ? team.members : [];
   const membersLoading = teamLoading;
   const isOwner    = isTeamOwner(team);
-  const isAtLimit  = members.length >= 15;
+  const isAtLimit  = members.length >= TEAM_MAX_PLAYERS;
 
   const myMembership = members.find(
     (m) => m.player?.user_id === user?.id || m.player?.user_email === user?.email
@@ -645,7 +646,7 @@ export default function TeamDetailPage() {
                   )}
                   <span className="text-xs text-muted flex items-center gap-1 font-mono">
                     <Users className="w-3 h-3 text-gold/50" />
-                    {members.length}/15
+                    {members.length}/{TEAM_MAX_PLAYERS}
                   </span>
                 </div>
 

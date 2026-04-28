@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from users.models import User, PlayerProfile
 
@@ -7,6 +8,8 @@ class Team(models.Model):
     """
     Modelo de Time.
     """
+
+    MAX_PLAYERS = 20
     
     owner = models.ForeignKey(
         User,
@@ -55,6 +58,16 @@ class Team(models.Model):
     def get_player_count(self):
         """Retorna o número de jogadores no time quando não vier anotado no queryset."""
         return self.players.filter(teammembership__is_active=True).count()
+
+    def get_active_player_count(self, *, exclude_membership_id=None):
+        memberships = TeamMembership.objects.filter(team=self, is_active=True)
+        if exclude_membership_id is not None:
+            memberships = memberships.exclude(pk=exclude_membership_id)
+        return memberships.count()
+
+    def ensure_has_capacity(self, *, exclude_membership_id=None):
+        if self.get_active_player_count(exclude_membership_id=exclude_membership_id) >= self.MAX_PLAYERS:
+            raise ValidationError(f'O time já atingiu o limite máximo de {self.MAX_PLAYERS} jogadores.')
     
     def get_has_active_championship(self):
         """Verifica se o time tem campeonato ativo quando não vier anotado no queryset."""
@@ -109,6 +122,23 @@ class TeamMembership(models.Model):
     
     def __str__(self):
         return f'{self.player} - {self.team}'
+
+    def clean(self):
+        super().clean()
+
+        if not self.is_active:
+            return
+
+        if self.pk:
+            previous = TeamMembership.objects.filter(pk=self.pk).only('is_active').first()
+            if previous and previous.is_active:
+                return
+
+        self.team.ensure_has_capacity(exclude_membership_id=self.pk)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 class TeamInvitation(models.Model):
