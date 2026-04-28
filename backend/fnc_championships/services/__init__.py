@@ -262,14 +262,15 @@ def reschedule_championship_matches(championship, *, days_between_rounds: int = 
         if match.round_number is None:
             continue
 
-        new_scheduled_date = align_datetime_to_championship_schedule(match.scheduled_date, championship)
+        new_scheduled_date = resolve_championship_round_datetime(
+            championship,
+            match.round_number,
+            start_date=championship.start_date,
+            days_between_rounds=days_between_rounds,
+        )
+
         if new_scheduled_date is None:
-            new_scheduled_date = resolve_championship_round_datetime(
-                championship,
-                match.round_number,
-                start_date=championship.start_date,
-                days_between_rounds=days_between_rounds,
-            )
+            new_scheduled_date = align_datetime_to_championship_schedule(match.scheduled_date, championship)
 
         if match.scheduled_date == new_scheduled_date:
             continue

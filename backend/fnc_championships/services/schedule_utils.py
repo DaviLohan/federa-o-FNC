@@ -37,7 +37,11 @@ def align_datetime_to_championship_schedule(reference_datetime, championship):
 
 
 def resolve_championship_round_datetime(championship, round_number: int, *, start_date=None, days_between_rounds: int = 7):
-    """Resolve a data oficial de uma rodada com base na agenda do campeonato."""
+    """Resolve a data oficial de uma rodada com base na agenda do campeonato.
+    
+    Usa round-robin entre os dias configurados na agenda para distribuir as rodadas
+    uniformemente: Segunda -> Terça -> Quinta -> Segunda -> ...
+    """
     base = _normalize_base_datetime(start_date or championship.start_date)
 
     if not championship_uses_official_schedule(championship):
@@ -58,7 +62,7 @@ def resolve_championship_round_datetime(championship, round_number: int, *, star
 
     current = _first_valid_slot(base, valid_weekdays, championship.game_start_time)
     for _ in range(1, round_number):
-        current = _next_valid_slot(current, valid_weekdays, championship.game_start_time)
+        current = _next_scheduled_slot(current, valid_weekdays, championship.game_start_time)
     return current
 
 
@@ -89,10 +93,10 @@ def _first_valid_slot(base, valid_weekdays, start_time):
     return candidate
 
 
-def _next_valid_slot(current, valid_weekdays, start_time):
-    candidate = _apply_start_time(current + timedelta(days=1), start_time)
-    for day_offset in range(0, 14):
-        probe = candidate + timedelta(days=day_offset)
-        if probe.weekday() in valid_weekdays:
-            return probe
-    return candidate
+def _next_scheduled_slot(current, valid_weekdays, start_time):
+    current_index = valid_weekdays.index(current.weekday())
+    target_weekday = valid_weekdays[(current_index + 1) % len(valid_weekdays)]
+    day_offset = (target_weekday - current.weekday()) % 7
+    if day_offset == 0:
+        day_offset = 7
+    return _apply_start_time(current + timedelta(days=day_offset), start_time)
