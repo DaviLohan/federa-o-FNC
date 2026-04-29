@@ -422,15 +422,16 @@ function ErrorState({
           <li className="flex gap-2 items-start">
             <span className="w-1 h-1 rounded-full bg-muted2 mt-2 shrink-0" />
             <span>
-              A partida deve ter sido jogada no modo{' '}
-              <strong className="text-text">Amistoso</strong> (Friendly Match)
+              A partida pode aparecer na EA como{' '}
+              <strong className="text-text">League Match</strong> ou{' '}
+              <strong className="text-text">Friendly Match</strong>
             </span>
           </li>
           <li className="flex gap-2 items-start">
             <span className="w-1 h-1 rounded-full bg-muted2 mt-2 shrink-0" />
             <span>
-              A EA API armazena apenas as{' '}
-              <strong className="text-text">ultimas 10</strong> partidas amistosas
+              O sistema procura partidas da EA em uma{' '}
+              <strong className="text-text">janela de ate 48 horas</strong> em relacao ao horario agendado
             </span>
           </li>
           <li className="flex gap-2 items-start">
@@ -439,7 +440,11 @@ function ErrorState({
           </li>
           <li className="flex gap-2 items-start">
             <span className="w-1 h-1 rounded-full bg-muted2 mt-2 shrink-0" />
-            <span>Aguarde alguns minutos apos o fim da partida</span>
+            <span>Aguarde alguns minutos apos o fim da partida para a EA disponibilizar o historico</span>
+          </li>
+          <li className="flex gap-2 items-start">
+            <span className="w-1 h-1 rounded-full bg-muted2 mt-2 shrink-0" />
+            <span>Partidas contestadas tambem podem ser reprocessadas pelo botao Reportar EA</span>
           </li>
         </ul>
       </div>

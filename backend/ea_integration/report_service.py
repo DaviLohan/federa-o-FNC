@@ -299,13 +299,18 @@ class MatchReportEAService:
 
     def _validate_match_status(self, match: Match) -> None:
         """Valida que o Match pode ser reportado."""
-        valid_statuses = [Match.Status.SCHEDULED, Match.Status.IN_PROGRESS]
+        valid_statuses = [
+            Match.Status.SCHEDULED,
+            Match.Status.IN_PROGRESS,
+            Match.Status.FINISHED,
+            Match.Status.CONTESTED,
+        ]
         if match.status not in valid_statuses:
             status_display = match.get_status_display()
             raise MatchReportEAError(
                 f'Esta partida não pode ser reportada. '
                 f'Status atual: {status_display}. '
-                f'Apenas partidas agendadas ou em andamento podem ser reportadas.'
+                f'Apenas partidas agendadas, em andamento, finalizadas ou contestadas podem ser reportadas.'
             )
         if match.status == Match.Status.SCHEDULED and match.scheduled_date > timezone.now():
             raise MatchReportEAError('Esta partida ainda não chegou no horário de início.')
