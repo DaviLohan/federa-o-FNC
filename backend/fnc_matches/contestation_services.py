@@ -2,16 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.utils import timezone
 
 from fnc_matches.models import Contestation, ContestationAuditLog, Match
 from fnc_matches.services import (
+    recompute_match_derived_data_for_championship,
     reverse_match_result,
-    update_player_statistics,
-    update_team_statistics,
-    update_standings,
-    update_top_scorers,
 )
 
 
@@ -104,6 +102,7 @@ class ContestationDecisionService:
         }
         contestation.match.status = Match.Status.FINISHED
         contestation.match.save(update_fields=['status', 'updated_at'])
+        self._recompute_championship_state(contestation.match)
         contestation.save(
             update_fields=[
                 'status', 'reviewed_by', 'reviewed_at', 'response', 'decision_type',
@@ -136,6 +135,7 @@ class ContestationDecisionService:
         previous_snapshot = snapshot_match_result(match)
         self._validate_result_change(previous_snapshot, winner_team_id)
         self._revert_existing_result(match, admin_user)
+        self._purge_match_result_artifacts(match)
 
         home_score, away_score = self._decision_score_for_winner(match, winner_team_id)
         match.home_score = home_score
@@ -153,7 +153,7 @@ class ContestationDecisionService:
             'is_walkover', 'walkover_team', 'walkover_reason', 'updated_at'
         ])
 
-        self._apply_result_statistics(match)
+        self._recompute_championship_state(match)
 
         new_snapshot = snapshot_match_result(match)
         contestation.status = Contestation.Status.ACCEPTED
@@ -235,14 +235,22 @@ class ContestationDecisionService:
             return ADMIN_DECISION_HOME_WIN_SCORE
         return ADMIN_DECISION_AWAY_WIN_SCORE
 
-    def _apply_result_statistics(self, match: Match) -> None:
-        if not match.championship:
-            return
+    def _recompute_championship_state(self, match: Match) -> None:
+        if match.championship:
+            recompute_match_derived_data_for_championship(match.championship)
 
-        update_team_statistics(match)
-        update_player_statistics(match)
-        update_standings(match)
-        update_top_scorers(match)
+    def _purge_match_result_artifacts(self, match: Match) -> None:
+        for goal in match.goals.all():
+            if hasattr(goal, 'assist'):
+                goal.assist.delete()
+        match.goals.all().delete()
+        match.cards.all().delete()
+        try:
+            report = match.report
+        except ObjectDoesNotExist:
+            report = None
+        if report and report.pk:
+            report.delete()
 
     def _create_audit_log(self, *, contestation: Contestation, action: str, admin_user, reason: str, previous_result: dict, new_result: dict):
         ContestationAuditLog.objects.create(

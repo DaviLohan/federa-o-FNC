@@ -457,10 +457,13 @@ export interface Match {
 export interface MatchReport {
   id: number;
   match: Match;
+  home_score?: number;
+  away_score?: number;
   reported_by: User;
   screenshot: string;
   notes: string;
   status: 'PENDING' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  status_display?: string;
   approved_by?: User;
   approved_at?: string;
   rejection_reason: string;
@@ -475,6 +478,10 @@ export interface Goal {
   team: Team;
   minute: number;
   goal_type: 'REGULAR' | 'PENALTY' | 'FREE_KICK' | 'HEADER' | 'VOLLEY' | 'OWN_GOAL';
+  goal_type_display?: string;
+  assist?: {
+    assistant: PlayerProfile;
+  } | null;
   created_at: string;
 }
 

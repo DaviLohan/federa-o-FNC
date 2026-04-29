@@ -429,6 +429,52 @@ def recompute_match_derived_data_for_championship(championship):
     recompute_standings_for_championship(championship)
     recompute_team_statistics_for_championship(championship)
     recompute_player_statistics_for_championship(championship)
+    recompute_top_scorers_for_championship(championship)
+
+
+def recompute_top_scorers_for_championship(championship):
+    """Recalcula o ranking de artilheiros de um campeonato a partir das partidas finalizadas."""
+    if not championship:
+        return
+
+    TopScorer.objects.filter(championship=championship).delete()
+
+    scorers = Goal.objects.filter(
+        match__championship=championship,
+        match__status=Match.Status.FINISHED,
+    ).exclude(goal_type='OWN_GOAL').select_related('scorer', 'team')
+
+    scorer_pairs = {(goal.scorer_id, goal.team_id) for goal in scorers}
+    for player_id, team_id in scorer_pairs:
+        player_goals = Goal.objects.filter(
+            match__championship=championship,
+            match__status=Match.Status.FINISHED,
+            scorer_id=player_id,
+            team_id=team_id,
+        ).exclude(goal_type='OWN_GOAL').count()
+        player_assists = Goal.objects.filter(
+            match__championship=championship,
+            match__status=Match.Status.FINISHED,
+            team_id=team_id,
+            assist__assistant_id=player_id,
+        ).count()
+        matches_played = Match.objects.filter(
+            Q(home_team_id=team_id) | Q(away_team_id=team_id),
+            championship=championship,
+            status=Match.Status.FINISHED,
+        ).count()
+
+        TopScorer.objects.create(
+            championship=championship,
+            player_id=player_id,
+            team_id=team_id,
+            goals=player_goals,
+            assists=player_assists,
+            matches_played=matches_played,
+            position=0,
+        )
+
+    _recalculate_top_scorer_positions(championship)
 
 
 def update_top_scorers(match):

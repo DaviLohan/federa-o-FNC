@@ -21,7 +21,7 @@ from fnc_championships.models import Standings
 from conftest import (
     UserFactory, AdminUserFactory, PlayerProfileFactory, TeamFactory,
     ChampionshipFactory, ChampionshipEnrollmentFactory, MatchFactory, FinishedMatchFactory, TeamMembershipFactory,
-    GoalFactory, AssistFactory, CardFactory, StandingsFactory, ContestationFactory
+    GoalFactory, AssistFactory, CardFactory, StandingsFactory, ContestationFactory, MatchReportFactory
 )
 
 
@@ -251,7 +251,18 @@ class TestContestationDecisionService:
         self.admin = AdminUserFactory()
 
     def test_approve_current_result_records_audit_and_keeps_score(self):
-        match = FinishedMatchFactory(status='CONTESTED', home_score=2, away_score=1)
+        championship = ChampionshipFactory(status='IN_PROGRESS')
+        home_team = TeamFactory()
+        away_team = TeamFactory()
+        match = FinishedMatchFactory(
+            championship=championship,
+            home_team=home_team,
+            away_team=away_team,
+            status='CONTESTED',
+            home_score=2,
+            away_score=1,
+        )
+        recompute_match_derived_data_for_championship(championship)
         contestation = ContestationFactory(match=match, team=match.home_team, status='UNDER_REVIEW')
 
         result = self.service.approve_current_result(
@@ -262,6 +273,8 @@ class TestContestationDecisionService:
 
         match.refresh_from_db()
         result.refresh_from_db()
+        home_standing = Standings.objects.get(team=home_team, championship=championship)
+        away_standing = Standings.objects.get(team=away_team, championship=championship)
 
         assert result.status == Contestation.Status.REJECTED
         assert result.decision_type == Contestation.DecisionType.APPROVE_CURRENT_RESULT
@@ -269,6 +282,8 @@ class TestContestationDecisionService:
         assert match.status == Match.Status.FINISHED
         assert match.home_score == 2
         assert match.away_score == 1
+        assert home_standing.points == 3
+        assert away_standing.points == 0
         assert ContestationAuditLog.objects.filter(
             contestation=contestation,
             action=ContestationAuditLog.Action.APPROVE_CURRENT_RESULT,
@@ -312,6 +327,44 @@ class TestContestationDecisionService:
             contestation=contestation,
             action=ContestationAuditLog.Action.CHANGE_RESULT,
         ).exists()
+
+    def test_change_match_result_clears_old_report_and_events_before_recompute(self):
+        championship = ChampionshipFactory(status='IN_PROGRESS')
+        home_team = TeamFactory()
+        away_team = TeamFactory()
+        scorer = PlayerProfileFactory()
+        assistant = PlayerProfileFactory()
+        card_player = PlayerProfileFactory()
+        TeamMembershipFactory(team=home_team, player=scorer, is_active=True)
+        TeamMembershipFactory(team=home_team, player=assistant, is_active=True)
+        TeamMembershipFactory(team=home_team, player=card_player, is_active=True)
+        match = FinishedMatchFactory(
+            championship=championship,
+            home_team=home_team,
+            away_team=away_team,
+            status='FINISHED',
+            home_score=2,
+            away_score=0,
+        )
+        goal = GoalFactory(match=match, scorer=scorer, team=home_team)
+        AssistFactory(goal=goal, assistant=assistant)
+        CardFactory(match=match, player=card_player, team=home_team)
+        MatchReportFactory(match=match)
+        recompute_match_derived_data_for_championship(championship)
+        contestation = ContestationFactory(match=match, team=away_team, status='UNDER_REVIEW')
+
+        self.service.change_match_result(
+            contestation,
+            self.admin,
+            winner_team_id=away_team.id,
+            reason='Eventos originais invalidados por irregularidade do vencedor atual.'
+        )
+
+        match.refresh_from_db()
+        assert match.goals.count() == 0
+        assert match.cards.count() == 0
+        assert not hasattr(match, 'report')
+        assert TopScorer.objects.filter(championship=championship, player=scorer).count() == 0
 
     def test_cannot_decide_same_contestation_twice(self):
         match = FinishedMatchFactory(status='CONTESTED', home_score=2, away_score=0)

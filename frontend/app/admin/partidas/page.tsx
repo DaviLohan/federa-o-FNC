@@ -400,6 +400,9 @@ export default function AdminPartidasPage() {
                   {selectedMatch.goals.map((goal) => (
                     <p key={goal.id}>
                       {goal.minute}' - <strong className="text-text">{goal.scorer?.player_name || 'Jogador'}</strong> ({goal.team?.name})
+                      {goal.assist?.assistant && (
+                        <span> • Assistência: <strong className="text-text">{goal.assist.assistant.player_name}</strong></span>
+                      )}
                     </p>
                   ))}
                   {!!selectedMatch.cards?.length && (
@@ -412,6 +415,57 @@ export default function AdminPartidasPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {selectedMatch.report && (
+              <div className="bg-surface2 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <h3 className="font-semibold text-text">Súmula / Report da Partida</h3>
+                  <Badge variant="info">{selectedMatch.report.status_display || selectedMatch.report.status}</Badge>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="rounded-xl bg-panel2 p-3">
+                    <p className="text-xs text-muted mb-1">Reportado por</p>
+                    <p className="font-medium text-text text-sm">{selectedMatch.report.reported_by?.full_name || '—'}</p>
+                  </div>
+                  <div className="rounded-xl bg-panel2 p-3">
+                    <p className="text-xs text-muted mb-1">Criado em</p>
+                    <p className="font-medium text-text text-sm">{formatDateTimeShort(selectedMatch.report.created_at)}</p>
+                  </div>
+                  <div className="rounded-xl bg-panel2 p-3">
+                    <p className="text-xs text-muted mb-1">Aprovado por</p>
+                    <p className="font-medium text-text text-sm">{selectedMatch.report.approved_by?.full_name || '—'}</p>
+                  </div>
+                  <div className="rounded-xl bg-panel2 p-3">
+                    <p className="text-xs text-muted mb-1">Aprovado em</p>
+                    <p className="font-medium text-text text-sm">{selectedMatch.report.approved_at ? formatDateTimeShort(selectedMatch.report.approved_at) : '—'}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-panel2 p-4">
+                  <p className="text-xs text-muted mb-1">Observações da súmula</p>
+                  <p className="text-sm text-text whitespace-pre-line">{selectedMatch.report.notes || 'Sem observações.'}</p>
+                </div>
+
+                {selectedMatch.report.rejection_reason && (
+                  <div className="rounded-xl border border-error/20 bg-error/5 p-4">
+                    <p className="text-xs text-muted mb-1">Motivo da rejeição da súmula</p>
+                    <p className="text-sm text-text whitespace-pre-line">{selectedMatch.report.rejection_reason}</p>
+                  </div>
+                )}
+
+                {selectedMatch.report.screenshot && (
+                  <a
+                    href={selectedMatch.report.screenshot}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex text-sm text-brand hover:underline"
+                  >
+                    Abrir print/evidência da súmula
+                  </a>
+                )}
               </div>
             )}
 
