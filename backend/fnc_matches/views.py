@@ -40,6 +40,10 @@ from .serializers import (
     GoalWithAssistSerializer,
     CardSerializer,
     ContestationSerializer,
+    ContestationAdminDetailSerializer,
+    ContestationReviewSerializer,
+    ApproveCurrentResultSerializer,
+    ChangeContestationResultSerializer,
     MatchProposalSerializer,
     MatchProposalResponseSerializer,
     MatchConfirmationSerializer,
@@ -47,6 +51,7 @@ from .serializers import (
     MatchLineupInputSerializer,
     MatchLineupOutputSerializer,
 )
+from .contestation_services import ContestationDecisionService, ContestationDecisionError
 from .query_utils import filter_matches_for_user, filter_queryset_by_match_visibility
 from .services import sync_matches_ready_to_start, recompute_standings_for_championship
 
@@ -737,13 +742,27 @@ class ContestationViewSet(viewsets.ModelViewSet):
     queryset = Contestation.objects.all()
     serializer_class = ContestationSerializer
     permission_classes = [IsAuthenticated, CanContestMatch]
-    
+    decision_service = ContestationDecisionService()
+
     def get_permissions(self):
         """Define permissões por ação."""
-        if self.action in ['review', 'accept', 'reject']:
+        if self.action in ['review', 'approve_current_result', 'change_result']:
             return [CanReviewContestation()]
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
         return super().get_permissions()
-    
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return ContestationAdminDetailSerializer
+        if self.action == 'review':
+            return ContestationReviewSerializer
+        if self.action == 'approve_current_result':
+            return ApproveCurrentResultSerializer
+        if self.action == 'change_result':
+            return ChangeContestationResultSerializer
+        return super().get_serializer_class()
+
     def get_queryset(self):
         """Filtra contestações."""
         queryset = Contestation.objects.all()
@@ -758,103 +777,111 @@ class ContestationViewSet(viewsets.ModelViewSet):
         team_id = self.request.query_params.get('team', None)
         if team_id:
             queryset = queryset.filter(team_id=team_id)
+
+        championship_id = self.request.query_params.get('championship', None)
+        if championship_id:
+            queryset = queryset.filter(match__championship_id=championship_id)
         
         # Filtro por status
         contestation_status = self.request.query_params.get('status', None)
         if contestation_status:
             queryset = queryset.filter(status=contestation_status)
         
-        return queryset.select_related('match', 'team', 'contested_by', 'reviewed_by')
-    
+        return queryset.select_related(
+            'match', 'match__home_team', 'match__away_team', 'match__championship',
+            'team', 'contested_by', 'reviewed_by', 'previous_winner_team', 'decided_winner_team'
+        ).prefetch_related('audit_logs')
+
+    def perform_create(self, serializer):
+        match_id = serializer.validated_data['match_id']
+        team_id = serializer.validated_data['team_id']
+        match = get_object_or_404(Match, pk=match_id)
+        team = get_object_or_404(Team, pk=team_id)
+
+        if team.id not in [match.home_team_id, match.away_team_id]:
+            raise PermissionDenied('O time contestante precisa participar da partida.')
+
+        if team.owner_id != self.request.user.id and not self.request.user.has_supervisor_access:
+            raise PermissionDenied('Você só pode contestar por um time que administra.')
+
+        contestation = serializer.save(match=match, team=team, contested_by=self.request.user)
+        from .contestation_services import snapshot_match_result
+        contestation.audit_logs.create(
+            action='SUBMITTED',
+            performed_by=self.request.user,
+            reason=contestation.description,
+            previous_result=snapshot_match_result(match).as_dict(),
+            new_result=snapshot_match_result(match).as_dict(),
+        )
+
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanReviewContestation])
     def review(self, request, pk=None):
         """
         Marca a contestação como em análise.
         """
         contestation = self.get_object()
-        
-        if contestation.status != 'PENDING':
-            return Response(
-                {'error': 'Apenas contestações pendentes podem ser analisadas.'},
-                status=status.HTTP_400_BAD_REQUEST
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            contestation = self.decision_service.mark_under_review(
+                contestation,
+                request.user,
+                reason=serializer.validated_data.get('reason', ''),
             )
-        
-        contestation.status = 'UNDER_REVIEW'
-        contestation.reviewed_by = request.user
-        contestation.reviewed_at = timezone.now()
-        contestation.save()
-        
+        except ContestationDecisionError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
         return Response({
             'message': 'Contestação em análise.',
-            'contestation': ContestationSerializer(contestation).data
+            'contestation': ContestationAdminDetailSerializer(contestation, context={'request': request}).data
         })
-    
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanReviewContestation])
-    def accept(self, request, pk=None):
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanReviewContestation], url_path='approve-current-result')
+    def approve_current_result(self, request, pk=None):
         """
-        Aceita a contestação e reverte o resultado.
+        Mantém o resultado atual da partida e finaliza a contestação.
         """
         contestation = self.get_object()
-        
-        if contestation.status not in ['PENDING', 'UNDER_REVIEW']:
-            return Response(
-                {'error': 'Esta contestação já foi resolvida.'},
-                status=status.HTTP_400_BAD_REQUEST
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            contestation = self.decision_service.approve_current_result(
+                contestation,
+                request.user,
+                reason=serializer.validated_data['reason'],
             )
-        
-        admin_notes = request.data.get('admin_notes', '')
-        
-        contestation.status = 'ACCEPTED'
-        contestation.reviewed_by = request.user
-        contestation.reviewed_at = timezone.now()
-        contestation.admin_notes = admin_notes
-        contestation.save()
-        
-        # Atualizar status da partida para CONTESTED
-        match = contestation.match
-        match.status = 'CONTESTED'
-        match.save()
-        
-        # Reverter resultado da partida
-        from .services import reverse_match_result
-        reversal_result = reverse_match_result(match, request.user)
-        
-        if not reversal_result['success']:
-            return Response(
-                {'error': f"Contestação aceita mas houve erro na reversão: {reversal_result['message']}"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+        except ContestationDecisionError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
         return Response({
-            'message': 'Contestação aceita. Resultado revertido e partida reagendada.',
-            'contestation': ContestationSerializer(contestation).data,
-            'reversal_info': reversal_result
+            'message': 'Resultado atual aprovado e contestação finalizada.',
+            'contestation': ContestationAdminDetailSerializer(contestation, context={'request': request}).data,
         })
-    
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanReviewContestation])
-    def reject(self, request, pk=None):
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanReviewContestation], url_path='change-result')
+    def change_result(self, request, pk=None):
         """
-        Rejeita a contestação e mantém o resultado.
+        Altera administrativamente o resultado da partida.
         """
         contestation = self.get_object()
-        
-        if contestation.status not in ['PENDING', 'UNDER_REVIEW']:
-            return Response(
-                {'error': 'Esta contestação já foi resolvida.'},
-                status=status.HTTP_400_BAD_REQUEST
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            contestation = self.decision_service.change_match_result(
+                contestation,
+                request.user,
+                winner_team_id=serializer.validated_data['winner_team_id'],
+                reason=serializer.validated_data['reason'],
             )
-        
-        admin_notes = request.data.get('admin_notes', '')
-        
-        contestation.status = 'REJECTED'
-        contestation.reviewed_by = request.user
-        contestation.reviewed_at = timezone.now()
-        contestation.admin_notes = admin_notes
-        contestation.save()
-        
+        except ContestationDecisionError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
         return Response({
-            'message': 'Contestação rejeitada. Resultado mantido.',
-            'contestation': ContestationSerializer(contestation).data
+            'message': 'Resultado da partida alterado com sucesso.',
+            'contestation': ContestationAdminDetailSerializer(contestation, context={'request': request}).data,
         })
 
 

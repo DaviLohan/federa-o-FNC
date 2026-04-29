@@ -14,13 +14,14 @@ from fnc_matches.services import (
     update_standings,
     update_top_scorers
 )
-from fnc_matches.models import Match, Goal, Assist, Card, MatchReport
+from fnc_matches.models import Match, Goal, Assist, Card, MatchReport, Contestation, ContestationAuditLog
+from fnc_matches.contestation_services import ContestationDecisionService, ContestationDecisionError
 from player_stats.models import PlayerStatistics, TeamStatistics, TopScorer
 from fnc_championships.models import Standings
 from conftest import (
     UserFactory, AdminUserFactory, PlayerProfileFactory, TeamFactory,
     ChampionshipFactory, ChampionshipEnrollmentFactory, MatchFactory, FinishedMatchFactory, TeamMembershipFactory,
-    GoalFactory, AssistFactory, CardFactory, StandingsFactory
+    GoalFactory, AssistFactory, CardFactory, StandingsFactory, ContestationFactory
 )
 
 
@@ -241,6 +242,93 @@ class TestReverseMatchResult:
         assert away_standing.points == 0
         assert away_standing.goals_for == 0
         assert away_standing.goals_against == 0
+
+
+@pytest.mark.django_db
+class TestContestationDecisionService:
+    def setup_method(self):
+        self.service = ContestationDecisionService()
+        self.admin = AdminUserFactory()
+
+    def test_approve_current_result_records_audit_and_keeps_score(self):
+        match = FinishedMatchFactory(status='CONTESTED', home_score=2, away_score=1)
+        contestation = ContestationFactory(match=match, team=match.home_team, status='UNDER_REVIEW')
+
+        result = self.service.approve_current_result(
+            contestation,
+            self.admin,
+            reason='Resultado mantido após validação administrativa completa.'
+        )
+
+        match.refresh_from_db()
+        result.refresh_from_db()
+
+        assert result.status == Contestation.Status.REJECTED
+        assert result.decision_type == Contestation.DecisionType.APPROVE_CURRENT_RESULT
+        assert result.decision_reason == 'Resultado mantido após validação administrativa completa.'
+        assert match.status == Match.Status.FINISHED
+        assert match.home_score == 2
+        assert match.away_score == 1
+        assert ContestationAuditLog.objects.filter(
+            contestation=contestation,
+            action=ContestationAuditLog.Action.APPROVE_CURRENT_RESULT,
+        ).exists()
+
+    def test_change_match_result_flips_winner_and_updates_standings(self):
+        championship = ChampionshipFactory(status='IN_PROGRESS')
+        home_team = TeamFactory()
+        away_team = TeamFactory()
+        match = FinishedMatchFactory(
+            championship=championship,
+            home_team=home_team,
+            away_team=away_team,
+            status='FINISHED',
+            home_score=3,
+            away_score=1,
+        )
+        update_standings(match)
+        contestation = ContestationFactory(match=match, team=away_team, status='UNDER_REVIEW')
+
+        result = self.service.change_match_result(
+            contestation,
+            self.admin,
+            winner_team_id=away_team.id,
+            reason='Time vencedor atual irregular; vitória administrativa para o adversário regular.'
+        )
+
+        match.refresh_from_db()
+        result.refresh_from_db()
+        home_standing = Standings.objects.get(team=home_team, championship=championship)
+        away_standing = Standings.objects.get(team=away_team, championship=championship)
+
+        assert result.status == Contestation.Status.ACCEPTED
+        assert result.decision_type == Contestation.DecisionType.CHANGE_RESULT
+        assert match.status == Match.Status.FINISHED
+        assert (match.home_score, match.away_score) == (0, 1)
+        assert match.winner == away_team
+        assert home_standing.points == 0
+        assert away_standing.points == 3
+        assert ContestationAuditLog.objects.filter(
+            contestation=contestation,
+            action=ContestationAuditLog.Action.CHANGE_RESULT,
+        ).exists()
+
+    def test_cannot_decide_same_contestation_twice(self):
+        match = FinishedMatchFactory(status='CONTESTED', home_score=2, away_score=0)
+        contestation = ContestationFactory(match=match, team=match.home_team, status='UNDER_REVIEW')
+
+        self.service.approve_current_result(
+            contestation,
+            self.admin,
+            reason='Resultado mantido.'
+        )
+
+        with pytest.raises(ContestationDecisionError, match='já foi resolvida'):
+            self.service.approve_current_result(
+                contestation,
+                self.admin,
+                reason='Nova tentativa indevida.'
+            )
     
     def test_reversal_with_draw_result(self):
         """Reversal should correctly handle draw results."""

@@ -144,7 +144,7 @@ class Match(models.Model):
     @property
     def winner(self):
         """Retorna o time vencedor."""
-        if self.status != self.Status.FINISHED:
+        if self.status not in [self.Status.FINISHED, self.Status.CONTESTED]:
             return None
         if self.home_score > self.away_score:
             return self.home_team
@@ -155,7 +155,7 @@ class Match(models.Model):
     @property
     def is_draw(self):
         """Verifica se foi empate."""
-        return self.status == self.Status.FINISHED and self.home_score == self.away_score
+        return self.status in [self.Status.FINISHED, self.Status.CONTESTED] and self.home_score == self.away_score
     
     @property
     def duration_minutes(self):
@@ -427,6 +427,10 @@ class Contestation(models.Model):
         OPPONENT_QUIT = 'OPPONENT_QUIT', 'Adversário Saiu da Partida'
         CONNECTION_ISSUE = 'CONNECTION_ISSUE', 'Problema de Conexão'
         OTHER = 'OTHER', 'Outro'
+
+    class DecisionType(models.TextChoices):
+        APPROVE_CURRENT_RESULT = 'APPROVE_CURRENT_RESULT', 'Aprovar resultado atual'
+        CHANGE_RESULT = 'CHANGE_RESULT', 'Alterar resultado'
     
     match = models.ForeignKey(
         Match,
@@ -478,6 +482,13 @@ class Contestation(models.Model):
     
     # Resposta
     response = models.TextField('resposta', blank=True)
+    decision_type = models.CharField(
+        'tipo de decisão',
+        max_length=40,
+        choices=DecisionType.choices,
+        blank=True,
+    )
+    decision_reason = models.TextField('motivo da decisão', blank=True)
     reviewed_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -487,6 +498,28 @@ class Contestation(models.Model):
         verbose_name='analisado por'
     )
     reviewed_at = models.DateTimeField('analisado em', null=True, blank=True)
+
+    previous_home_score = models.PositiveIntegerField('placar casa anterior', null=True, blank=True)
+    previous_away_score = models.PositiveIntegerField('placar visitante anterior', null=True, blank=True)
+    previous_winner_team = models.ForeignKey(
+        Team,
+        on_delete=models.SET_NULL,
+        related_name='contestations_as_previous_winner',
+        verbose_name='vencedor anterior',
+        null=True,
+        blank=True,
+    )
+    decided_home_score = models.PositiveIntegerField('placar casa decidido', null=True, blank=True)
+    decided_away_score = models.PositiveIntegerField('placar visitante decidido', null=True, blank=True)
+    decided_winner_team = models.ForeignKey(
+        Team,
+        on_delete=models.SET_NULL,
+        related_name='contestations_as_decided_winner',
+        verbose_name='vencedor decidido',
+        null=True,
+        blank=True,
+    )
+    decision_snapshot = models.JSONField('snapshot da decisão', default=dict, blank=True)
     
     # Timestamps
     created_at = models.DateTimeField('criado em', auto_now_add=True)
@@ -499,6 +532,44 @@ class Contestation(models.Model):
     
     def __str__(self):
         return f'Contestação - {self.match} por {self.team}'
+
+
+class ContestationAuditLog(models.Model):
+    """Histórico de auditoria das ações administrativas e operacionais de uma contestação."""
+
+    class Action(models.TextChoices):
+        SUBMITTED = 'SUBMITTED', 'Contestação criada'
+        UNDER_REVIEW = 'UNDER_REVIEW', 'Contestação em análise'
+        APPROVE_CURRENT_RESULT = 'APPROVE_CURRENT_RESULT', 'Resultado atual aprovado'
+        CHANGE_RESULT = 'CHANGE_RESULT', 'Resultado alterado'
+
+    contestation = models.ForeignKey(
+        Contestation,
+        on_delete=models.CASCADE,
+        related_name='audit_logs',
+        verbose_name='contestação',
+    )
+    action = models.CharField('ação', max_length=40, choices=Action.choices)
+    performed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='contestation_audit_logs',
+        verbose_name='executado por',
+    )
+    reason = models.TextField('motivo')
+    previous_result = models.JSONField('resultado anterior', default=dict, blank=True)
+    new_result = models.JSONField('novo resultado', default=dict, blank=True)
+    created_at = models.DateTimeField('criado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'auditoria de contestação'
+        verbose_name_plural = 'auditorias de contestações'
+        ordering = ['created_at', 'id']
+
+    def __str__(self):
+        return f'{self.get_action_display()} - Contestação {self.contestation_id}'
 
 
 class MatchProposal(models.Model):

@@ -409,9 +409,9 @@ class TestContestationAPI:
         self.client.force_authenticate(user=self.admin)
         response = self.client.post(f'/api/v1/contestations/{contestation.id}/review/', data)
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
-    
-    def test_accept_contestation_admin_only(self):
-        """Apenas admins podem aceitar contestações."""
+
+    def test_approve_current_result_admin_only(self):
+        """Apenas admins podem aprovar o resultado atual de contestações."""
         contestation = ContestationFactory(
             match=self.match,
             team=self.team,
@@ -421,17 +421,17 @@ class TestContestationAPI:
         
         # Usuário regular não pode
         self.client.force_authenticate(user=self.user)
-        data = {'response': 'Contestação aceita'}
-        response = self.client.post(f'/api/v1/contestations/{contestation.id}/accept/', data)
+        data = {'reason': 'Resultado atual mantido pela revisão administrativa'}
+        response = self.client.post(f'/api/v1/contestations/{contestation.id}/approve-current-result/', data)
         assert response.status_code == status.HTTP_403_FORBIDDEN
-        
+
         # Admin pode
         self.client.force_authenticate(user=self.admin)
-        response = self.client.post(f'/api/v1/contestations/{contestation.id}/accept/', data)
+        response = self.client.post(f'/api/v1/contestations/{contestation.id}/approve-current-result/', data)
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
-    
-    def test_reject_contestation_admin_only(self):
-        """Apenas admins podem rejeitar contestações."""
+
+    def test_change_result_admin_only(self):
+        """Apenas admins podem alterar o resultado de contestações."""
         contestation = ContestationFactory(
             match=self.match,
             team=self.team,
@@ -441,14 +441,79 @@ class TestContestationAPI:
         
         # Usuário regular não pode
         self.client.force_authenticate(user=self.user)
-        data = {'response': 'Contestação rejeitada'}
-        response = self.client.post(f'/api/v1/contestations/{contestation.id}/reject/', data)
+        data = {'winner_team_id': self.match.away_team.id, 'reason': 'Time vencedor atual irregular'}
+        response = self.client.post(f'/api/v1/contestations/{contestation.id}/change-result/', data)
         assert response.status_code == status.HTTP_403_FORBIDDEN
-        
+
         # Admin pode
         self.client.force_authenticate(user=self.admin)
-        response = self.client.post(f'/api/v1/contestations/{contestation.id}/reject/', data)
+        response = self.client.post(f'/api/v1/contestations/{contestation.id}/change-result/', data)
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
+
+    def test_admin_cannot_decide_contestation_without_reason(self):
+        contestation = ContestationFactory(
+            match=self.match,
+            team=self.team,
+            contested_by=self.user,
+            status='UNDER_REVIEW'
+        )
+
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post(
+            f'/api/v1/contestations/{contestation.id}/approve-current-result/',
+            {'reason': ''}
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_admin_can_approve_current_result(self):
+        self.match.status = 'CONTESTED'
+        self.match.save(update_fields=['status'])
+        contestation = ContestationFactory(
+            match=self.match,
+            team=self.team,
+            contested_by=self.user,
+            status='UNDER_REVIEW'
+        )
+
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post(
+            f'/api/v1/contestations/{contestation.id}/approve-current-result/',
+            {'reason': 'Resultado atual mantido após análise da evidência.'}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        contestation.refresh_from_db()
+        self.match.refresh_from_db()
+        assert contestation.status == 'REJECTED'
+        assert contestation.decision_type == 'APPROVE_CURRENT_RESULT'
+        assert self.match.status == 'FINISHED'
+
+    def test_admin_can_change_result(self):
+        self.match.status = 'CONTESTED'
+        self.match.home_score = 2
+        self.match.away_score = 0
+        self.match.finished_at = timezone.now()
+        self.match.save(update_fields=['status', 'home_score', 'away_score', 'finished_at'])
+        contestation = ContestationFactory(
+            match=self.match,
+            team=self.match.away_team,
+            contested_by=self.match.away_team.owner,
+            status='UNDER_REVIEW'
+        )
+
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post(
+            f'/api/v1/contestations/{contestation.id}/change-result/',
+            {'winner_team_id': self.match.away_team.id, 'reason': 'Vitória administrativa para o time regular.'}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        contestation.refresh_from_db()
+        self.match.refresh_from_db()
+        assert contestation.status == 'ACCEPTED'
+        assert contestation.decision_type == 'CHANGE_RESULT'
+        assert (self.match.home_score, self.match.away_score) == (0, 1)
 
 
 @pytest.mark.django_db

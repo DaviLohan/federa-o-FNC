@@ -448,6 +448,10 @@ export interface Match {
   winner?: Team;
   is_draw: boolean;
   duration_minutes: number;
+  goals?: Goal[];
+  cards?: Card[];
+  report?: MatchReport;
+  contestations?: Contestation[];
 }
 
 export interface MatchReport {
@@ -524,10 +528,33 @@ export interface Contestation {
   status: 'PENDING' | 'UNDER_REVIEW' | 'ACCEPTED' | 'REJECTED';
   status_display?: string;
   response: string;
+  decision_type?: 'APPROVE_CURRENT_RESULT' | 'CHANGE_RESULT';
+  decision_type_display?: string;
+  decision_reason?: string;
+  previous_home_score?: number;
+  previous_away_score?: number;
+  previous_winner_team?: Team | null;
+  decided_home_score?: number;
+  decided_away_score?: number;
+  decided_winner_team?: Team | null;
+  decision_snapshot?: Record<string, any>;
+  current_winner?: Team | null;
+  audit_logs?: ContestationAuditLog[];
   reviewed_by?: User;
   reviewed_at?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface ContestationAuditLog {
+  id: number;
+  action: 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVE_CURRENT_RESULT' | 'CHANGE_RESULT';
+  action_display?: string;
+  performed_by?: User;
+  reason: string;
+  previous_result: Record<string, any>;
+  new_result: Record<string, any>;
+  created_at: string;
 }
 
 // Championship-related Types

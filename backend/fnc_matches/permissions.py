@@ -74,6 +74,8 @@ class CanContestMatch(permissions.BasePermission):
     """
     
     def has_permission(self, request, view):
+        if request.user.has_supervisor_access:
+            return True
         # Verificar se o usuário tem times
         return hasattr(request.user, 'owned_teams') and request.user.owned_teams.exists()
     
@@ -84,7 +86,7 @@ class CanContestMatch(permissions.BasePermission):
         
         # Apenas o time que contestou pode editar sua própria contestação
         if request.method not in permissions.SAFE_METHODS:
-            return obj.contested_by_team.owner == request.user
+            return obj.team.owner == request.user
         
         # Times participantes podem visualizar
         match = obj.match

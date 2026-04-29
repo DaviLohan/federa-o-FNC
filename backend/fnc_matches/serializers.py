@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from .models import (
-    Match, MatchReport, Goal, Assist, Card, Contestation,
+    Match, MatchReport, Goal, Assist, Card, Contestation, ContestationAuditLog,
     MatchProposal, MatchConfirmation,
     MatchLineup, MatchLineupPlayer,
 )
@@ -330,6 +330,7 @@ class ContestationSerializer(serializers.ModelSerializer):
     
     reason_display = serializers.CharField(source='get_reason_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    decision_type_display = serializers.CharField(source='get_decision_type_display', read_only=True)
     
     class Meta:
         model = Contestation
@@ -347,6 +348,13 @@ class ContestationSerializer(serializers.ModelSerializer):
             'status',
             'status_display',
             'response',
+            'decision_type',
+            'decision_type_display',
+            'decision_reason',
+            'previous_home_score',
+            'previous_away_score',
+            'decided_home_score',
+            'decided_away_score',
             'reviewed_by',
             'reviewed_at',
             'created_at',
@@ -360,6 +368,60 @@ class ContestationSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at'
         ]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        if 'match_id' not in attrs:
+            fallback_match = self.initial_data.get('match')
+            if fallback_match is not None:
+                attrs['match_id'] = fallback_match
+
+        if 'team_id' not in attrs:
+            fallback_team = self.initial_data.get('team')
+            if fallback_team is not None:
+                attrs['team_id'] = fallback_team
+
+        if 'match_id' not in attrs or 'team_id' not in attrs:
+            raise serializers.ValidationError('Informe match_id/team_id da contestação.')
+
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop('match_id', None)
+        validated_data.pop('team_id', None)
+        return super().create(validated_data)
+
+
+class ContestationAuditLogSerializer(serializers.ModelSerializer):
+    performed_by = UserSerializer(read_only=True)
+    action_display = serializers.CharField(source='get_action_display', read_only=True)
+
+    class Meta:
+        model = ContestationAuditLog
+        fields = [
+            'id',
+            'action',
+            'action_display',
+            'performed_by',
+            'reason',
+            'previous_result',
+            'new_result',
+            'created_at',
+        ]
+
+
+class ContestationReviewSerializer(serializers.Serializer):
+    reason = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
+
+
+class ApproveCurrentResultSerializer(serializers.Serializer):
+    reason = serializers.CharField(required=True, allow_blank=False, trim_whitespace=True)
+
+
+class ChangeContestationResultSerializer(serializers.Serializer):
+    winner_team_id = serializers.IntegerField(required=True)
+    reason = serializers.CharField(required=True, allow_blank=False, trim_whitespace=True)
 
 
 class MatchDetailSerializer(serializers.ModelSerializer):
@@ -442,6 +504,29 @@ class MatchDetailSerializer(serializers.ModelSerializer):
             return obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
         is_owner = obj.home_team.owner_id == user.id or obj.away_team.owner_id == user.id
         return is_owner and obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
+
+
+class ContestationAdminDetailSerializer(ContestationSerializer):
+    match = MatchDetailSerializer(read_only=True)
+    previous_winner_team = TeamListSerializer(read_only=True)
+    decided_winner_team = TeamListSerializer(read_only=True)
+    audit_logs = ContestationAuditLogSerializer(many=True, read_only=True)
+    current_winner = serializers.SerializerMethodField()
+
+    class Meta(ContestationSerializer.Meta):
+        fields = ContestationSerializer.Meta.fields + [
+            'previous_winner_team',
+            'decided_winner_team',
+            'decision_snapshot',
+            'audit_logs',
+            'current_winner',
+        ]
+
+    def get_current_winner(self, obj):
+        winner = obj.match.winner
+        if not winner:
+            return None
+        return TeamListSerializer(winner).data
 
 
 class MatchCreateSerializer(serializers.ModelSerializer):

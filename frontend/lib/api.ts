@@ -254,8 +254,14 @@ export const contestationsAPI = {
   create: (formData: FormData) =>
     apiClient.upload<Contestation>('/api/v1/contestations/', formData, 'post'),
   
-  review: (id: number, data: { status: string; response: string }) =>
+  review: (id: number, data: { reason?: string }) =>
     apiClient.post(`/api/v1/contestations/${id}/review/`, data),
+
+  approveCurrentResult: (id: number, data: { reason: string }) =>
+    apiClient.post<Contestation>(`/api/v1/contestations/${id}/approve-current-result/`, data),
+
+  changeResult: (id: number, data: { winner_team_id: number; reason: string }) =>
+    apiClient.post<Contestation>(`/api/v1/contestations/${id}/change-result/`, data),
 };
 
 // Statistics API

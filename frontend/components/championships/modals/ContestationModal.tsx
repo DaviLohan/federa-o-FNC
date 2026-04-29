@@ -110,8 +110,8 @@ export function ContestationModal({ match, teamId, isOpen, onClose }: Contestati
 
     // Create FormData
     const formDataObj = new FormData();
-    formDataObj.append('match', match.id.toString());
-    formDataObj.append('team', teamId.toString());
+    formDataObj.append('match_id', match.id.toString());
+    formDataObj.append('team_id', teamId.toString());
     formDataObj.append('reason', formData.reason);
     formDataObj.append('description', formData.description);
 

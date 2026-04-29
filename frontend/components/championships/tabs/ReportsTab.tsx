@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, EmptyState, Badge, Skeleton, Button, useToast } from '@/components/shared/ui';
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { Card, EmptyState, Badge, Skeleton, Button } from '@/components/shared/ui';
 import { contestationsAPI } from '@/lib/api';
 import { usePermissions } from '@/lib/hooks';
-import { AlertCircle, CheckCircle, Clock, XCircle, ThumbsUp, ThumbsDown, ClipboardList } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, ExternalLink, XCircle, ClipboardList } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils/date';
 
 interface ReportsTabProps {
@@ -29,45 +29,13 @@ const reasonLabels = {
 };
 
 export function ReportsTab({ championshipId }: ReportsTabProps) {
-  const { showToast } = useToast();
-  const queryClient = useQueryClient();
   const { canManageChampionships } = usePermissions();
-  const [reviewingId, setReviewingId] = useState<number | null>(null);
-  const [reviewResponse, setReviewResponse] = useState('');
 
   // Fetch contestations for this championship
   const { data: contestationsData, isLoading } = useQuery({
     queryKey: ['contestations', championshipId],
     queryFn: () => contestationsAPI.getAll({ championship: championshipId }),
   });
-
-  // Review mutation
-  const reviewMutation = useMutation({
-    mutationFn: ({ id, status, response }: { id: number; status: string; response: string }) =>
-      contestationsAPI.review(id, { status, response }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contestations', championshipId] });
-      showToast('Contestação revisada com sucesso', 'success');
-      setReviewingId(null);
-      setReviewResponse('');
-    },
-    onError: (error: any) => {
-      showToast(error.response?.data?.error || 'Erro ao revisar contestação', 'error');
-    },
-  });
-
-  const handleReview = (contestationId: number, status: 'ACCEPTED' | 'REJECTED') => {
-    if (!reviewResponse.trim() && status === 'REJECTED') {
-      showToast('Por favor, adicione uma justificativa para rejeição', 'warning');
-      return;
-    }
-    
-    reviewMutation.mutate({
-      id: contestationId,
-      status,
-      response: reviewResponse || `Contestação ${status === 'ACCEPTED' ? 'aceita' : 'rejeitada'} pela administração.`,
-    });
-  };
 
   const contestations = contestationsData?.results || [];
 
@@ -229,66 +197,12 @@ export function ReportsTab({ championshipId }: ReportsTabProps) {
                     {/* Actions for Admins */}
                     {canManageChampionships && (
                       <div className="mt-4 pt-4 border-t border-border space-y-3">
-                        {reviewingId === contestation.id ? (
-                          // Review form
-                          <div className="space-y-3">
-                            <div>
-                              <label className="block text-sm font-semibold text-text mb-2">
-                                Resposta do Administrador
-                              </label>
-                              <textarea
-                                value={reviewResponse}
-                                onChange={(e) => setReviewResponse(e.target.value)}
-                                placeholder="Adicione uma justificativa para sua decisão..."
-                                className="w-full px-4 py-3 rounded-xl bg-surface2 border border-border text-text placeholder-muted focus:border-gold focus:ring-2 focus:ring-gold/20 outline-none transition-all resize-none"
-                                rows={3}
-                              />
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setReviewingId(null);
-                                  setReviewResponse('');
-                                }}
-                                disabled={reviewMutation.isPending}
-                              >
-                                Cancelar
-                              </Button>
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={() => handleReview(contestation.id, 'ACCEPTED')}
-                                disabled={reviewMutation.isPending}
-                                className="bg-success hover:bg-success/80"
-                              >
-                                <ThumbsUp className="w-4 h-4 mr-2" />
-                                Aceitar Contestação
-                              </Button>
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={() => handleReview(contestation.id, 'REJECTED')}
-                                disabled={reviewMutation.isPending}
-                                className="bg-error hover:bg-error/80"
-                              >
-                                <ThumbsDown className="w-4 h-4 mr-2" />
-                                Rejeitar Contestação
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          // Review button
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setReviewingId(contestation.id)}
-                          >
-                            <AlertCircle className="w-4 h-4 mr-2" />
-                            Revisar Contestação
+                        <Link href={`/admin/partidas?status=CONTESTED&match=${contestation.match.id}`}>
+                          <Button variant="ghost" size="sm">
+                            <ExternalLink className="w-4 h-4 mr-2" />
+                            Abrir no Painel Administrativo
                           </Button>
-                        )}
+                        </Link>
                       </div>
                     )}
                   </div>
