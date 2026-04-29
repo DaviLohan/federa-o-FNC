@@ -13,7 +13,7 @@ from typing import Optional
 from django.db import transaction, IntegrityError
 from django.utils import timezone
 
-from .ea_client import EAProClubsClient, EAApiError
+from .ea_client import EAProClubsClient, EAApiError, DEFAULT_SYNC_MATCH_TYPES
 from .models import EAClub, EAMatch, EAPlayerMatchStats
 from .validation import MatchValidationService
 
@@ -24,7 +24,7 @@ class MatchSyncService:
     """
     Serviço responsável por:
     1. Iterar sobre todos os EAClubs ativos
-    2. Consultar a API da EA para cada clube (apenas friendlyMatch)
+    2. Consultar a API da EA para cada clube (league/friendly por padrão)
     3. Detectar partidas novas (não existem no DB)
     4. Parsear o JSON e salvar EAMatch + EAPlayerMatchStats
     5. Disparar validação automática (times, elencos, gamertags, stats)
@@ -52,7 +52,7 @@ class MatchSyncService:
         Sincroniza partidas de TODOS os clubes ativos.
 
         Args:
-            match_types: Lista de tipos a buscar. Default: ['friendlyMatch']
+            match_types: Lista de tipos a buscar. Default: league + friendly.
 
         Returns:
             Dict com contadores: {
@@ -61,7 +61,7 @@ class MatchSyncService:
             }
         """
         if match_types is None:
-            match_types = ['friendlyMatch']
+            match_types = list(DEFAULT_SYNC_MATCH_TYPES)
 
         clubs = EAClub.objects.filter(is_active=True)
         totals = {
@@ -114,7 +114,7 @@ class MatchSyncService:
             }
         """
         if match_types is None:
-            match_types = ['friendlyMatch']
+            match_types = list(DEFAULT_SYNC_MATCH_TYPES)
 
         result = {'synced': 0, 'skipped': 0, 'errors': 0, 'validated': 0, 'contested': 0}
 

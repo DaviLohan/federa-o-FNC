@@ -32,6 +32,7 @@ DEFAULT_HEADERS = {
 
 # Timeout padrão em segundos (connect, read)
 DEFAULT_TIMEOUT = (10, 30)
+DEFAULT_SYNC_MATCH_TYPES = ('leagueMatch', 'friendlyMatch')
 
 
 class EAApiError(Exception):
@@ -143,6 +144,9 @@ class EAProClubsClient:
 
         # A resposta é uma lista de partidas
         if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict) and not item.get('matchType'):
+                    item['matchType'] = match_type
             return data
         return []
 

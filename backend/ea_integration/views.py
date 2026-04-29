@@ -7,12 +7,14 @@ ViewSets DRF para a integração EA Pro Clubs.
 import logging
 
 from django.db.models import Avg, Sum, Count, Q
+from rest_framework.exceptions import ValidationError
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
-from .ea_client import EAProClubsClient, EAApiError
+from .date_utils import custom_bounds, period_bounds
+from .ea_client import EAProClubsClient, EAApiError, DEFAULT_SYNC_MATCH_TYPES
 from .models import EAClub, EAMatch, EAPlayerMatchStats
 from .serializers import (
     EAClubSerializer,
@@ -138,7 +140,7 @@ class EAClubViewSet(viewsets.ModelViewSet):
         Body (opcional): {"match_types": ["leagueMatch", "friendlyMatch"]}
         """
         club = self.get_object()
-        match_types = request.data.get('match_types', ['leagueMatch'])
+        match_types = request.data.get('match_types', list(DEFAULT_SYNC_MATCH_TYPES))
 
         service = MatchSyncService()
         try:
@@ -165,7 +167,7 @@ class EAClubViewSet(viewsets.ModelViewSet):
         POST /api/v1/ea/clubs/sync-all/
         Body (opcional): {"match_types": ["leagueMatch"]}
         """
-        match_types = request.data.get('match_types', ['leagueMatch'])
+        match_types = request.data.get('match_types', list(DEFAULT_SYNC_MATCH_TYPES))
 
         service = MatchSyncService()
         result = service.sync_all(match_types=match_types)
@@ -183,6 +185,8 @@ class EAMatchViewSet(viewsets.ReadOnlyModelViewSet):
     Filtros via query params:
     - ?club=<ea_club_id>    — Filtra partidas de um clube
     - ?match_type=leagueMatch
+    - ?period=yesterday|today|last_48h
+    - ?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD
     - ?ordering=-played_at  (padrão)
 
     Ações customizadas:
@@ -206,6 +210,22 @@ class EAMatchViewSet(viewsets.ReadOnlyModelViewSet):
         match_type = self.request.query_params.get('match_type')
         if match_type:
             qs = qs.filter(match_type=match_type)
+
+        period = self.request.query_params.get('period')
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
+
+        try:
+            start, end = custom_bounds(date_from, date_to)
+            if period:
+                start, end = period_bounds(period)
+        except ValueError as exc:
+            raise ValidationError({'date_range': str(exc)}) from exc
+
+        if start:
+            qs = qs.filter(played_at__gte=start)
+        if end:
+            qs = qs.filter(played_at__lte=end)
 
         return qs
 

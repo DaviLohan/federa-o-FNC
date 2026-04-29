@@ -2,13 +2,14 @@
 ea_integration/tasks.py
 
 Tasks Celery para sincronização automática de partidas EA.
-Puxa apenas friendlyMatch (amistosos — tipo usado nos campeonatos IMPERIUM).
+Busca leagueMatch e friendlyMatch por padrão.
 """
 
 import logging
 
 from celery import shared_task
 
+from .ea_client import DEFAULT_SYNC_MATCH_TYPES
 from .services import MatchSyncService
 
 logger = logging.getLogger(__name__)
@@ -25,8 +26,7 @@ def sync_all_matches(self, match_types=None):
     """
     Task periódica que sincroniza partidas de todos os clubes EA ativos.
 
-    Por padrão, busca apenas friendlyMatch (amistosos), que é o tipo de
-    partida usado nos campeonatos organizados pelo IMPERIUM.
+    Por padrão, busca leagueMatch e friendlyMatch.
 
     Após sincronizar, dispara validação automática:
     - Verifica times cadastrados
@@ -36,7 +36,7 @@ def sync_all_matches(self, match_types=None):
     - Contesta automaticamente se detectar inconsistências
     """
     if match_types is None:
-        match_types = ['friendlyMatch']
+        match_types = list(DEFAULT_SYNC_MATCH_TYPES)
 
     logger.info('Iniciando sincronização automática de partidas EA...')
 
@@ -68,13 +68,13 @@ def sync_club_matches(self, club_id, match_types=None):
 
     Args:
         club_id: PK do EAClub no banco
-        match_types: Lista de tipos de partida (default: ['friendlyMatch'])
+        match_types: Lista de tipos de partida (default: league + friendly)
     """
     from .models import EAClub
     from django.utils import timezone
 
     if match_types is None:
-        match_types = ['friendlyMatch']
+        match_types = list(DEFAULT_SYNC_MATCH_TYPES)
 
     try:
         club = EAClub.objects.get(pk=club_id)

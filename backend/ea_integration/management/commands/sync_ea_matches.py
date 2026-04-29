@@ -12,6 +12,7 @@ Uso:
 
 from django.core.management.base import BaseCommand, CommandError
 
+from ea_integration.ea_client import DEFAULT_SYNC_MATCH_TYPES
 from ea_integration.models import EAClub
 from ea_integration.services import MatchSyncService
 from ea_integration.ea_client import EAApiError
@@ -29,9 +30,9 @@ class Command(BaseCommand):
         parser.add_argument(
             '--match-types',
             nargs='+',
-            default=['friendlyMatch'],
+            default=list(DEFAULT_SYNC_MATCH_TYPES),
             choices=['leagueMatch', 'friendlyMatch', 'playoffMatch'],
-            help='Tipos de partida para buscar (padrão: friendlyMatch).',
+            help='Tipos de partida para buscar (padrão: leagueMatch friendlyMatch).',
         )
         parser.add_argument(
             '--verbose',

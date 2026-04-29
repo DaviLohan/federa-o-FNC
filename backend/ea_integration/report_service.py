@@ -22,12 +22,16 @@ from fnc_teams.models import TeamMembership
 from users.models import User, PlayerProfile
 
 from .ea_client import EAProClubsClient, EAApiError
+from .date_utils import ensure_aware_utc, format_dt_pair
 from .models import EAClub, EAMatch, EAPlayerMatchStats
 from .services import MatchSyncService
 from .validation import (
     MatchValidationService, ValidationResult, ValidationIssue,
     MIN_VALID_RATING,
 )
+
+
+REPORT_SEARCH_MATCH_TYPES = ('leagueMatch', 'friendlyMatch', 'playoffMatch')
 
 logger = logging.getLogger(__name__)
 
@@ -357,7 +361,7 @@ class MatchReportEAService:
         Usa o MatchSyncService para criar EAMatch + EAPlayerMatchStats.
         """
         # Determinar janela de tempo baseada na data agendada
-        reference_date = match.scheduled_date or timezone.now()
+        reference_date = ensure_aware_utc(match.scheduled_date or timezone.now())
         window = timedelta(hours=EA_MATCH_TIME_WINDOW_HOURS)
         window_start = reference_date - window
         window_end = reference_date + window
@@ -368,15 +372,30 @@ class MatchReportEAService:
         }
 
         logger.info(
-            'Buscando partida EA: Match PK=%d | clubs alvo=%s | janela=[%s, %s]',
+            'Buscando partida EA: match_pk=%d clubs=%s reference=%s janela=[%s, %s]',
             match.pk, target_club_ids,
-            window_start.strftime('%d/%m/%Y %H:%M UTC'),
-            window_end.strftime('%d/%m/%Y %H:%M UTC'),
+            format_dt_pair(reference_date),
+            format_dt_pair(window_start),
+            format_dt_pair(window_end),
         )
 
+        existing = self._find_existing_ea_match_in_window(
+            target_club_ids=target_club_ids,
+            window_start=window_start,
+            window_end=window_end,
+            reference_date=reference_date,
+        )
+        if existing:
+            logger.info(
+                'Partida EA já sincronizada encontrada no banco: match_pk=%d ea_match_id=%s played_at=%s',
+                match.pk,
+                existing.ea_match_id,
+                format_dt_pair(existing.played_at),
+            )
+            return existing
+
         # Tentar buscar pelo home club primeiro, depois pelo away.
-        # Para cada clube, tentar friendlyMatch primeiro, depois leagueMatch.
-        match_types = ['friendlyMatch', 'leagueMatch']
+        match_types = REPORT_SEARCH_MATCH_TYPES
         for search_club in [home_ea_club, away_ea_club]:
             for match_type in match_types:
                 ea_match = self._search_from_club(
@@ -390,12 +409,29 @@ class MatchReportEAService:
         logger.warning(
             'Nenhuma partida EA encontrada para Match PK=%d '
             '(clubs=%s, janela=%s a %s). '
-            'Verificado: friendlyMatch e leagueMatch para ambos os clubes.',
+            'Verificado: %s para ambos os clubes.',
             match.pk, target_club_ids,
-            window_start.strftime('%d/%m/%Y %H:%M UTC'),
-            window_end.strftime('%d/%m/%Y %H:%M UTC'),
+            format_dt_pair(window_start),
+            format_dt_pair(window_end),
+            ', '.join(match_types),
         )
         return None
+
+    def _find_existing_ea_match_in_window(self, *, target_club_ids: set[str], window_start, window_end, reference_date):
+        candidates = EAMatch.objects.filter(
+            Q(home_club__ea_club_id__in=target_club_ids) & Q(away_club__ea_club_id__in=target_club_ids),
+            played_at__gte=window_start,
+            played_at__lte=window_end,
+        ).order_by('-played_at')
+
+        best_match = None
+        best_diff = None
+        for candidate in candidates:
+            diff = abs((candidate.played_at - reference_date).total_seconds())
+            if best_diff is None or diff < best_diff:
+                best_match = candidate
+                best_diff = diff
+        return best_match
 
     def _search_from_club(
         self,
@@ -423,8 +459,8 @@ class MatchReportEAService:
             return None
 
         logger.info(
-            'EA retornou %d partidas para %s (match_type=%s, buscando clubs=%s)',
-            len(raw_matches), search_club.name, match_type, target_club_ids,
+            'EA retornou %d partidas para club=%s match_type=%s buscando clubs=%s',
+            len(raw_matches), search_club.ea_club_id, match_type, target_club_ids,
         )
 
         discarded_wrong_clubs = 0
@@ -449,9 +485,9 @@ class MatchReportEAService:
                     'Partida EA %s descartada (fora da janela): played_at=%s | '
                     'janela=[%s, %s]',
                     match_data.get('matchId'),
-                    played_at.strftime('%d/%m/%Y %H:%M UTC'),
-                    window_start.strftime('%d/%m/%Y %H:%M UTC'),
-                    window_end.strftime('%d/%m/%Y %H:%M UTC'),
+                    format_dt_pair(played_at),
+                    format_dt_pair(window_start),
+                    format_dt_pair(window_end),
                 )
                 discarded_out_of_window += 1
                 continue
@@ -461,7 +497,7 @@ class MatchReportEAService:
             logger.info(
                 'Partida EA %s encontrada! clubs=%s, played_at=%s',
                 ea_match_id, club_ids_in_match,
-                played_at.strftime('%d/%m/%Y %H:%M UTC'),
+                format_dt_pair(played_at),
             )
 
             # Verificar se já foi sincronizada

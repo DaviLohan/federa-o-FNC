@@ -224,7 +224,7 @@ CELERY_BEAT_SCHEDULE = {
     'sync-ea-matches-every-3-min': {
         'task': 'ea_integration.sync_all_matches',
         'schedule': 180.0,  # 3 minutos
-        'kwargs': {'match_types': ['friendlyMatch']},
+        'kwargs': {'match_types': ['leagueMatch', 'friendlyMatch']},
     },
     'ea-api-health-check-every-10-min': {
         'task': 'ea_integration.health_check_ea_api',
