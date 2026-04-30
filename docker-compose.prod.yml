@@ -48,6 +48,16 @@ services:
       - ./backend/.env
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.production
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import sys, urllib.request, urllib.error; url='http://127.0.0.1:8000/api/v1/championships/?status=OPEN,IN_PROGRESS';\ntry:\n r=urllib.request.urlopen(url, timeout=5); sys.exit(0 if r.status < 500 else 1)\nexcept urllib.error.HTTPError as exc:\n sys.exit(0 if exc.code < 500 else 1)\nexcept Exception:\n sys.exit(1)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     depends_on:
       db:
         condition: service_healthy
@@ -105,8 +115,15 @@ services:
       - "3000"
     environment:
       - NEXT_PUBLIC_API_URL=https://imperiumfederacao.com
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
   nginx:
@@ -121,8 +138,10 @@ services:
       - backend_static:/var/www/static:ro
       - backend_media:/var/www/media:ro
     depends_on:
-      - backend
-      - frontend
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
