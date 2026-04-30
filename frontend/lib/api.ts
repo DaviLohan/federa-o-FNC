@@ -37,6 +37,7 @@ import type {
   EnrollmentCheckoutResponse,
   EAReportPreview,
   EAReportContestRequest,
+  EAReportIrregularConfirmRequest,
   TeamPerformancePayload,
   TeamLineupStyle,
 } from '@/types';
@@ -238,6 +239,9 @@ export const matchesAPI = {
   
   confirmReport: (id: number, data: { ea_match_id: number }) =>
     apiClient.post(`/api/v1/matches/${id}/confirm-report/`, data),
+
+  confirmIrregularResult: (id: number, data: EAReportIrregularConfirmRequest) =>
+    apiClient.post(`/api/v1/matches/${id}/confirm-irregular-result/`, data),
   
   contestReport: (id: number, data: EAReportContestRequest) =>
     apiClient.post(`/api/v1/matches/${id}/contest-report/`, data),
@@ -262,6 +266,9 @@ export const contestationsAPI = {
 
   changeResult: (id: number, data: { winner_team_id: number; reason: string }) =>
     apiClient.post<Contestation>(`/api/v1/contestations/${id}/change-result/`, data),
+
+  convertToWalkover: (id: number, data: { walkover_team_id: number; reason: string }) =>
+    apiClient.post<Contestation>(`/api/v1/contestations/${id}/convert-to-walkover/`, data),
 };
 
 // Statistics API

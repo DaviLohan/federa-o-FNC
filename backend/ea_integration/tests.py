@@ -10,6 +10,7 @@ from ea_integration.date_utils import LOCAL_TIMEZONE
 from ea_integration.models import EAClub, EAMatch
 from ea_integration.report_service import MatchReportEAService
 from ea_integration.services import MatchSyncService
+from fnc_matches.models import Goal, MatchReport
 
 
 class RecordingEAClient:
@@ -184,3 +185,76 @@ def test_match_sync_service_defaults_to_league_and_friendly_match_types():
 
     assert result['errors'] == 0
     assert [call['match_type'] for call in client.calls] == ['leagueMatch', 'friendlyMatch']
+
+
+@pytest.mark.django_db
+def test_confirm_report_blocks_critical_irregularities_without_explicit_confirmation():
+    home_team = TeamFactory()
+    away_team = TeamFactory()
+    home_club = EAClub.objects.create(team=home_team, ea_club_id='5001', platform='common-gen5', name='Critical Home')
+    away_club = EAClub.objects.create(team=away_team, ea_club_id='5002', platform='common-gen5', name='Critical Away')
+    played_at = datetime(2026, 4, 29, 2, 30, tzinfo=dt_timezone.utc)
+    match = MatchFactory(
+        home_team=home_team,
+        away_team=away_team,
+        status='IN_PROGRESS',
+        scheduled_date=played_at,
+    )
+    raw_match = build_raw_match('ea-report-critical', home_club.ea_club_id, away_club.ea_club_id, played_at=played_at)
+    service = MatchReportEAService(
+        client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}),
+        validator=NoOpValidator(),
+        sync_service=MatchSyncService(client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}), validator=NoOpValidator()),
+    )
+
+    preview = service.fetch_ea_report(match, home_team.owner)
+    ea_match = EAMatch.objects.get(pk=preview['ea_match_id'])
+    ea_match.validation_notes = [{'severity': 'error', 'detail': 'Jogador irregular', 'type': 'player_not_in_roster'}]
+    ea_match.save(update_fields=['validation_notes'])
+
+    with pytest.raises(Exception, match='irregularidades detectadas'):
+        service.confirm_report(match, ea_match.pk, home_team.owner)
+
+
+@pytest.mark.django_db
+def test_confirm_irregular_result_preserves_match_data_and_flags_confirmation():
+    home_team = TeamFactory()
+    away_team = TeamFactory()
+    home_club = EAClub.objects.create(team=home_team, ea_club_id='6001', platform='common-gen5', name='Preserve Home')
+    away_club = EAClub.objects.create(team=away_team, ea_club_id='6002', platform='common-gen5', name='Preserve Away')
+    played_at = datetime(2026, 4, 29, 2, 30, tzinfo=dt_timezone.utc)
+    match = MatchFactory(
+        home_team=home_team,
+        away_team=away_team,
+        status='IN_PROGRESS',
+        scheduled_date=played_at,
+    )
+    raw_match = build_raw_match('ea-report-preserve', home_club.ea_club_id, away_club.ea_club_id, played_at=played_at)
+    service = MatchReportEAService(
+        client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}),
+        validator=NoOpValidator(),
+        sync_service=MatchSyncService(client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}), validator=NoOpValidator()),
+    )
+
+    preview = service.fetch_ea_report(match, away_team.owner)
+    ea_match = EAMatch.objects.get(pk=preview['ea_match_id'])
+    ea_match.validation_notes = [{'severity': 'critical', 'detail': 'Gamertag irregular', 'type': 'gamertag_mismatch'}]
+    ea_match.save(update_fields=['validation_notes'])
+
+    updated_match = service.confirm_report(
+        match,
+        ea_match.pk,
+        away_team.owner,
+        allow_irregular_confirmation=True,
+        decision_reason='Adversário aceitou manter o resultado apesar da irregularidade.',
+    )
+
+    updated_match.refresh_from_db()
+    assert updated_match.status == 'FINISHED'
+    assert updated_match.irregularity_flag is True
+    assert updated_match.match_result_confirmed is True
+    assert updated_match.confirmed_by_team == away_team
+    assert updated_match.admin_override is False
+    assert updated_match.decision_reason == 'Adversário aceitou manter o resultado apesar da irregularidade.'
+    assert Goal.objects.filter(match=updated_match).count() >= 0
+    assert MatchReport.objects.filter(match=updated_match).exists()

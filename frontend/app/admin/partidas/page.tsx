@@ -52,6 +52,8 @@ const DECISION_ACTION_LABELS: Record<string, string> = {
   UNDER_REVIEW: 'Em análise',
   APPROVE_CURRENT_RESULT: 'Resultado atual aprovado',
   CHANGE_RESULT: 'Resultado alterado',
+  CONFIRM_IRREGULAR_RESULT: 'Resultado confirmado com irregularidade',
+  CONVERT_TO_WALKOVER: 'Resultado convertido para W.O.',
 };
 
 export default function AdminPartidasPage() {
@@ -73,6 +75,7 @@ export default function AdminPartidasPage() {
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
   const [reviewReasons, setReviewReasons] = useState<Record<number, string>>({});
   const [winnerChoices, setWinnerChoices] = useState<Record<number, number>>({});
+  const [walkoverChoices, setWalkoverChoices] = useState<Record<number, number>>({});
 
   const contestedCount = matches.filter((m) => m.status === 'CONTESTED').length;
   const requestedMatchId = searchParams.get('match');
@@ -121,6 +124,11 @@ export default function AdminPartidasPage() {
             contestation.id,
             contestation.current_winner?.id || matchDetail.home_team.id,
           ])
+        )
+      );
+      setWalkoverChoices(
+        Object.fromEntries(
+          detailedContestations.map((contestation) => [contestation.id, matchDetail.home_team.id])
         )
       );
       setDrawerOpen(true);
@@ -203,6 +211,31 @@ export default function AdminPartidasPage() {
       await refreshSelectedMatch();
     } catch (error: any) {
       showToast(error.response?.data?.error || 'Erro ao alterar resultado da partida', 'error');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleConvertToWalkover = async (contestation: Contestation) => {
+    const reason = reviewReasons[contestation.id]?.trim();
+    if (!reason) {
+      showToast('Informe o motivo da conversão para W.O.', 'warning');
+      return;
+    }
+
+    const walkoverTeamId = walkoverChoices[contestation.id];
+    if (!walkoverTeamId) {
+      showToast('Selecione o time que deve receber o W.O.', 'warning');
+      return;
+    }
+
+    setActionLoadingId(contestation.id);
+    try {
+      await contestationsAPI.convertToWalkover(contestation.id, { walkover_team_id: walkoverTeamId, reason });
+      showToast('W.O. aplicado com sucesso.', 'success');
+      await refreshSelectedMatch();
+    } catch (error: any) {
+      showToast(error.response?.data?.error || 'Erro ao converter a partida para W.O.', 'error');
     } finally {
       setActionLoadingId(null);
     }
@@ -385,6 +418,10 @@ export default function AdminPartidasPage() {
                 { label: 'Início', value: selectedMatch.started_at ? formatDateTimeShort(selectedMatch.started_at) : '—' },
                 { label: 'Fim', value: selectedMatch.finished_at ? formatDateTimeShort(selectedMatch.finished_at) : '—' },
                 { label: 'Duração', value: selectedMatch.duration_minutes ? `${selectedMatch.duration_minutes} min` : '—' },
+                { label: 'Irregularidade detectada', value: selectedMatch.irregularity_flag ? 'Sim' : 'Não' },
+                { label: 'Resultado confirmado pelo adversário', value: selectedMatch.match_result_confirmed ? 'Sim' : 'Não' },
+                { label: 'Confirmado por', value: selectedMatch.confirmed_by_team?.name || '—' },
+                { label: 'Override administrativo', value: selectedMatch.admin_override ? 'Sim' : 'Não' },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-surface2 rounded-xl p-3">
                   <p className="text-xs text-muted mb-1">{label}</p>
@@ -392,6 +429,13 @@ export default function AdminPartidasPage() {
                 </div>
               ))}
             </div>
+
+            {selectedMatch.decision_reason && (
+              <div className="rounded-xl border border-info/20 bg-info/5 p-4">
+                <p className="text-xs text-muted mb-1">Justificativa registrada</p>
+                <p className="text-sm text-text whitespace-pre-line">{selectedMatch.decision_reason}</p>
+              </div>
+            )}
 
             {!!selectedMatch.goals?.length && (
               <div className="bg-surface2 rounded-2xl p-5">
@@ -583,6 +627,29 @@ export default function AdminPartidasPage() {
                               disabled={actionLoadingId === contestation.id}
                             >
                               Alterar Resultado
+                            </Button>
+                          </div>
+
+                          <div className="rounded-xl bg-surface2 p-4 space-y-3">
+                            <div>
+                              <p className="text-sm font-semibold text-text">Converter para W.O.</p>
+                              <p className="text-xs text-muted">Selecione o time penalizado. O sistema aplicará W.O. apenas por decisão administrativa explícita.</p>
+                            </div>
+                            <select
+                              value={walkoverChoices[contestation.id] || selectedMatch.home_team.id}
+                              onChange={(e) => setWalkoverChoices((prev) => ({ ...prev, [contestation.id]: Number(e.target.value) }))}
+                              className="w-full px-4 py-2.5 bg-panel2 border border-border rounded-xl text-text focus:outline-none focus:border-gold/50"
+                            >
+                              <option value={selectedMatch.home_team.id}>{selectedMatch.home_team.name} recebe W.O.</option>
+                              <option value={selectedMatch.away_team.id}>{selectedMatch.away_team.name} recebe W.O.</option>
+                            </select>
+                            <Button
+                              variant="primary"
+                              className="bg-warning hover:bg-warning/90"
+                              onClick={() => handleConvertToWalkover(contestation)}
+                              disabled={actionLoadingId === contestation.id}
+                            >
+                              Converter para W.O.
                             </Button>
                           </div>
 

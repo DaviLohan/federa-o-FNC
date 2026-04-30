@@ -10,6 +10,7 @@ from fnc_matches.models import Contestation, ContestationAuditLog, Match
 from fnc_matches.services import (
     recompute_match_derived_data_for_championship,
     reverse_match_result,
+    update_team_performance,
 )
 
 
@@ -100,8 +101,12 @@ class ContestationDecisionService:
             'previous_result': previous_snapshot.as_dict(),
             'new_result': previous_snapshot.as_dict(),
         }
-        contestation.match.status = Match.Status.FINISHED
-        contestation.match.save(update_fields=['status', 'updated_at'])
+        self._mark_match_result_kept(
+            contestation.match,
+            reason=reason,
+            confirmed_by_team=contestation.match.confirmed_by_team,
+            admin_override=True,
+        )
         self._recompute_championship_state(contestation.match)
         contestation.save(
             update_fields=[
@@ -119,6 +124,81 @@ class ContestationDecisionService:
             reason=reason,
             previous_result=previous_snapshot.as_dict(),
             new_result=previous_snapshot.as_dict(),
+        )
+        return contestation
+
+    @transaction.atomic
+    def convert_to_walkover(self, contestation: Contestation, admin_user, *, walkover_team_id: int, reason: str) -> Contestation:
+        self._validate_reason(reason)
+        self._ensure_open_contestation(contestation)
+        match = contestation.match
+        self._ensure_match_has_result(match)
+
+        if walkover_team_id not in [match.home_team_id, match.away_team_id]:
+            raise ContestationDecisionError('O time penalizado por W.O. precisa participar da partida.')
+
+        previous_snapshot = snapshot_match_result(match)
+        self._revert_existing_result(match, admin_user)
+        self._purge_match_result_artifacts(match)
+
+        if walkover_team_id == match.home_team_id:
+            home_score, away_score = (0, 3)
+        else:
+            home_score, away_score = (3, 0)
+
+        match.home_score = home_score
+        match.away_score = away_score
+        match.status = Match.Status.FINISHED
+        match.finished_at = match.finished_at or timezone.now()
+        match.started_at = match.started_at or match.scheduled_date
+        match.is_walkover = True
+        match.walkover_team_id = walkover_team_id
+        match.walkover_reason = reason
+        match.irregularity_flag = True
+        match.match_result_confirmed = False
+        match.confirmed_by_team = None
+        match.admin_override = True
+        match.decision_reason = reason
+        match.save(update_fields=[
+            'home_score', 'away_score', 'status', 'finished_at', 'started_at',
+            'is_walkover', 'walkover_team', 'walkover_reason', 'irregularity_flag',
+            'match_result_confirmed', 'confirmed_by_team', 'admin_override', 'decision_reason', 'updated_at'
+        ])
+
+        self._recompute_championship_state(match)
+
+        new_snapshot = snapshot_match_result(match)
+        contestation.status = Contestation.Status.ACCEPTED
+        contestation.reviewed_by = admin_user
+        contestation.reviewed_at = timezone.now()
+        contestation.response = reason
+        contestation.decision_type = Contestation.DecisionType.CONVERT_TO_WALKOVER
+        contestation.decision_reason = reason
+        contestation.previous_home_score = previous_snapshot.home_score
+        contestation.previous_away_score = previous_snapshot.away_score
+        contestation.previous_winner_team_id = previous_snapshot.winner_team_id
+        contestation.decided_home_score = new_snapshot.home_score
+        contestation.decided_away_score = new_snapshot.away_score
+        contestation.decided_winner_team_id = new_snapshot.winner_team_id
+        contestation.decision_snapshot = {
+            'previous_result': previous_snapshot.as_dict(),
+            'new_result': new_snapshot.as_dict(),
+            'walkover_team_id': walkover_team_id,
+        }
+        contestation.save(update_fields=[
+            'status', 'reviewed_by', 'reviewed_at', 'response', 'decision_type',
+            'decision_reason', 'previous_home_score', 'previous_away_score',
+            'previous_winner_team', 'decided_home_score', 'decided_away_score',
+            'decided_winner_team', 'decision_snapshot', 'updated_at'
+        ])
+
+        self._create_audit_log(
+            contestation=contestation,
+            action=ContestationAuditLog.Action.CONVERT_TO_WALKOVER,
+            admin_user=admin_user,
+            reason=reason,
+            previous_result=previous_snapshot.as_dict(),
+            new_result=new_snapshot.as_dict(),
         )
         return contestation
 
@@ -148,9 +228,15 @@ class ContestationDecisionService:
         match.is_walkover = False
         match.walkover_team = None
         match.walkover_reason = ''
+        match.irregularity_flag = match.irregularity_flag
+        match.match_result_confirmed = False
+        match.confirmed_by_team = None
+        match.admin_override = True
+        match.decision_reason = reason
         match.save(update_fields=[
             'home_score', 'away_score', 'status', 'finished_at', 'started_at',
-            'is_walkover', 'walkover_team', 'walkover_reason', 'updated_at'
+            'is_walkover', 'walkover_team', 'walkover_reason', 'irregularity_flag',
+            'match_result_confirmed', 'confirmed_by_team', 'admin_override', 'decision_reason', 'updated_at'
         ])
 
         self._recompute_championship_state(match)
@@ -238,6 +324,20 @@ class ContestationDecisionService:
     def _recompute_championship_state(self, match: Match) -> None:
         if match.championship:
             recompute_match_derived_data_for_championship(match.championship)
+        if match.status == Match.Status.FINISHED:
+            update_team_performance(match)
+
+    def _mark_match_result_kept(self, match: Match, *, reason: str, confirmed_by_team=None, admin_override: bool) -> None:
+        match.status = Match.Status.FINISHED
+        match.irregularity_flag = True if match.irregularity_flag or confirmed_by_team else match.irregularity_flag
+        match.match_result_confirmed = bool(confirmed_by_team)
+        match.confirmed_by_team = confirmed_by_team
+        match.admin_override = admin_override
+        match.decision_reason = reason
+        match.save(update_fields=[
+            'status', 'irregularity_flag', 'match_result_confirmed',
+            'confirmed_by_team', 'admin_override', 'decision_reason', 'updated_at'
+        ])
 
     def _purge_match_result_artifacts(self, match: Match) -> None:
         for goal in match.goals.all():

@@ -599,7 +599,8 @@ class MatchValidationService:
 
         # Marcar o Match como CONTESTED
         match.status = Match.Status.CONTESTED
-        match.save(update_fields=['status', 'updated_at'])
+        match.irregularity_flag = True
+        match.save(update_fields=['status', 'irregularity_flag', 'updated_at'])
 
         logger.info(
             'Contestação automática criada para Match PK=%d '

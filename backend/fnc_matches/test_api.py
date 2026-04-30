@@ -515,6 +515,36 @@ class TestContestationAPI:
         assert contestation.decision_type == 'CHANGE_RESULT'
         assert (self.match.home_score, self.match.away_score) == (0, 1)
 
+    def test_owner_can_confirm_irregular_result(self, monkeypatch):
+        owner = UserFactory(user_type='TEAM_OWNER')
+        team1 = TeamFactory(owner=owner)
+        team2 = TeamFactory()
+        match = MatchFactory(
+            championship=self.championship,
+            home_team=team1,
+            away_team=team2,
+            status='IN_PROGRESS'
+        )
+
+        def fake_confirm_report(self, match, ea_match_id, user, **kwargs):
+            match.status = 'FINISHED'
+            match.irregularity_flag = True
+            match.match_result_confirmed = True
+            match.confirmed_by_team = match.home_team
+            match.decision_reason = kwargs['decision_reason']
+            return match
+
+        monkeypatch.setattr('ea_integration.report_service.MatchReportEAService.confirm_report', fake_confirm_report)
+
+        self.client.force_authenticate(user=owner)
+        response = self.client.post(
+            f'/api/v1/matches/{match.id}/confirm-irregular-result/',
+            {'ea_match_id': 99, 'reason': 'Aceitamos manter o resultado apesar da irregularidade.'},
+            format='json'
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
 
 @pytest.mark.django_db
 class TestMatchWorkflowIntegration:

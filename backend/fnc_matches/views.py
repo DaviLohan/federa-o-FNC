@@ -44,6 +44,8 @@ from .serializers import (
     ContestationReviewSerializer,
     ApproveCurrentResultSerializer,
     ChangeContestationResultSerializer,
+    ConvertContestationToWalkoverSerializer,
+    ConfirmIrregularResultSerializer,
     MatchProposalSerializer,
     MatchProposalResponseSerializer,
     MatchConfirmationSerializer,
@@ -537,6 +539,43 @@ class MatchViewSet(viewsets.ModelViewSet):
     @action(
         detail=True,
         methods=['post'],
+        url_path='confirm-irregular-result',
+        permission_classes=[IsAuthenticated, IsMatchParticipantOrAdmin],
+    )
+    def confirm_irregular_result(self, request, pk=None):
+        """
+        Confirma a manutenção do resultado mesmo com irregularidade detectada.
+        """
+        match = self.get_object()
+        serializer = ConfirmIrregularResultSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        service = MatchReportEAService()
+
+        try:
+            updated_match = service.confirm_report(
+                match=match,
+                ea_match_id=serializer.validated_data['ea_match_id'],
+                user=request.user,
+                allow_irregular_confirmation=True,
+                decision_reason=serializer.validated_data['reason'],
+                confirmed_by_team_id=serializer.validated_data.get('confirmed_by_team_id'),
+            )
+            return Response({
+                'message': 'Resultado mantido com irregularidade registrada.',
+                'match': MatchDetailSerializer(updated_match, context={'request': request}).data,
+            })
+        except MatchReportEAError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {'error': f'Erro ao confirmar resultado com irregularidade: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(
+        detail=True,
+        methods=['post'],
         url_path='contest-report',
         permission_classes=[IsAuthenticated, IsMatchParticipantOrAdmin],
     )
@@ -746,7 +785,7 @@ class ContestationViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         """Define permissões por ação."""
-        if self.action in ['review', 'approve_current_result', 'change_result']:
+        if self.action in ['review', 'approve_current_result', 'change_result', 'convert_to_walkover']:
             return [CanReviewContestation()]
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
@@ -761,6 +800,8 @@ class ContestationViewSet(viewsets.ModelViewSet):
             return ApproveCurrentResultSerializer
         if self.action == 'change_result':
             return ChangeContestationResultSerializer
+        if self.action == 'convert_to_walkover':
+            return ConvertContestationToWalkoverSerializer
         return super().get_serializer_class()
 
     def get_queryset(self):
@@ -881,6 +922,28 @@ class ContestationViewSet(viewsets.ModelViewSet):
 
         return Response({
             'message': 'Resultado da partida alterado com sucesso.',
+            'contestation': ContestationAdminDetailSerializer(contestation, context={'request': request}).data,
+        })
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanReviewContestation], url_path='convert-to-walkover')
+    def convert_to_walkover(self, request, pk=None):
+        """Converte administrativamente o resultado contestado para W.O."""
+        contestation = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            contestation = self.decision_service.convert_to_walkover(
+                contestation,
+                request.user,
+                walkover_team_id=serializer.validated_data['walkover_team_id'],
+                reason=serializer.validated_data['reason'],
+            )
+        except ContestationDecisionError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'message': 'Partida convertida para W.O. com sucesso.',
             'contestation': ContestationAdminDetailSerializer(contestation, context={'request': request}).data,
         })
 

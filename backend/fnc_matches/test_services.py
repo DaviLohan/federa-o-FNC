@@ -261,6 +261,7 @@ class TestContestationDecisionService:
             status='CONTESTED',
             home_score=2,
             away_score=1,
+            irregularity_flag=True,
         )
         recompute_match_derived_data_for_championship(championship)
         contestation = ContestationFactory(match=match, team=match.home_team, status='UNDER_REVIEW')
@@ -282,6 +283,9 @@ class TestContestationDecisionService:
         assert match.status == Match.Status.FINISHED
         assert match.home_score == 2
         assert match.away_score == 1
+        assert match.admin_override is True
+        assert match.irregularity_flag is True
+        assert match.decision_reason == 'Resultado mantido após validação administrativa completa.'
         assert home_standing.points == 3
         assert away_standing.points == 0
         assert ContestationAuditLog.objects.filter(
@@ -365,6 +369,42 @@ class TestContestationDecisionService:
         assert match.cards.count() == 0
         assert not hasattr(match, 'report')
         assert TopScorer.objects.filter(championship=championship, player=scorer).count() == 0
+
+    def test_convert_to_walkover_requires_no_confirmation_and_recomputes(self):
+        championship = ChampionshipFactory(status='IN_PROGRESS')
+        home_team = TeamFactory()
+        away_team = TeamFactory()
+        match = FinishedMatchFactory(
+            championship=championship,
+            home_team=home_team,
+            away_team=away_team,
+            status='CONTESTED',
+            home_score=2,
+            away_score=1,
+        )
+        contestation = ContestationFactory(match=match, team=away_team, status='UNDER_REVIEW')
+
+        result = self.service.convert_to_walkover(
+            contestation,
+            self.admin,
+            walkover_team_id=home_team.id,
+            reason='Time da casa irregular e sem acordo do adversário; convertido para W.O.'
+        )
+
+        match.refresh_from_db()
+        result.refresh_from_db()
+
+        assert result.decision_type == Contestation.DecisionType.CONVERT_TO_WALKOVER
+        assert match.is_walkover is True
+        assert match.walkover_team == home_team
+        assert (match.home_score, match.away_score) == (0, 3)
+        assert match.match_result_confirmed is False
+        assert match.confirmed_by_team is None
+        assert match.admin_override is True
+        assert ContestationAuditLog.objects.filter(
+            contestation=contestation,
+            action=ContestationAuditLog.Action.CONVERT_TO_WALKOVER,
+        ).exists()
 
     def test_cannot_decide_same_contestation_twice(self):
         match = FinishedMatchFactory(status='CONTESTED', home_score=2, away_score=0)

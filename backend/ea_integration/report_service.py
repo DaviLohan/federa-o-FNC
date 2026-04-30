@@ -16,7 +16,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from fnc_matches.models import (
-    Match, MatchReport, Goal, Assist, Card, Contestation,
+    Match, MatchReport, Goal, Assist, Card, Contestation, ContestationAuditLog,
 )
 from fnc_teams.models import TeamMembership
 from users.models import User, PlayerProfile
@@ -147,7 +147,16 @@ class MatchReportEAService:
     # ═══════════════════════════════════════════════════════════════════════
 
     @transaction.atomic
-    def confirm_report(self, match: Match, ea_match_id: int, user: User) -> Match:
+    def confirm_report(
+        self,
+        match: Match,
+        ea_match_id: int,
+        user: User,
+        *,
+        allow_irregular_confirmation: bool = False,
+        decision_reason: str = '',
+        confirmed_by_team_id: int | None = None,
+    ) -> Match:
         """
         Confirma o report EA e salva o resultado da partida.
 
@@ -169,6 +178,20 @@ class MatchReportEAService:
         self._validate_user_permission(match, user)
 
         ea_match = self._get_ea_match(ea_match_id, match)
+        warnings = self._build_warnings(ea_match)
+        has_critical_errors = self._has_critical_warnings(warnings)
+
+        if has_critical_errors and not allow_irregular_confirmation:
+            raise MatchReportEAError(
+                'Esta partida possui irregularidades detectadas. '
+                'Use a confirmação excepcional para manter o resultado com justificativa.'
+            )
+
+        confirming_team = None
+        if allow_irregular_confirmation:
+            if not decision_reason or not decision_reason.strip():
+                raise MatchReportEAError('Informe a justificativa para confirmar um resultado com irregularidade.')
+            confirming_team = self._resolve_confirming_team(match, user, confirmed_by_team_id)
 
         # ── Determinar correspondência de lados ─────────────────────────
         side_map = self._get_side_mapping(ea_match, match)
@@ -180,9 +203,15 @@ class MatchReportEAService:
         match.finished_at = ea_match.played_at
         if not match.started_at:
             match.started_at = ea_match.played_at
+        match.irregularity_flag = has_critical_errors
+        match.match_result_confirmed = allow_irregular_confirmation
+        match.confirmed_by_team = confirming_team if allow_irregular_confirmation else None
+        match.admin_override = False
+        match.decision_reason = decision_reason.strip() if allow_irregular_confirmation else ''
         match.save(update_fields=[
             'home_score', 'away_score', 'status',
-            'started_at', 'finished_at', 'updated_at',
+            'started_at', 'finished_at', 'irregularity_flag', 'match_result_confirmed',
+            'confirmed_by_team', 'admin_override', 'decision_reason', 'updated_at',
         ])
 
         # ── Criar Goals, Assists, Cards ─────────────────────────────────
@@ -209,6 +238,8 @@ class MatchReportEAService:
 
         # ── Atualizar estatísticas ──────────────────────────────────────
         self._update_statistics(match)
+        if allow_irregular_confirmation:
+            self._log_irregular_result_confirmation(match, user, decision_reason.strip())
 
         logger.info(
             'Report EA confirmado: Match PK=%d → %s %d x %d %s (EA: %s)',
@@ -589,7 +620,50 @@ class MatchReportEAService:
             },
             'warnings': warnings,
             'can_confirm': not has_critical_errors,
+            'has_irregularity': has_critical_errors,
+            'can_confirm_with_irregularity': has_critical_errors,
         }
+
+    @staticmethod
+    def _has_critical_warnings(warnings: list[dict]) -> bool:
+        return any(w['severity'] in ('error', 'critical') for w in warnings)
+
+    def _resolve_confirming_team(self, match: Match, user: User, confirmed_by_team_id: int | None):
+        if user.has_supervisor_access:
+            if confirmed_by_team_id in [match.home_team_id, match.away_team_id]:
+                return match.home_team if confirmed_by_team_id == match.home_team_id else match.away_team
+            raise MatchReportEAError('Supervisores devem informar qual time confirmou o resultado com irregularidade.')
+
+        return self._get_user_team(match, user)
+
+    def _log_irregular_result_confirmation(self, match: Match, user: User, reason: str) -> None:
+        contestation = match.contestations.filter(
+            status__in=[Contestation.Status.PENDING, Contestation.Status.UNDER_REVIEW]
+        ).order_by('-created_at').first()
+        if not contestation:
+            return
+
+        ContestationAuditLog.objects.create(
+            contestation=contestation,
+            action=ContestationAuditLog.Action.CONFIRM_IRREGULAR_RESULT,
+            performed_by=user,
+            reason=reason,
+            previous_result={
+                'status': match.status,
+                'home_score': match.home_score,
+                'away_score': match.away_score,
+                'irregularity_flag': match.irregularity_flag,
+            },
+            new_result={
+                'status': match.status,
+                'home_score': match.home_score,
+                'away_score': match.away_score,
+                'irregularity_flag': match.irregularity_flag,
+                'match_result_confirmed': match.match_result_confirmed,
+                'confirmed_by_team_id': match.confirmed_by_team_id,
+                'decision_reason': match.decision_reason,
+            },
+        )
 
     def _get_side_mapping(self, ea_match: EAMatch, match: Match) -> dict:
         """

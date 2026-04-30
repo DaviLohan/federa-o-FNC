@@ -34,7 +34,7 @@ interface EAReportModalProps {
   onClose: () => void;
 }
 
-type ModalStep = 'loading' | 'preview' | 'contest' | 'error';
+type ModalStep = 'loading' | 'preview' | 'contest' | 'irregularConfirm' | 'error';
 
 const contestationReasons = [
   { value: '', label: 'Selecione um motivo...' },
@@ -62,6 +62,8 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
   const [error, setError] = useState<string>('');
   const [contestForm, setContestForm] = useState({ reason: '', description: '' });
   const [contestErrors, setContestErrors] = useState<Record<string, string>>({});
+  const [irregularReason, setIrregularReason] = useState('');
+  const [irregularError, setIrregularError] = useState('');
 
   const loadingStartRef = useRef<number>(0);
   const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,6 +138,28 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
     },
   });
 
+  const confirmIrregularMutation = useMutation({
+    mutationFn: () => {
+      if (!preview) throw new Error('Preview nao disponivel');
+      return matchesAPI.confirmIrregularResult(match.id, {
+        ea_match_id: preview.ea_match_id,
+        reason: irregularReason,
+      });
+    },
+    onSuccess: () => {
+      showToast('Resultado mantido com irregularidade registrada.', 'success');
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
+      queryClient.invalidateQueries({ queryKey: ['championship'] });
+      queryClient.invalidateQueries({ queryKey: ['match', match.id] });
+      queryClient.invalidateQueries({ queryKey: ['contestations'] });
+      handleClose();
+    },
+    onError: (err: any) => {
+      const msg = err.response?.data?.error || 'Erro ao confirmar resultado com irregularidade.';
+      showToast(msg, 'error');
+    },
+  });
+
   // ── Handlers ─────────────────────────────────────────────────────────
 
   const handleOpen = () => {
@@ -144,19 +168,23 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
     setPreview(null);
     setContestForm({ reason: '', description: '' });
     setContestErrors({});
+    setIrregularReason('');
+    setIrregularError('');
     loadingStartRef.current = Date.now();
     if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
     fetchMutation.mutate();
   };
 
   const handleClose = () => {
-    if (confirmMutation.isPending || contestMutation.isPending) return;
+    if (confirmMutation.isPending || contestMutation.isPending || confirmIrregularMutation.isPending) return;
     if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
     setStep('loading');
     setPreview(null);
     setError('');
     setContestForm({ reason: '', description: '' });
     setContestErrors({});
+    setIrregularReason('');
+    setIrregularError('');
     onClose();
   };
 
@@ -171,6 +199,15 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
     setContestErrors(errors);
     if (Object.keys(errors).length > 0) return;
     contestMutation.mutate();
+  };
+
+  const handleIrregularConfirmSubmit = () => {
+    if (!irregularReason.trim()) {
+      setIrregularError('Informe a justificativa para manter o resultado com irregularidade');
+      return;
+    }
+    setIrregularError('');
+    confirmIrregularMutation.mutate();
   };
 
   // Auto-fetch when modal opens (via useEffect to avoid setState during render)
@@ -199,6 +236,10 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
     contest: {
       title: 'Contestar Resultado',
       description: 'Informe o motivo da contestacao',
+    },
+    irregularConfirm: {
+      title: 'Manter Resultado com Irregularidade',
+      description: 'Registre a justificativa para manter o resultado mesmo com irregularidade detectada',
     },
   };
 
@@ -236,6 +277,17 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
             Confirmar Resultado
           </Button>
         </div>
+        {!preview.can_confirm && preview.can_confirm_with_irregularity && (
+          <Button
+            variant="primary"
+            onClick={() => setStep('irregularConfirm')}
+            className="w-full bg-warning hover:bg-warning/90"
+            disabled={confirmMutation.isPending}
+          >
+            <Shield className="w-4 h-4 mr-2" />
+            Confirmar resultado mesmo com irregularidade
+          </Button>
+        )}
       </div>
     );
   } else if (step === 'contest') {
@@ -261,10 +313,33 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
         </Button>
       </div>
     );
+  } else if (step === 'irregularConfirm') {
+    stickyFooter = (
+      <div className="flex gap-3">
+        <Button
+          variant="ghost"
+          onClick={() => setStep('preview')}
+          className="flex-1"
+          disabled={confirmIrregularMutation.isPending}
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Voltar
+        </Button>
+        <Button
+          variant="primary"
+          onClick={handleIrregularConfirmSubmit}
+          className="flex-1 bg-warning hover:bg-warning/90"
+          loading={confirmIrregularMutation.isPending}
+        >
+          <UserCheck className="w-4 h-4 mr-2" />
+          Confirmar com Irregularidade
+        </Button>
+      </div>
+    );
   }
 
   // ── Dynamic modal size per step ──────────────────────────────────
-  const isExpandedStep = step === 'preview' || step === 'contest';
+  const isExpandedStep = step === 'preview' || step === 'contest' || step === 'irregularConfirm';
   const modalSize = isExpandedStep ? '2xl' : 'xl';
 
   // ── Render ───────────────────────────────────────────────────────────
@@ -301,6 +376,16 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
                 return n;
               });
             }
+          }}
+        />
+      )}
+      {step === 'irregularConfirm' && preview && (
+        <IrregularConfirmContent
+          reason={irregularReason}
+          error={irregularError}
+          onChange={(value) => {
+            setIrregularReason(value);
+            if (irregularError) setIrregularError('');
           }}
         />
       )}
@@ -993,6 +1078,52 @@ function ContestContent({
             </ul>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function IrregularConfirmContent({
+  reason,
+  error,
+  onChange,
+}: {
+  reason: string;
+  error: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="bg-warning/10 border border-warning/20 rounded-xl p-4">
+        <div className="flex gap-3">
+          <Shield className="w-5 h-5 text-warning shrink-0 mt-0.5" />
+          <div className="space-y-2 text-sm text-muted">
+            <p className="font-semibold text-text">Resultado com irregularidade detectada</p>
+            <p>
+              Use esta opção apenas quando o time potencialmente prejudicado concorda em manter o resultado
+              mesmo com a irregularidade identificada.
+            </p>
+            <p>
+              O sistema vai preservar estatísticas, saldo de gols e registrar a decisão para auditoria.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-text mb-2">
+          Justificativa da confirmação <span className="text-error">*</span>
+        </label>
+        <textarea
+          value={reason}
+          onChange={(e) => onChange(e.target.value)}
+          rows={5}
+          className={`w-full px-4 py-3 bg-panel2 border ${
+            error ? 'border-error' : 'border-stroke'
+          } rounded-xl text-text text-sm placeholder-muted2 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand transition-all resize-none`}
+          placeholder="Explique por que o resultado deve ser mantido apesar da irregularidade detectada..."
+        />
+        {error && <p className="text-sm text-error mt-1.5">{error}</p>}
       </div>
     </div>
   );

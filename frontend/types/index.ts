@@ -442,6 +442,11 @@ export interface Match {
   home_score: number;
   away_score: number;
   status: 'PENDING' | 'SCHEDULED' | 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED' | 'CONTESTED';
+  irregularity_flag?: boolean;
+  match_result_confirmed?: boolean;
+  confirmed_by_team?: Team | null;
+  admin_override?: boolean;
+  decision_reason?: string;
   can_start_now?: boolean;
   start_block_reason?: string;
   can_report?: boolean;
@@ -535,7 +540,7 @@ export interface Contestation {
   status: 'PENDING' | 'UNDER_REVIEW' | 'ACCEPTED' | 'REJECTED';
   status_display?: string;
   response: string;
-  decision_type?: 'APPROVE_CURRENT_RESULT' | 'CHANGE_RESULT';
+  decision_type?: 'APPROVE_CURRENT_RESULT' | 'CHANGE_RESULT' | 'CONVERT_TO_WALKOVER';
   decision_type_display?: string;
   decision_reason?: string;
   previous_home_score?: number;
@@ -555,7 +560,7 @@ export interface Contestation {
 
 export interface ContestationAuditLog {
   id: number;
-  action: 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVE_CURRENT_RESULT' | 'CHANGE_RESULT';
+  action: 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVE_CURRENT_RESULT' | 'CHANGE_RESULT' | 'CONFIRM_IRREGULAR_RESULT' | 'CONVERT_TO_WALKOVER';
   action_display?: string;
   performed_by?: User;
   reason: string;
@@ -775,6 +780,14 @@ export interface EAReportPreview {
   away_team: EAReportTeam;
   warnings: EAReportWarning[];
   can_confirm: boolean;
+  has_irregularity?: boolean;
+  can_confirm_with_irregularity?: boolean;
+}
+
+export interface EAReportIrregularConfirmRequest {
+  ea_match_id: number;
+  reason: string;
+  confirmed_by_team_id?: number;
 }
 
 /** Request para contestar um report EA. */

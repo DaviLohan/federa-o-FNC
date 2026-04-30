@@ -117,6 +117,35 @@ class Match(models.Model):
         blank=True,
         help_text='Explicação sobre o walk-over'
     )
+
+    irregularity_flag = models.BooleanField(
+        'houve irregularidade',
+        default=False,
+        help_text='Indica que a partida teve irregularidade identificada, mas não necessariamente virou W.O.'
+    )
+    match_result_confirmed = models.BooleanField(
+        'resultado confirmado com irregularidade',
+        default=False,
+        help_text='Indica que o time potencialmente prejudicado confirmou a manutenção do resultado apesar da irregularidade.'
+    )
+    confirmed_by_team = models.ForeignKey(
+        Team,
+        on_delete=models.SET_NULL,
+        related_name='irregular_results_confirmed',
+        verbose_name='resultado confirmado por',
+        null=True,
+        blank=True,
+    )
+    admin_override = models.BooleanField(
+        'resultado mantido por override administrativo',
+        default=False,
+        help_text='Indica que a administração manteve ou definiu o resultado apesar da irregularidade.'
+    )
+    decision_reason = models.TextField(
+        'motivo da decisão sobre irregularidade',
+        blank=True,
+        help_text='Justificativa para manter resultado, converter para W.O. ou outra decisão relacionada à irregularidade.'
+    )
     
     # Cancelamento
     cancelled_at = models.DateTimeField(
@@ -431,6 +460,7 @@ class Contestation(models.Model):
     class DecisionType(models.TextChoices):
         APPROVE_CURRENT_RESULT = 'APPROVE_CURRENT_RESULT', 'Aprovar resultado atual'
         CHANGE_RESULT = 'CHANGE_RESULT', 'Alterar resultado'
+        CONVERT_TO_WALKOVER = 'CONVERT_TO_WALKOVER', 'Converter para W.O.'
     
     match = models.ForeignKey(
         Match,
@@ -542,6 +572,8 @@ class ContestationAuditLog(models.Model):
         UNDER_REVIEW = 'UNDER_REVIEW', 'Contestação em análise'
         APPROVE_CURRENT_RESULT = 'APPROVE_CURRENT_RESULT', 'Resultado atual aprovado'
         CHANGE_RESULT = 'CHANGE_RESULT', 'Resultado alterado'
+        CONFIRM_IRREGULAR_RESULT = 'CONFIRM_IRREGULAR_RESULT', 'Resultado confirmado com irregularidade'
+        CONVERT_TO_WALKOVER = 'CONVERT_TO_WALKOVER', 'Resultado convertido para W.O.'
 
     contestation = models.ForeignKey(
         Contestation,

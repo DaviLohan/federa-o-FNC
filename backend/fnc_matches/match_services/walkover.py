@@ -9,6 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 from fnc_matches.models import Match
 from fnc_teams.models import Team
+from fnc_matches.services import recompute_match_derived_data_for_championship, update_team_performance
 
 
 class WalkOverService:
@@ -84,16 +85,18 @@ class WalkOverService:
         self.match.is_walkover = True
         self.match.walkover_team_id = self.match.home_team.id
         self.match.walkover_reason = reason or f'Time {self.match.home_team.name} não compareceu'
+        self.match.irregularity_flag = False
+        self.match.match_result_confirmed = False
+        self.match.confirmed_by_team = None
+        self.match.admin_override = False
+        self.match.decision_reason = self.match.walkover_reason
         self.match.save()
         
         # Atualizar estatísticas
         # Import here to avoid circular dependency
-        import fnc_matches.services as match_services
-        match_services.update_player_statistics(self.match)
-        match_services.update_team_statistics(self.match)
-        match_services.update_team_performance(self.match)
-        match_services.update_standings(self.match)
-        match_services.update_top_scorers(self.match)
+        if self.match.championship:
+            recompute_match_derived_data_for_championship(self.match.championship)
+        update_team_performance(self.match)
         
         return {
             'success': True,
@@ -132,15 +135,17 @@ class WalkOverService:
         self.match.is_walkover = True
         self.match.walkover_team_id = self.match.away_team.id
         self.match.walkover_reason = reason or f'Time {self.match.away_team.name} não compareceu'
+        self.match.irregularity_flag = False
+        self.match.match_result_confirmed = False
+        self.match.confirmed_by_team = None
+        self.match.admin_override = False
+        self.match.decision_reason = self.match.walkover_reason
         self.match.save()
         
         # Atualizar estatísticas
-        import fnc_matches.services as match_services
-        match_services.update_player_statistics(self.match)
-        match_services.update_team_statistics(self.match)
-        match_services.update_team_performance(self.match)
-        match_services.update_standings(self.match)
-        match_services.update_top_scorers(self.match)
+        if self.match.championship:
+            recompute_match_derived_data_for_championship(self.match.championship)
+        update_team_performance(self.match)
         
         return {
             'success': True,

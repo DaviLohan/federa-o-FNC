@@ -151,6 +151,7 @@ class MatchSerializer(serializers.ModelSerializer):
     away_team_id = serializers.IntegerField(write_only=True)
     championship = ChampionshipListSerializer(read_only=True)
     championship_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    confirmed_by_team = TeamListSerializer(read_only=True)
     
     match_type_display = serializers.CharField(source='get_match_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
@@ -183,6 +184,11 @@ class MatchSerializer(serializers.ModelSerializer):
             'away_score',
             'status',
             'status_display',
+            'irregularity_flag',
+            'match_result_confirmed',
+            'confirmed_by_team',
+            'admin_override',
+            'decision_reason',
             'winner',
             'is_draw',
             'duration_minutes',
@@ -424,6 +430,17 @@ class ChangeContestationResultSerializer(serializers.Serializer):
     reason = serializers.CharField(required=True, allow_blank=False, trim_whitespace=True)
 
 
+class ConvertContestationToWalkoverSerializer(serializers.Serializer):
+    walkover_team_id = serializers.IntegerField(required=True)
+    reason = serializers.CharField(required=True, allow_blank=False, trim_whitespace=True)
+
+
+class ConfirmIrregularResultSerializer(serializers.Serializer):
+    ea_match_id = serializers.IntegerField(required=True)
+    reason = serializers.CharField(required=True, allow_blank=False, trim_whitespace=True)
+    confirmed_by_team_id = serializers.IntegerField(required=False)
+
+
 class MatchDetailSerializer(serializers.ModelSerializer):
     """
     Serializer detalhado da partida com eventos.
@@ -433,6 +450,7 @@ class MatchDetailSerializer(serializers.ModelSerializer):
     championship = ChampionshipListSerializer(read_only=True)
     home_formation = FormationSerializer(read_only=True)
     away_formation = FormationSerializer(read_only=True)
+    confirmed_by_team = TeamListSerializer(read_only=True)
     
     # Eventos da partida
     goals = GoalWithAssistSerializer(many=True, read_only=True)
@@ -466,6 +484,11 @@ class MatchDetailSerializer(serializers.ModelSerializer):
             'away_score',
             'status',
             'status_display',
+            'irregularity_flag',
+            'match_result_confirmed',
+            'confirmed_by_team',
+            'admin_override',
+            'decision_reason',
             'can_start_now',
             'start_block_reason',
             'can_report',

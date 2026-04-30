@@ -239,6 +239,8 @@ class EAReportPreviewSerializer(serializers.Serializer):
     away_team = EAReportTeamSerializer()
     warnings = EAReportWarningSerializer(many=True)
     can_confirm = serializers.BooleanField()
+    has_irregularity = serializers.BooleanField(required=False)
+    can_confirm_with_irregularity = serializers.BooleanField(required=False)
 
 
 class EAReportConfirmSerializer(serializers.Serializer):
@@ -247,6 +249,8 @@ class EAReportConfirmSerializer(serializers.Serializer):
         required=True,
         help_text='ID do EAMatch no banco (pk)',
     )
+    reason = serializers.CharField(required=False, allow_blank=True)
+    confirmed_by_team_id = serializers.IntegerField(required=False)
 
 
 class EAReportContestSerializer(serializers.Serializer):
