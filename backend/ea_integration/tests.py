@@ -310,3 +310,44 @@ def test_only_winner_can_confirm_result():
 
     with pytest.raises(MatchReportEAError, match='Apenas o dono do time vencedor'):
         service.confirm_report(match, preview['ea_match_id'], away_team.owner)
+
+
+@pytest.mark.django_db
+def test_winner_with_supervisor_access_can_confirm_irregular_without_confirmed_team_id():
+    winner_owner = UserFactory(user_type='SUPERVISOR')
+    loser_owner = UserFactory(user_type='TEAM_OWNER')
+    home_team = TeamFactory(owner=winner_owner)
+    away_team = TeamFactory(owner=loser_owner)
+    home_club = EAClub.objects.create(team=home_team, ea_club_id='8301', platform='common-gen5', name='Supervisor Winner Home')
+    away_club = EAClub.objects.create(team=away_team, ea_club_id='8302', platform='common-gen5', name='Supervisor Winner Away')
+    played_at = datetime(2026, 4, 29, 2, 30, tzinfo=dt_timezone.utc)
+    match = MatchFactory(
+        home_team=home_team,
+        away_team=away_team,
+        status='IN_PROGRESS',
+        scheduled_date=played_at,
+    )
+    raw_match = build_raw_match('ea-report-supervisor-winner', home_club.ea_club_id, away_club.ea_club_id, played_at=played_at)
+    service = MatchReportEAService(
+        client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}),
+        validator=NoOpValidator(),
+        sync_service=MatchSyncService(client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}), validator=NoOpValidator()),
+    )
+
+    preview = service.fetch_ea_report(match, winner_owner)
+    ea_match = EAMatch.objects.get(pk=preview['ea_match_id'])
+    ea_match.validation_notes = [{'severity': 'critical', 'detail': 'Jogador irregular', 'type': 'player_not_in_roster'}]
+    ea_match.save(update_fields=['validation_notes'])
+
+    updated_match = service.confirm_report(
+        match,
+        ea_match.pk,
+        winner_owner,
+        allow_irregular_confirmation=True,
+        decision_reason='Confirmação do vencedor com acesso de supervisão sem contestação.',
+    )
+
+    updated_match.refresh_from_db()
+    assert updated_match.status == 'FINISHED'
+    assert updated_match.match_result_confirmed is True
+    assert updated_match.confirmed_by_team == home_team

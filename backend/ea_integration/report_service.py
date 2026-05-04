@@ -669,6 +669,13 @@ class MatchReportEAService:
         return any(w['severity'] in ('error', 'critical') for w in warnings)
 
     def _resolve_confirming_team(self, match: Match, user: User, winner_team, confirmed_by_team_id: int | None):
+        participant_team = self._get_participant_team(match, user)
+
+        # Prioridade: se o usuário é participante e dono do time vencedor,
+        # deve confirmar como vencedor mesmo que também tenha perfil supervisor.
+        if participant_team is not None and winner_team is not None and participant_team.pk == winner_team.pk:
+            return participant_team
+
         if user.has_supervisor_access:
             if winner_team is None:
                 raise MatchReportEAError('Partidas empatadas não podem ser confirmadas por este fluxo.')
@@ -676,13 +683,15 @@ class MatchReportEAService:
                 raise MatchReportEAError('Supervisores devem informar o time vencedor ao confirmar o resultado com irregularidade.')
             return winner_team
 
-        participant_team = self._get_participant_team(match, user)
         self._validate_result_confirmation_permission(match, user, winner_team, participant_team)
         return participant_team
 
     def _validate_result_confirmation_permission(self, match: Match, user: User, winner_team, participant_team=None) -> None:
         if winner_team is None:
             raise MatchReportEAError('Partidas empatadas não podem ser confirmadas por este fluxo.')
+
+        if participant_team is not None and participant_team.pk == winner_team.pk:
+            return
 
         if user.has_supervisor_access:
             raise MatchReportEAError(
@@ -695,7 +704,7 @@ class MatchReportEAService:
             raise MatchReportEAError('Apenas o dono do time vencedor pode confirmar o resultado desta partida.')
 
     def _can_user_confirm_result(self, user: User, participant_team, winner_team) -> bool:
-        if winner_team is None or user.has_supervisor_access:
+        if winner_team is None:
             return False
         return participant_team is not None and participant_team.pk == winner_team.pk
 
