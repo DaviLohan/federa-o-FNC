@@ -693,8 +693,12 @@ class MatchReportEAService:
         if user.has_supervisor_access:
             if winner_team is None:
                 raise MatchReportEAError('Partidas empatadas não podem ser confirmadas por este fluxo.')
+            # Compatibilidade: se não vier explicitamente no payload,
+            # assumir o vencedor calculado para não bloquear a confirmação.
+            if confirmed_by_team_id is None:
+                return winner_team
             if confirmed_by_team_id != winner_team.pk:
-                raise MatchReportEAError('Supervisores devem informar o time vencedor ao confirmar o resultado com irregularidade.')
+                raise MatchReportEAError('O time informado para confirmação com irregularidade precisa ser o vencedor da partida.')
             return winner_team
 
         self._validate_result_confirmation_permission(match, user, winner_team, participant_team)
