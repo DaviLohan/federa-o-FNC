@@ -52,7 +52,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "python -c \"import sys, urllib.request, urllib.error; url='http://127.0.0.1:8000/api/v1/championships/?status=OPEN,IN_PROGRESS';\ntry:\n r=urllib.request.urlopen(url, timeout=5); sys.exit(0 if r.status < 500 else 1)\nexcept urllib.error.HTTPError as exc:\n sys.exit(0 if exc.code < 500 else 1)\nexcept Exception:\n sys.exit(1)\"",
+          "python -c \"import sys, urllib.request, urllib.error; url='http://127.0.0.1:8000/api/v1/championships/?status=OPEN,IN_PROGRESS'; opener=urllib.request.build_opener(type('NoRedirect',(urllib.request.HTTPRedirectHandler,),{'redirect_request':lambda self, req, fp, code, msg, headers, newurl: None})());\ntry:\n r=opener.open(url, timeout=5); sys.exit(0 if r.status < 500 else 1)\nexcept urllib.error.HTTPError as exc:\n sys.exit(0 if exc.code < 500 else 1)\nexcept Exception:\n sys.exit(1)\"",
         ]
       interval: 10s
       timeout: 5s
