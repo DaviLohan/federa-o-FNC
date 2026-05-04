@@ -241,6 +241,11 @@ class EAReportPreviewSerializer(serializers.Serializer):
     can_confirm = serializers.BooleanField()
     has_irregularity = serializers.BooleanField(required=False)
     can_confirm_with_irregularity = serializers.BooleanField(required=False)
+    can_contest = serializers.BooleanField(required=False)
+    winner_team_id = serializers.IntegerField(required=False, allow_null=True)
+    user_team_id = serializers.IntegerField(required=False, allow_null=True)
+    confirmation_block_reason = serializers.CharField(required=False, allow_blank=True)
+    irregularity_message = serializers.CharField(required=False, allow_blank=True)
 
 
 class EAReportConfirmSerializer(serializers.Serializer):

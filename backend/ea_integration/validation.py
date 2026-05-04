@@ -142,9 +142,9 @@ class MatchValidationService:
         if result.is_valid and linked_match:
             self._apply_result_to_match(ea_match, linked_match)
 
-        # ── 8. Se contestado, criar contestação automática + notificar ─
-        if status == 'contested' and linked_match:
-            self._create_auto_contestation(ea_match, linked_match, issues)
+        # ── 8. Irregularidades ficam registradas para decisão explícita do usuário/admin ─
+        # Não geramos contestação automática aqui para não obrigar o time vencedor
+        # a entrar em fluxo administrativo quando ele concorda com o resultado importado.
 
         return result
 

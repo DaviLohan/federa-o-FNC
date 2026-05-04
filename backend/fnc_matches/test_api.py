@@ -7,6 +7,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework import status
+from ea_integration.models import EAClub, EAMatch
 from fnc_matches.models import Match, MatchReport, Contestation
 from fnc_championships.models import Standings
 from conftest import (
@@ -544,6 +545,137 @@ class TestContestationAPI:
         )
 
         assert response.status_code == status.HTTP_200_OK
+
+    def test_losing_owner_cannot_confirm_report(self):
+        winner = UserFactory(user_type='TEAM_OWNER')
+        loser = UserFactory(user_type='TEAM_OWNER')
+        winner_team = TeamFactory(owner=winner)
+        loser_team = TeamFactory(owner=loser)
+        match = MatchFactory(
+            championship=self.championship,
+            home_team=winner_team,
+            away_team=loser_team,
+            status='IN_PROGRESS'
+        )
+        home_club = EAClub.objects.create(team=winner_team, ea_club_id='9001', platform='common-gen5', name='Winner Club')
+        away_club = EAClub.objects.create(team=loser_team, ea_club_id='9002', platform='common-gen5', name='Loser Club')
+        ea_match = EAMatch.objects.create(
+            ea_match_id='api-winner-only',
+            match_type='leagueMatch',
+            played_at=match.scheduled_date,
+            home_club=home_club,
+            home_club_name=home_club.name,
+            home_score=2,
+            away_club=away_club,
+            away_club_name=away_club.name,
+            away_score=1,
+            linked_match=match,
+            validation_status=EAMatch.ValidationStatus.VALIDATED,
+            validation_notes=[],
+            raw_data={},
+        )
+
+        self.client.force_authenticate(user=loser)
+        response = self.client.post(
+            f'/api/v1/matches/{match.id}/confirm-report/',
+            {'ea_match_id': ea_match.pk},
+            format='json',
+            secure=True,
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'time vencedor' in response.data['error']
+
+    def test_winner_can_confirm_irregular_result_without_creating_contestation(self):
+        winner = UserFactory(user_type='TEAM_OWNER')
+        loser = UserFactory(user_type='TEAM_OWNER')
+        winner_team = TeamFactory(owner=winner)
+        loser_team = TeamFactory(owner=loser)
+        match = MatchFactory(
+            championship=self.championship,
+            home_team=winner_team,
+            away_team=loser_team,
+            status='IN_PROGRESS'
+        )
+        home_club = EAClub.objects.create(team=winner_team, ea_club_id='9101', platform='common-gen5', name='Irregular Winner Club')
+        away_club = EAClub.objects.create(team=loser_team, ea_club_id='9102', platform='common-gen5', name='Irregular Loser Club')
+        ea_match = EAMatch.objects.create(
+            ea_match_id='api-irregular-accepted',
+            match_type='leagueMatch',
+            played_at=match.scheduled_date,
+            home_club=home_club,
+            home_club_name=home_club.name,
+            home_score=2,
+            away_club=away_club,
+            away_club_name=away_club.name,
+            away_score=1,
+            linked_match=match,
+            validation_status=EAMatch.ValidationStatus.CONTESTED,
+            validation_notes=[{'severity': 'error', 'detail': 'Jogador irregular', 'type': 'player_not_in_roster'}],
+            raw_data={},
+        )
+
+        self.client.force_authenticate(user=winner)
+        response = self.client.post(
+            f'/api/v1/matches/{match.id}/confirm-irregular-result/',
+            {
+                'ea_match_id': ea_match.pk,
+                'reason': 'Aceitamos manter o resultado apesar da irregularidade encontrada.',
+            },
+            format='json',
+            secure=True,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        match.refresh_from_db()
+        assert match.status == Match.Status.FINISHED
+        assert match.irregularity_flag is True
+        assert match.match_result_confirmed is True
+        assert match.confirmed_by_team == winner_team
+        assert match.contestations.count() == 0
+
+    def test_losing_owner_cannot_confirm_irregular_result(self):
+        winner = UserFactory(user_type='TEAM_OWNER')
+        loser = UserFactory(user_type='TEAM_OWNER')
+        winner_team = TeamFactory(owner=winner)
+        loser_team = TeamFactory(owner=loser)
+        match = MatchFactory(
+            championship=self.championship,
+            home_team=winner_team,
+            away_team=loser_team,
+            status='IN_PROGRESS'
+        )
+        home_club = EAClub.objects.create(team=winner_team, ea_club_id='9201', platform='common-gen5', name='Winner Club 2')
+        away_club = EAClub.objects.create(team=loser_team, ea_club_id='9202', platform='common-gen5', name='Loser Club 2')
+        ea_match = EAMatch.objects.create(
+            ea_match_id='api-irregular-blocked',
+            match_type='leagueMatch',
+            played_at=match.scheduled_date,
+            home_club=home_club,
+            home_club_name=home_club.name,
+            home_score=2,
+            away_club=away_club,
+            away_club_name=away_club.name,
+            away_score=1,
+            linked_match=match,
+            validation_status=EAMatch.ValidationStatus.CONTESTED,
+            validation_notes=[{'severity': 'critical', 'detail': 'Jogador irregular', 'type': 'player_not_in_roster'}],
+            raw_data={},
+        )
+
+        self.client.force_authenticate(user=loser)
+        response = self.client.post(
+            f'/api/v1/matches/{match.id}/confirm-irregular-result/',
+            {
+                'ea_match_id': ea_match.pk,
+                'reason': 'Não deveria passar para o time perdedor.',
+            },
+            format='json',
+            secure=True,
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'time vencedor' in response.data['error']
 
 
 @pytest.mark.django_db

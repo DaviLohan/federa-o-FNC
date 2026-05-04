@@ -238,8 +238,8 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
       description: 'Informe o motivo da contestacao',
     },
     irregularConfirm: {
-      title: 'Manter Resultado com Irregularidade',
-      description: 'Registre a justificativa para manter o resultado mesmo com irregularidade detectada',
+      title: 'Confirmar Resultado com Irregularidades',
+      description: 'Registre a justificativa para manter o resultado importado mesmo com avisos detectados',
     },
   };
 
@@ -248,24 +248,19 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
   let stickyFooter: React.ReactNode | undefined;
 
   if (step === 'preview' && preview) {
+    const showConfirmBlockedMessage = !preview.can_confirm && !!preview.confirmation_block_reason;
+    const showIrregularConfirmAction = !!preview.can_confirm_with_irregularity;
+    const showContestAction = preview.can_contest !== false;
+
     stickyFooter = (
       <div className="space-y-2">
-        {!preview.can_confirm && (
-          <p className="text-xs text-error text-center flex items-center justify-center gap-1.5">
+        {showConfirmBlockedMessage && (
+          <p className="text-xs text-warning text-center flex items-center justify-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-            Confirmacao bloqueada — verifique os avisos acima
+            {preview.confirmation_block_reason}
           </p>
         )}
-        <div className="flex gap-3">
-          <Button
-            variant="ghost"
-            onClick={() => setStep('contest')}
-            className="flex-1 border-warning/30 text-warning hover:bg-warning/10"
-            disabled={confirmMutation.isPending}
-          >
-            <AlertTriangle className="w-4 h-4 mr-2" />
-            Contestar
-          </Button>
+        <div className="flex flex-col gap-3 sm:flex-row">
           <Button
             variant="primary"
             onClick={() => confirmMutation.mutate()}
@@ -276,8 +271,19 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
             <CheckCircle2 className="w-4 h-4 mr-2" />
             Confirmar Resultado
           </Button>
+          {showContestAction && (
+            <Button
+              variant="ghost"
+              onClick={() => setStep('contest')}
+              className="flex-1 border-warning/30 text-warning hover:bg-warning/10"
+              disabled={confirmMutation.isPending}
+            >
+              <AlertTriangle className="w-4 h-4 mr-2" />
+              Contestar Resultado
+            </Button>
+          )}
         </div>
-        {!preview.can_confirm && preview.can_confirm_with_irregularity && (
+        {showIrregularConfirmAction && (
           <Button
             variant="primary"
             onClick={() => setStep('irregularConfirm')}
@@ -285,7 +291,7 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
             disabled={confirmMutation.isPending}
           >
             <Shield className="w-4 h-4 mr-2" />
-            Confirmar resultado mesmo com irregularidade
+            Confirmar resultado mesmo com irregularidades
           </Button>
         )}
       </div>
@@ -309,7 +315,7 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
           loading={contestMutation.isPending}
         >
           <Send className="w-4 h-4 mr-2" />
-          Enviar Contestacao
+          Enviar Contestação
         </Button>
       </div>
     );
@@ -332,7 +338,7 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
           loading={confirmIrregularMutation.isPending}
         >
           <UserCheck className="w-4 h-4 mr-2" />
-          Confirmar com Irregularidade
+          Confirmar com Irregularidades
         </Button>
       </div>
     );
@@ -613,13 +619,30 @@ function PreviewContent({
           </div>
         </div>
 
-        <div className="pt-2 border-t border-stroke/50 flex items-center justify-center gap-3 flex-wrap">
-          <p className="text-xs text-muted2">
-            {formatDateTime(preview.played_at)}
-          </p>
-          <Badge variant="info">{preview.ea_match_id_external}</Badge>
-        </div>
+      <div className="pt-2 border-t border-stroke/50 flex items-center justify-center gap-3 flex-wrap">
+        <p className="text-xs text-muted2">
+          {formatDateTime(preview.played_at)}
+        </p>
+        <Badge variant="info">{preview.ea_match_id_external}</Badge>
       </div>
+      </div>
+
+      {(preview.irregularity_message || preview.confirmation_block_reason) && (
+        <div className="rounded-xl border border-warning/20 bg-warning/10 p-4">
+          <div className="flex gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+            <div className="space-y-1 text-sm text-muted">
+              {preview.irregularity_message && (
+                <p className="text-text font-semibold">{preview.irregularity_message}</p>
+              )}
+              {preview.confirmation_block_reason &&
+                preview.confirmation_block_reason !== preview.irregularity_message && (
+                <p>{preview.confirmation_block_reason}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Highlights */}
       <HighlightsSection preview={preview} />

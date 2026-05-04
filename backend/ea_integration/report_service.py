@@ -110,7 +110,7 @@ class MatchReportEAService:
                 'EAMatch já existente para Match PK=%d: EA match %s',
                 match.pk, existing_ea_match.ea_match_id,
             )
-            return self._build_preview(existing_ea_match, match)
+            return self._build_preview(existing_ea_match, match, user)
 
         # ── Buscar partidas recentes na EA API ──────────────────────────
         ea_match = self._fetch_and_find_ea_match(
@@ -140,7 +140,7 @@ class MatchReportEAService:
                 ea_match.ea_match_id, e, exc_info=True,
             )
 
-        return self._build_preview(ea_match, match)
+        return self._build_preview(ea_match, match, user)
 
     # ═══════════════════════════════════════════════════════════════════════
     # 2. CONFIRM REPORT
@@ -179,6 +179,22 @@ class MatchReportEAService:
 
         ea_match = self._get_ea_match(ea_match_id, match)
         warnings = self._build_warnings(ea_match)
+        side_map = self._get_side_mapping(ea_match, match)
+        winner_team = self._get_winner_team(match, side_map)
+
+        confirming_team = None
+        if allow_irregular_confirmation:
+            if not decision_reason or not decision_reason.strip():
+                raise MatchReportEAError('Informe a justificativa para confirmar um resultado com irregularidade.')
+            confirming_team = self._resolve_confirming_team(
+                match,
+                user,
+                winner_team,
+                confirmed_by_team_id,
+            )
+        else:
+            self._validate_result_confirmation_permission(match, user, winner_team)
+
         has_critical_errors = self._has_critical_warnings(warnings)
 
         if has_critical_errors and not allow_irregular_confirmation:
@@ -187,14 +203,7 @@ class MatchReportEAService:
                 'Use a confirmação excepcional para manter o resultado com justificativa.'
             )
 
-        confirming_team = None
-        if allow_irregular_confirmation:
-            if not decision_reason or not decision_reason.strip():
-                raise MatchReportEAError('Informe a justificativa para confirmar um resultado com irregularidade.')
-            confirming_team = self._resolve_confirming_team(match, user, confirmed_by_team_id)
-
         # ── Determinar correspondência de lados ─────────────────────────
-        side_map = self._get_side_mapping(ea_match, match)
 
         # ── Atualizar Match com placar ──────────────────────────────────
         match.home_score = side_map['home_score']
@@ -222,10 +231,11 @@ class MatchReportEAService:
         MatchReport.objects.create(
             match=match,
             reported_by=user,
-            notes=(
-                f'Resultado importado automaticamente via EA API. '
-                f'EA Match ID: {ea_match.ea_match_id}. '
-                f'Partida EA jogada em {timezone.localtime(ea_match.played_at).strftime("%d/%m/%Y %H:%M")}.'
+            notes=self._build_report_notes(
+                ea_match=ea_match,
+                warnings=warnings,
+                allow_irregular_confirmation=allow_irregular_confirmation,
+                decision_reason=decision_reason.strip(),
             ),
             status=MatchReport.Status.APPROVED,
             approved_by=user,
@@ -572,7 +582,7 @@ class MatchReportEAService:
 
         return None
 
-    def _build_preview(self, ea_match: EAMatch, match: Match) -> dict:
+    def _build_preview(self, ea_match: EAMatch, match: Match, user: User) -> dict:
         """
         Monta o dict de preview para o frontend a partir de um EAMatch.
         Inclui match de gamertags com PlayerProfiles internos.
@@ -599,6 +609,25 @@ class MatchReportEAService:
             w['severity'] in ('error', 'critical') for w in warnings
         )
 
+        winner_team = self._get_winner_team(match, side_map)
+        participant_team = self._get_participant_team(match, user)
+        can_confirm_normally = self._can_user_confirm_result(user, participant_team, winner_team)
+        can_confirm_with_irregularity = has_critical_errors and can_confirm_normally
+        can_contest = participant_team is not None or user.has_supervisor_access
+
+        if winner_team is None:
+            confirmation_block_reason = 'Esta partida terminou empatada. O fluxo de confirmação por vencedor não está disponível.'
+        elif not can_confirm_normally:
+            confirmation_block_reason = 'Apenas o dono do time vencedor pode confirmar o resultado desta partida.'
+        elif has_critical_errors:
+            confirmation_block_reason = (
+                'Foram encontradas irregularidades no relatório. '
+                'Você ainda pode confirmar o resultado caso concorde com os dados importados, '
+                'ou contestar para análise administrativa.'
+            )
+        else:
+            confirmation_block_reason = ''
+
         return {
             'ea_match_id': ea_match.pk,
             'ea_match_id_external': ea_match.ea_match_id,
@@ -619,22 +648,98 @@ class MatchReportEAService:
                 'players': away_players,
             },
             'warnings': warnings,
-            'can_confirm': not has_critical_errors,
+            'can_confirm': can_confirm_normally and not has_critical_errors,
             'has_irregularity': has_critical_errors,
-            'can_confirm_with_irregularity': has_critical_errors,
+            'can_confirm_with_irregularity': can_confirm_with_irregularity,
+            'can_contest': can_contest,
+            'winner_team_id': winner_team.pk if winner_team else None,
+            'user_team_id': participant_team.pk if participant_team else None,
+            'confirmation_block_reason': confirmation_block_reason,
+            'irregularity_message': (
+                'Foram encontradas irregularidades no relatório. '
+                'Você ainda pode confirmar o resultado caso concorde com os dados importados, '
+                'ou contestar para análise administrativa.'
+                if has_critical_errors
+                else ''
+            ),
         }
 
     @staticmethod
     def _has_critical_warnings(warnings: list[dict]) -> bool:
         return any(w['severity'] in ('error', 'critical') for w in warnings)
 
-    def _resolve_confirming_team(self, match: Match, user: User, confirmed_by_team_id: int | None):
+    def _resolve_confirming_team(self, match: Match, user: User, winner_team, confirmed_by_team_id: int | None):
         if user.has_supervisor_access:
-            if confirmed_by_team_id in [match.home_team_id, match.away_team_id]:
-                return match.home_team if confirmed_by_team_id == match.home_team_id else match.away_team
-            raise MatchReportEAError('Supervisores devem informar qual time confirmou o resultado com irregularidade.')
+            if winner_team is None:
+                raise MatchReportEAError('Partidas empatadas não podem ser confirmadas por este fluxo.')
+            if confirmed_by_team_id != winner_team.pk:
+                raise MatchReportEAError('Supervisores devem informar o time vencedor ao confirmar o resultado com irregularidade.')
+            return winner_team
 
-        return self._get_user_team(match, user)
+        participant_team = self._get_participant_team(match, user)
+        self._validate_result_confirmation_permission(match, user, winner_team, participant_team)
+        return participant_team
+
+    def _validate_result_confirmation_permission(self, match: Match, user: User, winner_team, participant_team=None) -> None:
+        if winner_team is None:
+            raise MatchReportEAError('Partidas empatadas não podem ser confirmadas por este fluxo.')
+
+        if user.has_supervisor_access:
+            raise MatchReportEAError(
+                'Este fluxo de confirmação é exclusivo do dono do time vencedor. '
+                'Use o fluxo administrativo quando necessário.'
+            )
+
+        participant_team = participant_team or self._get_participant_team(match, user)
+        if participant_team is None or participant_team.pk != winner_team.pk:
+            raise MatchReportEAError('Apenas o dono do time vencedor pode confirmar o resultado desta partida.')
+
+    def _can_user_confirm_result(self, user: User, participant_team, winner_team) -> bool:
+        if winner_team is None or user.has_supervisor_access:
+            return False
+        return participant_team is not None and participant_team.pk == winner_team.pk
+
+    def _get_winner_team(self, match: Match, side_map: dict):
+        if side_map['home_score'] > side_map['away_score']:
+            return match.home_team
+        if side_map['away_score'] > side_map['home_score']:
+            return match.away_team
+        return None
+
+    def _get_participant_team(self, match: Match, user: User):
+        if match.home_team.owner_id == user.pk:
+            return match.home_team
+        if match.away_team.owner_id == user.pk:
+            return match.away_team
+        return None
+
+    def _build_report_notes(
+        self,
+        *,
+        ea_match: EAMatch,
+        warnings: list[dict],
+        allow_irregular_confirmation: bool,
+        decision_reason: str,
+    ) -> str:
+        lines = [
+            'Resultado importado automaticamente via EA API.',
+            f'EA Match ID: {ea_match.ea_match_id}.',
+            f'Partida EA jogada em {timezone.localtime(ea_match.played_at).strftime("%d/%m/%Y %H:%M")}.',
+        ]
+
+        if warnings:
+            lines.append('Avisos/irregularidades detectados:')
+            for warning in warnings:
+                lines.append(f'- [{warning.get("severity", "info").upper()}] {warning.get("message", "")}')
+
+        if allow_irregular_confirmation:
+            lines.append('Resultado confirmado mesmo com irregularidades detectadas.')
+            lines.append(f'Justificativa: {decision_reason}')
+
+        if len(lines) == 3:
+            return ' '.join(lines)
+
+        return ' '.join(lines[:3]) + '\n\n' + '\n'.join(lines[3:])
 
     def _log_irregular_result_confirmation(self, match: Match, user: User, reason: str) -> None:
         contestation = match.contestations.filter(

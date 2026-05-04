@@ -53,7 +53,9 @@ export function ReportStatusBar({
   // Only render if there are actions or a meaningful status to show
   if (!hasReportActions && !hasContestActions && match.status !== 'SCHEDULED') return null;
 
-  const statusInfo = reportStatusConfig[match.status];
+  const statusInfo = match.status === 'FINISHED' && match.irregularity_flag && match.match_result_confirmed
+    ? { icon: AlertTriangle, label: 'Resultado confirmado com irregularidades aceitas', className: 'text-warning' }
+    : reportStatusConfig[match.status];
   const StatusIcon = statusInfo?.icon || Clock;
 
   return (

@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 from conftest import MatchFactory, TeamFactory, UserFactory
 from ea_integration.date_utils import LOCAL_TIMEZONE
 from ea_integration.models import EAClub, EAMatch
-from ea_integration.report_service import MatchReportEAService
+from ea_integration.report_service import MatchReportEAError, MatchReportEAService
 from ea_integration.services import MatchSyncService
 from fnc_matches.models import Goal, MatchReport
 
@@ -258,3 +258,55 @@ def test_confirm_irregular_result_preserves_match_data_and_flags_confirmation():
     assert updated_match.decision_reason == 'Adversário aceitou manter o resultado apesar da irregularidade.'
     assert Goal.objects.filter(match=updated_match).count() >= 0
     assert MatchReport.objects.filter(match=updated_match).exists()
+
+
+@pytest.mark.django_db
+def test_preview_with_irregularities_does_not_create_auto_contestation():
+    home_team = TeamFactory()
+    away_team = TeamFactory()
+    home_club = EAClub.objects.create(team=home_team, ea_club_id='7001', platform='common-gen5', name='Preview Home')
+    away_club = EAClub.objects.create(team=away_team, ea_club_id='7002', platform='common-gen5', name='Preview Away')
+    played_at = datetime(2026, 4, 29, 2, 30, tzinfo=dt_timezone.utc)
+    match = MatchFactory(
+        home_team=home_team,
+        away_team=away_team,
+        status='IN_PROGRESS',
+        scheduled_date=played_at,
+    )
+    raw_match = build_raw_match('ea-report-no-auto-contest', home_club.ea_club_id, away_club.ea_club_id, played_at=played_at)
+    service = MatchReportEAService(client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}))
+
+    preview = service.fetch_ea_report(match, home_team.owner)
+
+    match.refresh_from_db()
+    assert preview['has_irregularity'] is True
+    assert preview['can_confirm'] is False
+    assert preview['can_confirm_with_irregularity'] is True
+    assert match.contestations.count() == 0
+    assert match.status == 'IN_PROGRESS'
+
+
+@pytest.mark.django_db
+def test_only_winner_can_confirm_result():
+    home_team = TeamFactory()
+    away_team = TeamFactory()
+    home_club = EAClub.objects.create(team=home_team, ea_club_id='8001', platform='common-gen5', name='Winner Home')
+    away_club = EAClub.objects.create(team=away_team, ea_club_id='8002', platform='common-gen5', name='Loser Away')
+    played_at = datetime(2026, 4, 29, 2, 30, tzinfo=dt_timezone.utc)
+    match = MatchFactory(
+        home_team=home_team,
+        away_team=away_team,
+        status='IN_PROGRESS',
+        scheduled_date=played_at,
+    )
+    raw_match = build_raw_match('ea-report-winner-only', home_club.ea_club_id, away_club.ea_club_id, played_at=played_at)
+    service = MatchReportEAService(
+        client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}),
+        validator=NoOpValidator(),
+        sync_service=MatchSyncService(client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}), validator=NoOpValidator()),
+    )
+
+    preview = service.fetch_ea_report(match, home_team.owner)
+
+    with pytest.raises(MatchReportEAError, match='Apenas o dono do time vencedor'):
+        service.confirm_report(match, preview['ea_match_id'], away_team.owner)

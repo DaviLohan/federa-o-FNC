@@ -782,6 +782,11 @@ export interface EAReportPreview {
   can_confirm: boolean;
   has_irregularity?: boolean;
   can_confirm_with_irregularity?: boolean;
+  can_contest?: boolean;
+  winner_team_id?: number | null;
+  user_team_id?: number | null;
+  confirmation_block_reason?: string;
+  irregularity_message?: string;
 }
 
 export interface EAReportIrregularConfirmRequest {
