@@ -677,6 +677,54 @@ class TestContestationAPI:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'time vencedor' in response.data['error']
 
+    def test_supervisor_can_confirm_irregular_result_with_winner_team(self):
+        winner = UserFactory(user_type='TEAM_OWNER')
+        loser = UserFactory(user_type='TEAM_OWNER')
+        supervisor = UserFactory(user_type='SUPERVISOR')
+        winner_team = TeamFactory(owner=winner)
+        loser_team = TeamFactory(owner=loser)
+        match = MatchFactory(
+            championship=self.championship,
+            home_team=winner_team,
+            away_team=loser_team,
+            status='IN_PROGRESS'
+        )
+        home_club = EAClub.objects.create(team=winner_team, ea_club_id='9301', platform='common-gen5', name='Winner Club 3')
+        away_club = EAClub.objects.create(team=loser_team, ea_club_id='9302', platform='common-gen5', name='Loser Club 3')
+        ea_match = EAMatch.objects.create(
+            ea_match_id='api-irregular-supervisor',
+            match_type='leagueMatch',
+            played_at=match.scheduled_date,
+            home_club=home_club,
+            home_club_name=home_club.name,
+            home_score=2,
+            away_club=away_club,
+            away_club_name=away_club.name,
+            away_score=1,
+            linked_match=match,
+            validation_status=EAMatch.ValidationStatus.CONTESTED,
+            validation_notes=[{'severity': 'critical', 'detail': 'Jogador irregular', 'type': 'player_not_in_roster'}],
+            raw_data={},
+        )
+
+        self.client.force_authenticate(user=supervisor)
+        response = self.client.post(
+            f'/api/v1/matches/{match.id}/confirm-irregular-result/',
+            {
+                'ea_match_id': ea_match.pk,
+                'reason': 'Confirmação administrativa com manutenção do resultado.',
+                'confirmed_by_team_id': winner_team.id,
+            },
+            format='json',
+            secure=True,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        match.refresh_from_db()
+        assert match.status == Match.Status.FINISHED
+        assert match.match_result_confirmed is True
+        assert match.confirmed_by_team == winner_team
+
 
 @pytest.mark.django_db
 class TestMatchWorkflowIntegration:

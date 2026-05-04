@@ -64,6 +64,7 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
   const [contestErrors, setContestErrors] = useState<Record<string, string>>({});
   const [irregularReason, setIrregularReason] = useState('');
   const [irregularError, setIrregularError] = useState('');
+  const [irregularConfirmedTeamId, setIrregularConfirmedTeamId] = useState<number | null>(null);
 
   const loadingStartRef = useRef<number>(0);
   const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -144,6 +145,7 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
       return matchesAPI.confirmIrregularResult(match.id, {
         ea_match_id: preview.ea_match_id,
         reason: irregularReason,
+        confirmed_by_team_id: irregularConfirmedTeamId ?? undefined,
       });
     },
     onSuccess: () => {
@@ -170,6 +172,7 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
     setContestErrors({});
     setIrregularReason('');
     setIrregularError('');
+    setIrregularConfirmedTeamId(null);
     loadingStartRef.current = Date.now();
     if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
     fetchMutation.mutate();
@@ -185,6 +188,7 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
     setContestErrors({});
     setIrregularReason('');
     setIrregularError('');
+    setIrregularConfirmedTeamId(null);
     onClose();
   };
 
@@ -202,6 +206,11 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
   };
 
   const handleIrregularConfirmSubmit = () => {
+    if (preview?.requires_confirmed_by_team_selection && !irregularConfirmedTeamId) {
+      setIrregularError('Selecione o time vencedor para registrar a confirmação com irregularidade.');
+      return;
+    }
+
     if (!irregularReason.trim()) {
       setIrregularError('Informe a justificativa para manter o resultado com irregularidade');
       return;
@@ -217,6 +226,16 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
+
+  useEffect(() => {
+    if (
+      preview?.requires_confirmed_by_team_selection
+      && irregularConfirmedTeamId === null
+      && preview.winner_team_id
+    ) {
+      setIrregularConfirmedTeamId(preview.winner_team_id);
+    }
+  }, [preview, irregularConfirmedTeamId]);
 
   // ── Dynamic modal config per step ───────────────────────────────────
 
@@ -387,10 +406,17 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
       )}
       {step === 'irregularConfirm' && preview && (
         <IrregularConfirmContent
+          preview={preview}
+          match={match}
           reason={irregularReason}
+          confirmedTeamId={irregularConfirmedTeamId}
           error={irregularError}
-          onChange={(value) => {
+          onChangeReason={(value) => {
             setIrregularReason(value);
+            if (irregularError) setIrregularError('');
+          }}
+          onChangeConfirmedTeam={(value) => {
+            setIrregularConfirmedTeamId(value);
             if (irregularError) setIrregularError('');
           }}
         />
@@ -1107,14 +1133,27 @@ function ContestContent({
 }
 
 function IrregularConfirmContent({
+  preview,
+  match,
   reason,
+  confirmedTeamId,
   error,
-  onChange,
+  onChangeReason,
+  onChangeConfirmedTeam,
 }: {
+  preview: EAReportPreview;
+  match: Match;
   reason: string;
+  confirmedTeamId: number | null;
   error: string;
-  onChange: (value: string) => void;
+  onChangeReason: (value: string) => void;
+  onChangeConfirmedTeam: (value: number | null) => void;
 }) {
+  const winningTeamOptions = [
+    { value: match.home_team.id, label: match.home_team.name },
+    { value: match.away_team.id, label: match.away_team.name },
+  ];
+
   return (
     <div className="space-y-5">
       <div className="bg-warning/10 border border-warning/20 rounded-xl p-4">
@@ -1133,13 +1172,32 @@ function IrregularConfirmContent({
         </div>
       </div>
 
+      {preview.requires_confirmed_by_team_selection && (
+        <div>
+          <Select
+            label="Time vencedor da confirmação *"
+            name="confirmed_by_team_id"
+            value={confirmedTeamId ? String(confirmedTeamId) : ''}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+              const nextValue = e.target.value ? Number(e.target.value) : null;
+              onChangeConfirmedTeam(nextValue);
+            }}
+            options={winningTeamOptions.map((opt) => ({
+              value: String(opt.value),
+              label: opt.label,
+            }))}
+            required
+          />
+        </div>
+      )}
+
       <div>
         <label className="block text-sm font-medium text-text mb-2">
           Justificativa da confirmação <span className="text-error">*</span>
         </label>
         <textarea
           value={reason}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => onChangeReason(e.target.value)}
           rows={5}
           className={`w-full px-4 py-3 bg-panel2 border ${
             error ? 'border-error' : 'border-stroke'

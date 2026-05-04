@@ -785,6 +785,7 @@ export interface EAReportPreview {
   can_contest?: boolean;
   winner_team_id?: number | null;
   user_team_id?: number | null;
+  requires_confirmed_by_team_selection?: boolean;
   confirmation_block_reason?: string;
   irregularity_message?: string;
 }

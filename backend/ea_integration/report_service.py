@@ -612,11 +612,20 @@ class MatchReportEAService:
         winner_team = self._get_winner_team(match, side_map)
         participant_team = self._get_participant_team(match, user)
         can_confirm_normally = self._can_user_confirm_result(user, participant_team, winner_team)
-        can_confirm_with_irregularity = has_critical_errors and can_confirm_normally
+        can_confirm_with_irregularity = has_critical_errors and (
+            can_confirm_normally
+            or (user.has_supervisor_access and winner_team is not None)
+        )
         can_contest = participant_team is not None or user.has_supervisor_access
 
         if winner_team is None:
             confirmation_block_reason = 'Esta partida terminou empatada. O fluxo de confirmação por vencedor não está disponível.'
+        elif has_critical_errors and user.has_supervisor_access:
+            confirmation_block_reason = (
+                'Foram encontradas irregularidades no relatório. '
+                'Você pode confirmar com irregularidades em nome do time vencedor '
+                'ou encaminhar para contestação administrativa.'
+            )
         elif not can_confirm_normally:
             confirmation_block_reason = 'Apenas o dono do time vencedor pode confirmar o resultado desta partida.'
         elif has_critical_errors:
@@ -654,6 +663,11 @@ class MatchReportEAService:
             'can_contest': can_contest,
             'winner_team_id': winner_team.pk if winner_team else None,
             'user_team_id': participant_team.pk if participant_team else None,
+            'requires_confirmed_by_team_selection': bool(
+                has_critical_errors
+                and user.has_supervisor_access
+                and (participant_team is None or winner_team is None or participant_team.pk != winner_team.pk)
+            ),
             'confirmation_block_reason': confirmation_block_reason,
             'irregularity_message': (
                 'Foram encontradas irregularidades no relatório. '

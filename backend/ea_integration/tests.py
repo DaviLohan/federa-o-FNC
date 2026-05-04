@@ -351,3 +351,30 @@ def test_winner_with_supervisor_access_can_confirm_irregular_without_confirmed_t
     assert updated_match.status == 'FINISHED'
     assert updated_match.match_result_confirmed is True
     assert updated_match.confirmed_by_team == home_team
+
+
+@pytest.mark.django_db
+def test_supervisor_preview_allows_irregular_confirmation_with_winner_selection():
+    winner_owner = UserFactory(user_type='TEAM_OWNER')
+    loser_owner = UserFactory(user_type='TEAM_OWNER')
+    supervisor = UserFactory(user_type='SUPERVISOR')
+    home_team = TeamFactory(owner=winner_owner)
+    away_team = TeamFactory(owner=loser_owner)
+    home_club = EAClub.objects.create(team=home_team, ea_club_id='8401', platform='common-gen5', name='Preview Sup Home')
+    away_club = EAClub.objects.create(team=away_team, ea_club_id='8402', platform='common-gen5', name='Preview Sup Away')
+    played_at = datetime(2026, 4, 29, 2, 30, tzinfo=dt_timezone.utc)
+    match = MatchFactory(
+        home_team=home_team,
+        away_team=away_team,
+        status='IN_PROGRESS',
+        scheduled_date=played_at,
+    )
+    raw_match = build_raw_match('ea-report-supervisor-preview', home_club.ea_club_id, away_club.ea_club_id, played_at=played_at)
+    service = MatchReportEAService(client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}))
+
+    preview = service.fetch_ea_report(match, supervisor)
+
+    assert preview['has_irregularity'] is True
+    assert preview['can_confirm'] is False
+    assert preview['can_confirm_with_irregularity'] is True
+    assert preview['requires_confirmed_by_team_selection'] is True
