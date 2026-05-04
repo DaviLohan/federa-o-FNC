@@ -8,6 +8,7 @@ import type { Championship } from '@/types';
 import { useAuthStore } from '@/lib/auth-store';
 import { ChampionshipCard } from '@/components/championships/ChampionshipCard';
 import { Search, Trophy, CalendarRange, PlayCircle, Flag } from 'lucide-react';
+import { Z_INDEX } from '@/lib/ui/z-index';
 
 function getApiErrorMessage(error: any, fallback: string) {
   const data = error?.response?.data;
@@ -422,7 +423,7 @@ function ChampionshipModal({ championship, onClose, onSubmit, isLoading }: Champ
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 overflow-y-auto py-8">
+    <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 overflow-y-auto py-8" style={{ zIndex: Z_INDEX.modal }}>
       <Card className="max-w-3xl w-full my-8">
         <div className="flex justify-between items-start mb-6">
           <div>
@@ -794,7 +795,7 @@ function EnrollmentModal({ championship, onClose, onSubmit, isLoading }: Enrollm
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+    <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" style={{ zIndex: Z_INDEX.modal }}>
       <Card className="max-w-lg w-full">
         <div className="flex justify-between items-start mb-6">
           <div>

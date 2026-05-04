@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import React, { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Z_INDEX } from '@/lib/ui/z-index';
 
 export interface NavItem {
   label: string;
@@ -91,7 +92,7 @@ export function Navbar() {
 
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 z-50 h-16 border-b border-border bg-surface1/95 backdrop-blur-md">
+      <nav className="fixed top-0 left-0 right-0 h-16 border-b border-border bg-surface1/95 backdrop-blur-md" style={{ zIndex: Z_INDEX.navbar }}>
         <div className="mx-auto flex h-full max-w-[1600px] items-center justify-between px-4 lg:px-6">
 
           {/* LEFT: Hamburger (mobile) + Logo */}
@@ -204,7 +205,7 @@ export function Navbar() {
 
               {/* Dropdown */}
               {userMenuOpen && (
-                <div className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-xl border border-border bg-surface1 shadow-2xl shadow-black/30 animate-reveal">
+                <div className="absolute right-0 top-full mt-2 w-56 overflow-hidden rounded-xl border border-border bg-surface1 shadow-2xl shadow-black/30 animate-reveal" style={{ zIndex: Z_INDEX.dropdown }}>
                   {/* User info header */}
                   <div className="border-b border-border px-4 py-3">
                     <p className="text-sm font-semibold text-text">{user.full_name}</p>

@@ -233,6 +233,21 @@ a {
   animation: slide-in-bottom 0.3s ease-out;
 }
 
+@keyframes slide-out-bottom {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.animate-slide-out-bottom {
+  animation: slide-out-bottom 0.25s ease-in both;
+}
+
 @keyframes slide-in-right {
   from {
     transform: translateX(100%);

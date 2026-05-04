@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Search, X, Loader2, Users, Trophy, Calendar, User } from 'lucide-react';
 import { useGlobalSearch } from '@/hooks/useGlobalSearch';
 import Link from 'next/link';
+import { Z_INDEX } from '@/lib/ui/z-index';
 
 export function GlobalSearch() {
   const [isOpen, setIsOpen] = useState(false);
@@ -69,7 +70,7 @@ export function GlobalSearch() {
 
       {/* Search Modal */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-12 sm:pt-20 backdrop-blur-sm">
+        <div className="fixed inset-0 flex items-start justify-center bg-black/50 p-4 pt-12 sm:pt-20 backdrop-blur-sm" style={{ zIndex: Z_INDEX.modal }}>
           <div
             ref={containerRef}
             className="w-full max-w-2xl overflow-hidden rounded-xl border border-border bg-surface1 shadow-2xl"

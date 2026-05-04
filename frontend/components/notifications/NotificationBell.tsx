@@ -6,6 +6,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { NotificationItem } from '@/components/notifications/NotificationItem';
 import { NotificationEmptyState } from '@/components/notifications/NotificationEmptyState';
 import Link from 'next/link';
+import { Z_INDEX } from '@/lib/ui/z-index';
 
 const MAX_DROPDOWN_ITEMS = 8;
 
@@ -58,7 +59,7 @@ export function NotificationBell() {
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-[400px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-border bg-surface1 shadow-2xl shadow-black/30 animate-reveal">
+        <div className="absolute right-0 top-full mt-2 w-[400px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-border bg-surface1 shadow-2xl shadow-black/30 animate-reveal" style={{ zIndex: Z_INDEX.dropdown }}>
           {/* Header */}
           <div className="border-b border-border bg-surface2/50 px-4 py-3">
             <div className="flex items-center justify-between">

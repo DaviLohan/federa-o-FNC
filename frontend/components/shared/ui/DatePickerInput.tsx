@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatDateShort, formatMonthYear } from '@/lib/utils/date';
+import { Z_INDEX } from '@/lib/ui/z-index';
 
 interface DatePickerInputProps {
   label: string;
@@ -256,7 +257,7 @@ export function DatePickerInput({ label, value, onChange, required = false, min,
       <input type="hidden" value={value} required={required} />
 
       {isMounted && isOpen && createPortal(
-        <div className="fixed inset-0 z-[9999]">
+        <div className="fixed inset-0" style={{ zIndex: Z_INDEX.popover }}>
           <button
             type="button"
             aria-label="Fechar calendario"

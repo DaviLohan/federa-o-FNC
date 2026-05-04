@@ -1,8 +1,10 @@
 'use client';
 
+import { createPortal } from 'react-dom';
 import { useReducedMotion, type Variants } from 'framer-motion';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X, Shield, ScrollText } from 'lucide-react';
+import { Z_INDEX } from '@/lib/ui/z-index';
 
 interface TermsModalProps {
   isOpen: boolean;
@@ -81,7 +83,9 @@ export function TermsModal({ isOpen, onClose }: TermsModalProps) {
         exit:    { opacity: 0, scale: 0.96, y: 16, transition: { duration: 0.2 } },
       };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <motion.div
@@ -90,7 +94,8 @@ export function TermsModal({ isOpen, onClose }: TermsModalProps) {
           initial="hidden"
           animate="visible"
           exit="exit"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md px-4 py-8"
+          className="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md px-4 py-8"
+          style={{ zIndex: Z_INDEX.modal }}
           onClick={onClose}
         >
           <motion.div
@@ -233,6 +238,7 @@ export function TermsModal({ isOpen, onClose }: TermsModalProps) {
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

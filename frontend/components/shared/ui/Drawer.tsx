@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { Z_INDEX } from '@/lib/ui/z-index';
 
 interface DrawerProps {
   isOpen: boolean;
@@ -49,13 +50,15 @@ export function Drawer({
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 animate-reveal"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-reveal"
+        style={{ zIndex: Z_INDEX.overlay }}
         onClick={onClose}
       />
 
       {/* Drawer Panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-full ${widthClasses[width]} bg-surface1 shadow-2xl shadow-black/50 z-50 overflow-y-auto animate-slide-in-right ${className}`}
+        className={`fixed top-0 right-0 h-full w-full ${widthClasses[width]} bg-surface1 shadow-2xl shadow-black/50 overflow-y-auto animate-slide-in-right ${className}`}
+        style={{ zIndex: Z_INDEX.modal }}
       >
         {/* Gradient Top Border */}
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-gold via-gold to-gold2 opacity-70" />

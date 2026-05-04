@@ -15,6 +15,7 @@ import { InvitePlayerTab } from '@/components/teams/InvitePlayerTab';
 import { TeamMatchesTab } from '@/components/teams/tabs/TeamMatchesTab';
 import { TeamPerformanceTab } from '@/components/teams/tabs/TeamPerformanceTab';
 import type { TeamMembership, TeamLeaveRequest } from '@/types';
+import { Z_INDEX } from '@/lib/ui/z-index';
 import {
   ArrowLeft,
   Users,
@@ -236,7 +237,7 @@ function DeleteTeamModal({ teamName, onClose, onConfirm, isLoading }: {
   const isMatch = confirmName.trim() === teamName.trim();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md px-4">
+    <div className="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md px-4" style={{ zIndex: Z_INDEX.modal }}>
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 16 }}
         animate={{ opacity: 1, scale: 1,    y: 0 }}
@@ -302,7 +303,7 @@ function LeaveRequestModal({ teamName, onClose, onConfirm, isLoading }: {
   const [reason, setReason] = useState('');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md px-4">
+    <div className="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md px-4" style={{ zIndex: Z_INDEX.modal }}>
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 16 }}
         animate={{ opacity: 1, scale: 1,    y: 0 }}

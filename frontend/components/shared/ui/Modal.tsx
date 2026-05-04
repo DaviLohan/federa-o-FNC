@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Z_INDEX } from '@/lib/ui/z-index';
 
 interface ModalProps {
   isOpen: boolean;
@@ -102,7 +103,8 @@ export function Modal({
 
     modalContent = (
       <div
-        className={`fixed inset-0 z-[100] flex items-start justify-center bg-black/60 backdrop-blur-sm px-3 sm:px-4 ${overlayPy}`}
+        className={`fixed inset-0 flex items-start justify-center bg-black/60 backdrop-blur-sm px-3 sm:px-4 ${overlayPy}`}
+        style={{ zIndex: Z_INDEX.modal }}
         onClick={onClose}
       >
         <div
@@ -130,7 +132,8 @@ export function Modal({
     // ── Default mode: scrollable overlay (backwards compatible) ──
     modalContent = (
       <div
-        className="fixed inset-0 z-[100] flex items-start justify-center bg-black/60 backdrop-blur-sm px-4 overflow-y-auto py-8"
+        className="fixed inset-0 flex items-start justify-center bg-black/60 backdrop-blur-sm px-4 overflow-y-auto py-8"
+        style={{ zIndex: Z_INDEX.modal }}
         onClick={onClose}
       >
         <div

@@ -6,6 +6,7 @@ import { useMobileMenu } from '@/hooks/useMobileMenu';
 import { X } from 'lucide-react';
 import { useEffect } from 'react';
 import type { NavItem } from '@/components/layout/Navbar';
+import { Z_INDEX } from '@/lib/ui/z-index';
 
 function isLinkActive(pathname: string, href: string, exact?: boolean): boolean {
   if (exact) return pathname === href;
@@ -40,16 +41,17 @@ export function MobileMenu({ items }: MobileMenuProps) {
       {/* Backdrop */}
       <div
         className={`
-          fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 lg:hidden
+          fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 lg:hidden
           ${isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}
         `}
+        style={{ zIndex: Z_INDEX.mobileMenu }}
         onClick={close}
       />
 
       {/* Slide-down panel */}
       <div
         className={`
-          fixed left-0 right-0 top-16 z-40 max-h-[calc(100vh-4rem)] overflow-y-auto
+          fixed left-0 right-0 top-16 max-h-[calc(100vh-4rem)] overflow-y-auto
           border-b border-border bg-surface1/98 backdrop-blur-md
           transition-all duration-300 ease-out lg:hidden
           ${isOpen
@@ -57,6 +59,7 @@ export function MobileMenu({ items }: MobileMenuProps) {
             : '-translate-y-4 pointer-events-none opacity-0'
           }
         `}
+        style={{ zIndex: Z_INDEX.mobileMenu }}
       >
         {/* Close button */}
         <div className="flex items-center justify-between border-b border-border/50 px-4 py-2">
