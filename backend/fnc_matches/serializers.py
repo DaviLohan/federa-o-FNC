@@ -6,8 +6,21 @@ from .models import (
     MatchLineup, MatchLineupPlayer,
 )
 from fnc_teams.serializers import TeamListSerializer, FormationSerializer
+from fnc_teams.models import TeamMembership
 from fnc_championships.serializers import ChampionshipListSerializer
 from users.serializers import UserSerializer, PlayerProfileListSerializer
+
+
+def _user_represents_team(user_id: int, team) -> bool:
+    if team.owner_id == user_id:
+        return True
+
+    return TeamMembership.objects.filter(
+        team_id=team.id,
+        player__user_id=user_id,
+        is_active=True,
+        role__in=[TeamMembership.Role.OWNER, TeamMembership.Role.CAPTAIN],
+    ).exists()
 
 
 class GoalSerializer(serializers.ModelSerializer):
@@ -220,8 +233,8 @@ class MatchSerializer(serializers.ModelSerializer):
         user = request.user
         if getattr(user, 'has_supervisor_access', False):
             return obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
-        is_owner = obj.home_team.owner_id == user.id or obj.away_team.owner_id == user.id
-        return is_owner and obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
+        is_team_representative = _user_represents_team(user.id, obj.home_team) or _user_represents_team(user.id, obj.away_team)
+        return is_team_representative and obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
     
     def validate(self, data):
         """Validações da partida."""
@@ -525,8 +538,8 @@ class MatchDetailSerializer(serializers.ModelSerializer):
         user = request.user
         if getattr(user, 'has_supervisor_access', False):
             return obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
-        is_owner = obj.home_team.owner_id == user.id or obj.away_team.owner_id == user.id
-        return is_owner and obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
+        is_team_representative = _user_represents_team(user.id, obj.home_team) or _user_represents_team(user.id, obj.away_team)
+        return is_team_representative and obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
 
 
 class ContestationAdminDetailSerializer(ContestationSerializer):

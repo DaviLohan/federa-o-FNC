@@ -725,6 +725,51 @@ class TestContestationAPI:
         assert match.match_result_confirmed is True
         assert match.confirmed_by_team == winner_team
 
+    def test_team_captain_can_confirm_irregular_result_as_winner(self):
+        owner = UserFactory(user_type='TEAM_OWNER')
+        captain_user = UserFactory(user_type='PLAYER')
+        captain_profile = PlayerProfileFactory(user=captain_user)
+        loser = UserFactory(user_type='TEAM_OWNER')
+        winner_team = TeamFactory(owner=owner)
+        TeamMembershipFactory(team=winner_team, player=captain_profile, role='CAPTAIN', is_active=True)
+        loser_team = TeamFactory(owner=loser)
+        match = MatchFactory(
+            championship=self.championship,
+            home_team=winner_team,
+            away_team=loser_team,
+            status='IN_PROGRESS'
+        )
+        home_club = EAClub.objects.create(team=winner_team, ea_club_id='9401', platform='common-gen5', name='Winner Club Captain')
+        away_club = EAClub.objects.create(team=loser_team, ea_club_id='9402', platform='common-gen5', name='Loser Club Captain')
+        ea_match = EAMatch.objects.create(
+            ea_match_id='api-irregular-captain',
+            match_type='leagueMatch',
+            played_at=match.scheduled_date,
+            home_club=home_club,
+            home_club_name=home_club.name,
+            home_score=2,
+            away_club=away_club,
+            away_club_name=away_club.name,
+            away_score=1,
+            linked_match=match,
+            validation_status=EAMatch.ValidationStatus.CONTESTED,
+            validation_notes=[{'severity': 'critical', 'detail': 'Jogador irregular', 'type': 'player_not_in_roster'}],
+            raw_data={},
+        )
+
+        self.client.force_authenticate(user=captain_user)
+        response = self.client.post(
+            f'/api/v1/matches/{match.id}/confirm-irregular-result/',
+            {
+                'ea_match_id': ea_match.pk,
+                'reason': 'Capitão confirma resultado com irregularidades aceitas.',
+            },
+            format='json',
+            secure=True,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
 
 @pytest.mark.django_db
 class TestMatchWorkflowIntegration:

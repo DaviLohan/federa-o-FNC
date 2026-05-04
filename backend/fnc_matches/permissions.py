@@ -1,4 +1,17 @@
 from rest_framework import permissions
+from fnc_teams.models import TeamMembership
+
+
+def _user_represents_team(user, team) -> bool:
+    if team.owner_id == user.id:
+        return True
+
+    return TeamMembership.objects.filter(
+        team_id=team.id,
+        player__user_id=user.id,
+        is_active=True,
+        role__in=[TeamMembership.Role.OWNER, TeamMembership.Role.CAPTAIN],
+    ).exists()
 
 
 class IsMatchParticipantOrAdmin(permissions.BasePermission):
@@ -20,8 +33,8 @@ class IsMatchParticipantOrAdmin(permissions.BasePermission):
         match = obj if hasattr(obj, 'home_team') else obj.match
         
         is_participant = (
-            match.home_team.owner == request.user or
-            match.away_team.owner == request.user
+            _user_represents_team(request.user, match.home_team)
+            or _user_represents_team(request.user, match.away_team)
         )
         
         return is_participant
@@ -49,8 +62,8 @@ class CanSubmitMatchReport(permissions.BasePermission):
         match = obj.match if hasattr(obj, 'match') else obj
         
         is_participant = (
-            match.home_team.owner == request.user or
-            match.away_team.owner == request.user
+            _user_represents_team(request.user, match.home_team)
+            or _user_represents_team(request.user, match.away_team)
         )
         
         return is_participant
@@ -86,13 +99,13 @@ class CanContestMatch(permissions.BasePermission):
         
         # Apenas o time que contestou pode editar sua própria contestação
         if request.method not in permissions.SAFE_METHODS:
-            return obj.team.owner == request.user
+            return _user_represents_team(request.user, obj.team)
         
         # Times participantes podem visualizar
         match = obj.match
         is_participant = (
-            match.home_team.owner == request.user or
-            match.away_team.owner == request.user
+            _user_represents_team(request.user, match.home_team)
+            or _user_represents_team(request.user, match.away_team)
         )
         
         return is_participant

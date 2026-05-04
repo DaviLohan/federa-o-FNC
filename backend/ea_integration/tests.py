@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from conftest import MatchFactory, TeamFactory, UserFactory
+from conftest import MatchFactory, TeamFactory, TeamMembershipFactory, PlayerProfileFactory, UserFactory
 from ea_integration.date_utils import LOCAL_TIMEZONE
 from ea_integration.models import EAClub, EAMatch
 from ea_integration.report_service import MatchReportEAError, MatchReportEAService
@@ -378,3 +378,47 @@ def test_supervisor_preview_allows_irregular_confirmation_with_winner_selection(
     assert preview['can_confirm'] is False
     assert preview['can_confirm_with_irregularity'] is True
     assert preview['requires_confirmed_by_team_selection'] is True
+
+
+@pytest.mark.django_db
+def test_team_captain_membership_can_confirm_irregular_as_winner():
+    owner = UserFactory(user_type='TEAM_OWNER')
+    captain_user = UserFactory(user_type='PLAYER')
+    captain_profile = PlayerProfileFactory(user=captain_user)
+    loser_owner = UserFactory(user_type='TEAM_OWNER')
+    home_team = TeamFactory(owner=owner)
+    TeamMembershipFactory(team=home_team, player=captain_profile, role='CAPTAIN', is_active=True)
+    away_team = TeamFactory(owner=loser_owner)
+    home_club = EAClub.objects.create(team=home_team, ea_club_id='8501', platform='common-gen5', name='Captain Home')
+    away_club = EAClub.objects.create(team=away_team, ea_club_id='8502', platform='common-gen5', name='Captain Away')
+    played_at = datetime(2026, 4, 29, 2, 30, tzinfo=dt_timezone.utc)
+    match = MatchFactory(
+        home_team=home_team,
+        away_team=away_team,
+        status='IN_PROGRESS',
+        scheduled_date=played_at,
+    )
+    raw_match = build_raw_match('ea-report-captain-winner', home_club.ea_club_id, away_club.ea_club_id, played_at=played_at)
+    service = MatchReportEAService(
+        client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}),
+        validator=NoOpValidator(),
+        sync_service=MatchSyncService(client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}), validator=NoOpValidator()),
+    )
+
+    preview = service.fetch_ea_report(match, captain_user)
+    ea_match = EAMatch.objects.get(pk=preview['ea_match_id'])
+    ea_match.validation_notes = [{'severity': 'critical', 'detail': 'Irregularidade de vínculo', 'type': 'player_not_in_roster'}]
+    ea_match.save(update_fields=['validation_notes'])
+
+    updated_match = service.confirm_report(
+        match,
+        ea_match.pk,
+        captain_user,
+        allow_irregular_confirmation=True,
+        decision_reason='Capitão confirmou o resultado com irregularidade aceita.',
+    )
+
+    updated_match.refresh_from_db()
+    assert updated_match.status == 'FINISHED'
+    assert updated_match.match_result_confirmed is True
+    assert updated_match.confirmed_by_team == home_team

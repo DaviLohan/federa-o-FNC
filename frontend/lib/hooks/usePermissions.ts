@@ -24,7 +24,9 @@ export function usePermissions() {
   const canReportMatch = (match: Match): boolean => {
     if (!user) return false;
 
-    if (match.can_report === false) return false;
+    if (typeof match.can_report === 'boolean') {
+      return match.can_report;
+    }
 
     // Admin e Supervisor sempre podem
     if (user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor) {

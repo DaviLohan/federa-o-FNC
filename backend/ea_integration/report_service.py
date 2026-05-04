@@ -18,7 +18,7 @@ from django.utils import timezone
 from fnc_matches.models import (
     Match, MatchReport, Goal, Assist, Card, Contestation, ContestationAuditLog,
 )
-from fnc_teams.models import TeamMembership
+from fnc_teams.models import TeamMembership, Team
 from users.models import User, PlayerProfile
 
 from .ea_client import EAProClubsClient, EAApiError
@@ -361,8 +361,8 @@ class MatchReportEAService:
         if user.has_supervisor_access:
             return
 
-        is_home_owner = match.home_team.owner_id == user.pk
-        is_away_owner = match.away_team.owner_id == user.pk
+        is_home_owner = self._user_represents_team(match.home_team_id, user.pk)
+        is_away_owner = self._user_represents_team(match.away_team_id, user.pk)
 
         if not (is_home_owner or is_away_owner):
             raise MatchReportEAError(
@@ -730,11 +730,23 @@ class MatchReportEAService:
         return None
 
     def _get_participant_team(self, match: Match, user: User):
-        if match.home_team.owner_id == user.pk:
+        if self._user_represents_team(match.home_team_id, user.pk):
             return match.home_team
-        if match.away_team.owner_id == user.pk:
+        if self._user_represents_team(match.away_team_id, user.pk):
             return match.away_team
         return None
+
+    @staticmethod
+    def _user_represents_team(team_id: int, user_id: int) -> bool:
+        if TeamMembership.objects.filter(
+            team_id=team_id,
+            player__user_id=user_id,
+            is_active=True,
+            role__in=[TeamMembership.Role.OWNER, TeamMembership.Role.CAPTAIN],
+        ).exists():
+            return True
+
+        return Team.objects.filter(id=team_id, owner_id=user_id).exists()
 
     def _build_report_notes(
         self,
