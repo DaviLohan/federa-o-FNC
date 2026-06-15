@@ -16,11 +16,15 @@ class Championship(models.Model):
         GROUPS_KNOCKOUT = 'GROUPS_KNOCKOUT', _('Grupos + Mata-Mata')
     
     class Status(models.TextChoices):
-        SCHEDULED = 'SCHEDULED', _('Programado')
+        PENDING = 'PENDING', _('Pendente')
         OPEN = 'OPEN', _('Inscrições Abertas')
         IN_PROGRESS = 'IN_PROGRESS', _('Em Andamento')
         FINISHED = 'FINISHED', _('Finalizado')
         CANCELLED = 'CANCELLED', _('Cancelado')
+
+    class GroupStageFormat(models.TextChoices):
+        SINGLE_ROUND = 'SINGLE_ROUND', _('Fase de grupos')
+        ROUND_TRIP = 'ROUND_TRIP', _('Fase de grupos ida e volta')
     
     name = models.CharField(_('nome'), max_length=200)
     description = models.TextField(_('descrição'))
@@ -54,7 +58,7 @@ class Championship(models.Model):
     # Datas
     enrollment_start = models.DateTimeField(_('início das inscrições'))
     enrollment_end = models.DateTimeField(_('fim das inscrições'))
-    start_date = models.DateTimeField(_('data de início'))
+    start_date = models.DateTimeField(_('data de início'), null=True, blank=True)
     end_date = models.DateTimeField(_('data de término'), null=True, blank=True)
     
     # Dias e horários de jogo
@@ -118,6 +122,13 @@ class Championship(models.Model):
         null=True,
         blank=True
     )
+    group_stage_format = models.CharField(
+        _('formato da fase de grupos'),
+        max_length=20,
+        choices=GroupStageFormat.choices,
+        default=GroupStageFormat.SINGLE_ROUND,
+        help_text=_('Define se a fase de grupos terá um ou dois jogos por confronto.')
+    )
     has_third_place_match = models.BooleanField(
         _('disputa de 3º lugar'),
         default=False
@@ -145,7 +156,7 @@ class Championship(models.Model):
         _('status'),
         max_length=20,
         choices=Status.choices,
-        default=Status.SCHEDULED
+        default=Status.PENDING
     )
     
     # Criador
@@ -178,60 +189,6 @@ class Championship(models.Model):
             self.enrollment_start <= now <= self.enrollment_end
         )
 
-    def get_automatic_status(self, now=None):
-        """Calcula o status do campeonato com base nas datas configuradas."""
-        if self.status == self.Status.CANCELLED:
-            return self.Status.CANCELLED
-
-        now = now or timezone.now()
-
-        if self.end_date and now >= self.end_date:
-            return self.Status.FINISHED
-
-        if now >= self.start_date:
-            return self.Status.IN_PROGRESS
-
-        if self.enrollment_start <= now <= self.enrollment_end:
-            return self.Status.OPEN
-
-        return self.Status.SCHEDULED
-
-    def sync_status(self, save=True, now=None):
-        """Sincroniza o status persistido do campeonato com a regra automática."""
-        automatic_status = self.get_automatic_status(now=now)
-        if self.status != automatic_status:
-            self.status = automatic_status
-            if save and self.pk:
-                self.save(update_fields=['status', 'updated_at'])
-        return self.status
-
-    @classmethod
-    def sync_automatic_statuses(cls):
-        """Atualiza em lote os status automáticos dos campeonatos ativos."""
-        now = timezone.now()
-
-        cls.objects.exclude(status=cls.Status.CANCELLED).filter(
-            end_date__isnull=False,
-            end_date__lte=now,
-        ).exclude(status=cls.Status.FINISHED).update(status=cls.Status.FINISHED)
-
-        cls.objects.exclude(status__in=[cls.Status.CANCELLED, cls.Status.FINISHED]).filter(
-            start_date__lte=now,
-        ).update(status=cls.Status.IN_PROGRESS)
-
-        cls.objects.exclude(status__in=[cls.Status.CANCELLED, cls.Status.FINISHED, cls.Status.IN_PROGRESS]).filter(
-            enrollment_start__lte=now,
-            enrollment_end__gte=now,
-            start_date__gt=now,
-        ).update(status=cls.Status.OPEN)
-
-        cls.objects.exclude(status__in=[cls.Status.CANCELLED, cls.Status.FINISHED, cls.Status.IN_PROGRESS]).filter(
-            start_date__gt=now,
-        ).exclude(
-            enrollment_start__lte=now,
-            enrollment_end__gte=now,
-        ).update(status=cls.Status.SCHEDULED)
-    
     def get_enrolled_teams_count(self):
         """Retorna o número de times inscritos quando não vier anotado no queryset."""
         return self.enrollments.filter(status='APPROVED').count()

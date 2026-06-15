@@ -9,6 +9,8 @@ Uso:
     ou simplesmente: python manage.py runserver  (se configurado no manage.py)
 """
 
+import dj_database_url
+
 from .base import *  # noqa: F401, F403
 
 # ─── Debug ─────────────────────────────────────────────────────────────────────
@@ -19,13 +21,21 @@ ALLOWED_HOSTS = ['*']
 
 # ─── Banco de dados ────────────────────────────────────────────────────────────
 
-# SQLite para desenvolvimento local (sem configuração extra)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',  # noqa: F405
+# Em Docker/local com DATABASE_URL, usa PostgreSQL para aproximar de produção.
+# Sem DATABASE_URL, mantém SQLite como fallback leve para desenvolvimento rápido.
+DATABASE_URL = config('DATABASE_URL', default='').strip()  # noqa: F405
+
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=0),
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',  # noqa: F405
+        }
+    }
 
 # ─── Email ─────────────────────────────────────────────────────────────────────
 

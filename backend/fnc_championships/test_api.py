@@ -32,7 +32,7 @@ class TestChampionshipAPI:
     def test_list_championships_authenticated(self):
         """Usuários autenticados podem listar campeonatos."""
         self.client.force_authenticate(user=self.user)
-        ChampionshipFactory(status='UPCOMING')
+        ChampionshipFactory(status='PENDING')
         ChampionshipFactory(status='IN_PROGRESS')
         
         response = self.client.get('/api/v1/championships/')
@@ -42,7 +42,7 @@ class TestChampionshipAPI:
     def test_retrieve_championship(self):
         """Usuários autenticados podem ver detalhes de um campeonato."""
         self.client.force_authenticate(user=self.user)
-        championship = ChampionshipFactory(status='UPCOMING')
+        championship = ChampionshipFactory(status='PENDING')
         
         response = self.client.get(f'/api/v1/championships/{championship.id}/')
         assert response.status_code == status.HTTP_200_OK
@@ -70,7 +70,7 @@ class TestChampionshipAPI:
     
     def test_update_championship_admin_only(self):
         """Apenas admins podem atualizar campeonatos."""
-        championship = ChampionshipFactory(status='UPCOMING')
+        championship = ChampionshipFactory(status='PENDING')
         
         self.client.force_authenticate(user=self.user)
         data = {'name': 'Campeonato Atualizado'}
@@ -84,7 +84,7 @@ class TestChampionshipAPI:
     
     def test_delete_championship_admin_only(self):
         """Apenas admins podem deletar campeonatos."""
-        championship = ChampionshipFactory(status='UPCOMING')
+        championship = ChampionshipFactory(status='PENDING')
         
         self.client.force_authenticate(user=self.user)
         response = self.client.delete(f'/api/v1/championships/{championship.id}/')
@@ -107,7 +107,7 @@ class TestEnrollmentAPI:
         TeamOwnerProfileFactory(user=self.user)
         self.team = TeamFactory(owner=self.user)
         self.championship = ChampionshipFactory(
-            status='REGISTRATIONS_OPEN',
+            status='OPEN',
             max_teams=16,
             enrollment_fee=100.00
         )
@@ -143,7 +143,7 @@ class TestEnrollmentAPI:
         enrollment = ChampionshipEnrollmentFactory(
             team=self.team,
             championship=self.championship,
-            status='PENDING'
+            status='PENDING_PAYMENT'
         )
         
         # Usuário regular não pode
@@ -161,7 +161,7 @@ class TestEnrollmentAPI:
         enrollment = ChampionshipEnrollmentFactory(
             team=self.team,
             championship=self.championship,
-            status='PENDING'
+            status='PENDING_PAYMENT'
         )
         
         # Usuário regular não pode
@@ -209,7 +209,7 @@ class TestChampionshipActions:
     
     def test_start_championship_admin_only(self):
         """Apenas admins podem iniciar campeonatos."""
-        championship = ChampionshipFactory(status='UPCOMING')
+        championship = ChampionshipFactory(status='PENDING')
         
         # Usuário regular não pode
         self.client.force_authenticate(user=self.user)
@@ -246,10 +246,10 @@ class TestChampionshipActions:
     
     def test_get_brackets(self):
         """Usuários autenticados podem ver chaves."""
-        championship = ChampionshipFactory(status='IN_PROGRESS', championship_type='KNOCKOUT')
+        championship = ChampionshipFactory(status='IN_PROGRESS', championship_type='GROUPS_KNOCKOUT')
         self.client.force_authenticate(user=self.user)
         
-        response = self.client.get(f'/api/v1/championships/{championship.id}/brackets/')
+        response = self.client.get(f'/api/v1/championships/{championship.id}/bracket/')
         assert response.status_code == status.HTTP_200_OK
 
 
@@ -264,7 +264,7 @@ class TestEnrollmentWorkflowIntegration:
         TeamOwnerProfileFactory(user=self.owner)
         self.team = TeamFactory(owner=self.owner)
         self.championship = ChampionshipFactory(
-            status='REGISTRATIONS_OPEN',
+            status='OPEN',
             max_teams=16,
             enrollment_fee=100.00
         )

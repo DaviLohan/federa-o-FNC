@@ -97,7 +97,7 @@ export function Benefits() {
           variants={headingVariants}
         >
           <span className="inline-block text-xs font-bold tracking-[0.2em] uppercase text-gold/70 mb-3">
-            Por que escolher a IMPERIUM
+            Por que escolher a Pro Eleven
           </span>
           <h2 className="font-heading text-4xl md:text-5xl font-bold mb-4">
             Tudo que sua liga{' '}

@@ -2,7 +2,7 @@
 Serviço para gerenciamento de Walk-Over (WO) em partidas.
 
 Walk-Over (WO) ocorre quando um time não comparece à partida,
-resultando em vitória automática para o adversário (geralmente 3x0).
+resultando em vitória automática para o adversário (placar administrativo 1x0).
 """
 from typing import Tuple, Optional
 from django.db import transaction
@@ -10,6 +10,7 @@ from django.utils import timezone
 from fnc_matches.models import Match
 from fnc_teams.models import Team
 from fnc_matches.services import recompute_match_derived_data_for_championship, update_team_performance
+from fnc_championships.services import update_bracket_after_match
 
 
 class WalkOverService:
@@ -23,7 +24,7 @@ class WalkOverService:
     """
     
     # Placar padrão para WO
-    DEFAULT_WO_SCORE = 3
+    DEFAULT_WO_SCORE = 1
     
     def __init__(self, match: Match):
         """
@@ -96,6 +97,7 @@ class WalkOverService:
         # Import here to avoid circular dependency
         if self.match.championship:
             recompute_match_derived_data_for_championship(self.match.championship)
+            update_bracket_after_match(self.match)
         update_team_performance(self.match)
         
         return {
@@ -145,6 +147,7 @@ class WalkOverService:
         # Atualizar estatísticas
         if self.match.championship:
             recompute_match_derived_data_for_championship(self.match.championship)
+            update_bracket_after_match(self.match)
         update_team_performance(self.match)
         
         return {

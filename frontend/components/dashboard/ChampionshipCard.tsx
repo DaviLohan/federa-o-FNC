@@ -10,8 +10,9 @@ interface ChampionshipCardProps {
     id: number;
     name: string;
     description?: string;
-    format: string;
-    status: 'OPEN' | 'IN_PROGRESS' | 'FINISHED';
+    format?: string;
+    championship_type?: string;
+    status: 'PENDING' | 'OPEN' | 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED';
     max_teams: number;
     start_date?: string;
     end_date?: string;
@@ -20,9 +21,11 @@ interface ChampionshipCardProps {
 }
 
 const statusConfig = {
+  PENDING: { label: 'Pendente', variant: 'default' as const },
   OPEN: { label: 'Inscrições Abertas', variant: 'success' as const },
   IN_PROGRESS: { label: 'Em Andamento', variant: 'warning' as const },
   FINISHED: { label: 'Finalizado', variant: 'default' as const },
+  CANCELLED: { label: 'Cancelado', variant: 'error' as const },
 };
 
 const formatConfig: Record<string, string> = {
@@ -32,7 +35,8 @@ const formatConfig: Record<string, string> = {
 };
 
 export function ChampionshipCard({ championship }: ChampionshipCardProps) {
-  const statusInfo = statusConfig[championship.status];
+  const statusInfo = statusConfig[championship.status] || statusConfig.PENDING;
+  const championshipFormat = championship.championship_type || championship.format || 'LEAGUE';
   const enrolledCount = championship.enrolled_teams_count || 0;
   const maxTeams = championship.max_teams;
   const progress = (enrolledCount / maxTeams) * 100;
@@ -70,7 +74,7 @@ export function ChampionshipCard({ championship }: ChampionshipCardProps) {
             <div>
               <div className="text-xs text-muted">Formato</div>
               <div className="text-sm font-medium text-text">
-                {formatConfig[championship.format] || championship.format}
+                {formatConfig[championshipFormat] || championshipFormat}
               </div>
             </div>
           </div>

@@ -2,7 +2,7 @@
 ea_integration/validation.py
 
 MatchValidationService — responsável por validar partidas EA sincronizadas
-contra os dados internos do IMPERIUM (times, elencos, gamertags, stats).
+contra os dados internos da PRO ELEVEN (times, elencos, gamertags, stats).
 
 Fluxo:
 1. Verifica se ambos os clubes EA estão vinculados a Teams internos
@@ -25,6 +25,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from fnc_matches.models import Match, Contestation
+from fnc_matches.report_utils import ensure_match_report_exists
 from fnc_teams.models import Team, TeamMembership
 from users.models import User, PlayerProfile
 
@@ -37,8 +38,16 @@ logger = logging.getLogger(__name__)
 # Similaridade mínima para considerar nomes "compatíveis" (0-1)
 NAME_SIMILARITY_THRESHOLD = 0.80
 
-# Janela de tempo para buscar Match interno correspondente (horas antes/depois)
-MATCH_TIME_WINDOW_HOURS = 24
+# Janela de tempo para buscar Match interno correspondente (horas antes/depois).
+# Alinhada à janela do report manual (EA_MATCH_TIME_WINDOW_HOURS) para não perder
+# voltas jogadas fora do horário exatamente agendado.
+MATCH_TIME_WINDOW_HOURS = 48
+
+# Margem máxima para um jogo EA jogado ANTES do horário agendado da partida.
+# Janela é assimétrica: aceitamos jogos atrasados (até MATCH_TIME_WINDOW_HOURS depois),
+# mas só uma pequena antecedência — evita aplicar revanches/rachas jogados no mesmo dia
+# da ida a uma volta agendada para outro dia.
+MATCH_EARLY_MARGIN_HOURS = 3
 
 # Nota mínima considerada válida (jogadores com rating < isso + 0 min = desconectados)
 MIN_VALID_RATING = 3.01
@@ -77,7 +86,7 @@ class ValidationResult:
 
 class MatchValidationService:
     """
-    Valida partidas EA contra dados internos do IMPERIUM.
+    Valida partidas EA contra dados internos da PRO ELEVEN.
 
     Uso:
         service = MatchValidationService()
@@ -108,6 +117,10 @@ class MatchValidationService:
         # ── 3. Validar estatísticas ────────────────────────────────────
         stats_issues = self._validate_stats(ea_match)
         issues.extend(stats_issues)
+
+        # ── 3.1 Detectar placar potencialmente sobrescrito por quit ────
+        disconnect_issues = self._detect_disconnect_result_override(ea_match)
+        issues.extend(disconnect_issues)
 
         # ── 4. Procurar Match interno correspondente ───────────────────
         linked_match = None
@@ -145,8 +158,68 @@ class MatchValidationService:
         # ── 8. Irregularidades ficam registradas para decisão explícita do usuário/admin ─
         # Não geramos contestação automática aqui para não obrigar o time vencedor
         # a entrar em fluxo administrativo quando ele concorda com o resultado importado.
+        # Exceção: em mata-mata (playoff/final), um resultado irregular não auto-aplicado
+        # trava o avanço do chaveamento — avisamos os admins para resolução manual.
+        elif (
+            linked_match
+            and linked_match.match_type in (Match.MatchType.PLAYOFF, Match.MatchType.FINAL)
+        ):
+            self._notify_irregular_knockout(ea_match, linked_match, result.issues)
 
         return result
+
+    def _notify_irregular_knockout(self, ea_match, match, issues):
+        """Cria notificações in-app para admins quando um resultado de mata-mata é
+        irregular (não auto-aplicado), para que seja resolvido manualmente."""
+        try:
+            from fnc_notifications.models import Notification
+
+            # Evita duplicar aviso para a mesma combinação partida/EAMatch.
+            already = Notification.objects.filter(
+                related_match_id=match.id,
+                notification_type='MATCH_CONTESTED',
+                message__contains=f'EA {ea_match.ea_match_id}',
+            ).exists()
+            if already:
+                return
+
+            admins = User.objects.filter(is_active=True).filter(
+                Q(user_type__in=[User.UserType.ADMIN, User.UserType.SUPERVISOR])
+                | Q(is_supervisor=True)
+            )
+            problems = '; '.join(
+                f'[{i.severity.upper()}] {i.details}'
+                for i in issues if i.severity in ('error', 'critical')
+            )
+            title = 'Resultado de mata-mata com irregularidade — ação manual'
+            message = (
+                f'{match.home_team.name} x {match.away_team.name}: resultado da EA '
+                f'(EA {ea_match.ea_match_id}) não foi aplicado automaticamente por '
+                f'irregularidade. {problems} Resolva manualmente para liberar o avanço.'
+            )
+            notifications = [
+                Notification(
+                    user=admin,
+                    notification_type='MATCH_CONTESTED',
+                    title=title,
+                    message=message,
+                    action_url=f'/matches/{match.id}',
+                    related_match_id=match.id,
+                    related_championship_id=match.championship_id,
+                )
+                for admin in admins
+            ]
+            if notifications:
+                Notification.objects.bulk_create(notifications)
+                logger.info(
+                    'Aviso de mata-mata irregular criado para %d admin(s): Match PK=%s (EA %s)',
+                    len(notifications), match.pk, ea_match.ea_match_id,
+                )
+        except Exception:
+            logger.exception(
+                'Falha ao notificar resultado irregular de mata-mata para Match PK=%s',
+                match.pk,
+            )
 
     # ── Validação de times ─────────────────────────────────────────────────
 
@@ -175,7 +248,7 @@ class MatchValidationService:
                     severity='error',
                     details=(
                         f'Clube EA "{club_name}" (ID: {ea_club.ea_club_id}) '
-                        f'não está vinculado a nenhum time interno do IMPERIUM.'
+                        f'não está vinculado a nenhum time interno da PRO ELEVEN.'
                     ),
                     raw_comparison={
                         'ea_club_id': ea_club.ea_club_id,
@@ -408,6 +481,62 @@ class MatchValidationService:
 
         return issues
 
+    def _detect_disconnect_result_override(self, ea_match: EAMatch) -> list[ValidationIssue]:
+        """Detecta possíveis vitórias automáticas por quit/desconexão.
+
+        Regra conservadora:
+        - placar da EA não é empate
+        - há pelo menos 1 jogador desconectado (0 segundos + nota mínima)
+        - nenhum gol foi atribuído aos jogadores nos stats da EA
+
+        Nesses casos, o resultado não deve ser confirmado automaticamente.
+        """
+        if ea_match.home_score == ea_match.away_score:
+            return []
+
+        issues: list[ValidationIssue] = []
+        disconnected_players = []
+        total_goal_stats = 0
+
+        for ea_club, side in [
+            (ea_match.home_club, 'casa'),
+            (ea_match.away_club, 'visitante'),
+        ]:
+            player_stats = EAPlayerMatchStats.objects.filter(
+                ea_match=ea_match,
+                ea_club=ea_club,
+            )
+            total_goal_stats += sum(ps.goals for ps in player_stats)
+
+            for ps in player_stats:
+                is_disconnected = ps.seconds_played == 0 and float(ps.rating) <= MIN_VALID_RATING
+                if is_disconnected:
+                    disconnected_players.append({
+                        'player_name': ps.player_name,
+                        'club_name': ea_club.name,
+                        'side': side,
+                        'rating': float(ps.rating),
+                        'seconds_played': ps.seconds_played,
+                    })
+
+        if disconnected_players and total_goal_stats == 0:
+            issues.append(ValidationIssue(
+                validation_type='potential_disconnect_override',
+                severity='critical',
+                details=(
+                    'A partida apresenta placar vencedor na EA, mas sem gols registrados nos jogadores e com sinais de quit/desconexão. '
+                    'O resultado não deve ser aplicado automaticamente sem análise administrativa.'
+                ),
+                raw_comparison={
+                    'home_score': ea_match.home_score,
+                    'away_score': ea_match.away_score,
+                    'total_goal_stats': total_goal_stats,
+                    'disconnected_players': disconnected_players,
+                },
+            ))
+
+        return issues
+
     # ── Buscar Match interno correspondente ────────────────────────────────
 
     def _find_linked_match(
@@ -431,6 +560,23 @@ class MatchValidationService:
         issues = []
         played_at = ea_match.played_at
         window = timedelta(hours=MATCH_TIME_WINDOW_HOURS)
+        early = timedelta(hours=MATCH_EARLY_MARGIN_HOURS)
+        # Janela assimétrica: a partida pode ter sido jogada de `early` antes do horário
+        # agendado até `window` depois. Assim, um jogo bem anterior à data agendada
+        # (ex.: revanche do mesmo dia da ida) não é elegível para a volta.
+        win_lo = played_at - window
+        win_hi = played_at + early
+
+        # Se o EAMatch ja esta ligado a uma fixture compativel, ela eh a resposta correta.
+        linked_match = ea_match.linked_match
+        if linked_match and linked_match.status in [Match.Status.SCHEDULED, Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]:
+            same_pair = (
+                (linked_match.home_team == home_team and linked_match.away_team == away_team)
+                or (linked_match.home_team == away_team and linked_match.away_team == home_team)
+            )
+            in_window = linked_match.scheduled_date and win_lo <= linked_match.scheduled_date <= win_hi
+            if same_pair and in_window:
+                return linked_match, issues
 
         # Buscar matches com os mesmos times (em qualquer direção)
         candidates = Match.objects.filter(
@@ -446,11 +592,17 @@ class MatchValidationService:
                 Match.Status.IN_PROGRESS,
             ],
             scheduled_date__range=(
-                played_at - window,
-                played_at + window,
+                win_lo,
+                win_hi,
             ),
         ).exclude(
-            ea_match__isnull=False,  # Já vinculado a outra EAMatch
+            # Só "trava" uma fixture quando ela já está ligada a OUTRO EAMatch que foi
+            # de fato aplicado (VALIDATED). Uma fixture ainda SCHEDULED/IN_PROGRESS presa
+            # a um EAMatch contested/rejected (ex.: resultado por desconexão) continua
+            # disponível para um resultado limpo posterior assumir.
+            Q(ea_match__isnull=False)
+            & ~Q(ea_match=ea_match)
+            & Q(ea_match__validation_status=EAMatch.ValidationStatus.VALIDATED),
         ).order_by('scheduled_date')
 
         if not candidates.exists():
@@ -531,6 +683,10 @@ class MatchValidationService:
             'home_score', 'away_score', 'status',
             'started_at', 'finished_at', 'updated_at',
         ])
+        ensure_match_report_exists(
+            match,
+            notes='Súmula técnica gerada automaticamente na validação EA para partida finalizada.',
+        )
 
         logger.info(
             'Match interno PK=%d atualizado: %s %d x %d %s (FINISHED)',
@@ -538,6 +694,17 @@ class MatchValidationService:
             match.home_team.name, match.home_score,
             match.away_score, match.away_team.name,
         )
+
+        # Recompute centralizado: tabela, standings de grupo, avanço de chaveamento
+        # (ida/volta) e performance — mesmo caminho do report manual.
+        try:
+            from fnc_championships.services import recompute_after_match
+            recompute_after_match(match)
+        except Exception:
+            logger.exception(
+                'Erro ao recomputar dados derivados após auto-aplicação do Match PK=%s',
+                match.pk,
+            )
 
     # ── Criar contestação automática ───────────────────────────────────────
 
@@ -654,7 +821,7 @@ class MatchValidationService:
                     EmailService.send_notification_email(
                         to_email=email,
                         subject=(
-                            f'[IMPERIUM] Contestação automática — '
+                            f'[PRO ELEVEN] Contestação automática — '
                             f'{ea_match.home_club_name} vs {ea_match.away_club_name}'
                         ),
                         template_name='match_contested',
@@ -701,6 +868,20 @@ class MatchValidationService:
             for issue in result.issues
         ]
         if result.linked_match:
+            # Respeita o OneToOne EAMatch.linked_match: se a fixture já estava presa a
+            # outro EAMatch não-aplicado (contested/rejected/pending), desvincula o antigo
+            # para que este resultado possa assumir. O registro antigo é preservado para
+            # auditoria (apenas o vínculo é removido).
+            stale_links = EAMatch.objects.filter(
+                linked_match=result.linked_match,
+            ).exclude(pk=ea_match.pk)
+            for stale in stale_links:
+                stale.linked_match = None
+                stale.save(update_fields=['linked_match', 'updated_at'])
+                logger.info(
+                    'EAMatch %s desvinculado do Match PK=%d (substituído pelo EA %s).',
+                    stale.ea_match_id, result.linked_match.pk, ea_match.ea_match_id,
+                )
             ea_match.linked_match = result.linked_match
 
         ea_match.save(update_fields=[
@@ -778,6 +959,7 @@ class MatchValidationService:
             'gamertag_mismatch': Contestation.Reason.MISSING_PLAYER,
             'stats_anomaly': Contestation.Reason.WRONG_SCORE,
             'score_mismatch': Contestation.Reason.WRONG_SCORE,
+            'potential_disconnect_override': Contestation.Reason.WRONG_SCORE,
             'incomplete_data': Contestation.Reason.OTHER,
             'unexpected_team': Contestation.Reason.OTHER,
             'no_matching_fixture': Contestation.Reason.OTHER,

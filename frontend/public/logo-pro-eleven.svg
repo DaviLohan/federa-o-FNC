@@ -1,0 +1,19 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="goldStroke" x1="48" y1="32" x2="460" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE37A"/>
+      <stop offset="0.52" stop-color="#F0B62F"/>
+      <stop offset="1" stop-color="#C98208"/>
+    </linearGradient>
+    <linearGradient id="goldFill" x1="102" y1="88" x2="402" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE66E"/>
+      <stop offset="0.5" stop-color="#F0B12A"/>
+      <stop offset="1" stop-color="#D88E08"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="32" fill="#06080D"/>
+  <path d="M42 34H470V414L256 490L42 414V34Z" stroke="url(#goldStroke)" stroke-width="18"/>
+  <path d="M110 102H298C334 102 360 110 378 126C396 142 405 164 405 194C405 218 396 238 378 252C363 263 342 270 316 273L340 314L330 392L292 432H174V356H104V102H110ZM174 176V282H280C303 282 320 277 331 267C341 258 346 245 346 228C346 211 341 198 331 189C320 180 303 176 280 176H174Z" fill="url(#goldFill)"/>
+  <path d="M342 178L398 120H446L404 344L368 368L342 178Z" fill="url(#goldFill)"/>
+  <path d="M412 178L468 120H512L470 392L434 416L412 178Z" fill="url(#goldFill)"/>
+</svg>

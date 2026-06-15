@@ -9,7 +9,7 @@ class Team(models.Model):
     Modelo de Time.
     """
 
-    MAX_PLAYERS = 20
+    MAX_PLAYERS = 25
     
     owner = models.ForeignKey(
         User,
@@ -87,7 +87,10 @@ class TeamMembership(models.Model):
     class Role(models.TextChoices):
         OWNER = 'OWNER', _('Dono')
         CAPTAIN = 'CAPTAIN', _('Capitão')
+        COMMISSION = 'COMMISSION', _('Comissão Técnica')
         PLAYER = 'PLAYER', _('Jogador')
+
+    MAX_COMMISSION_MEMBERS = 2
     
     team = models.ForeignKey(
         Team,
@@ -132,9 +135,23 @@ class TeamMembership(models.Model):
         if self.pk:
             previous = TeamMembership.objects.filter(pk=self.pk).only('is_active').first()
             if previous and previous.is_active:
-                return
+                pass
+            else:
+                self.team.ensure_has_capacity(exclude_membership_id=self.pk)
 
-        self.team.ensure_has_capacity(exclude_membership_id=self.pk)
+        elif self.is_active:
+            self.team.ensure_has_capacity(exclude_membership_id=self.pk)
+
+        if self.is_active and self.role == TeamMembership.Role.COMMISSION:
+            commission_count = TeamMembership.objects.filter(
+                team=self.team,
+                role=TeamMembership.Role.COMMISSION,
+                is_active=True,
+            ).exclude(pk=self.pk).count()
+            if commission_count >= TeamMembership.MAX_COMMISSION_MEMBERS:
+                raise ValidationError(
+                    f'Cada time pode ter no máximo {TeamMembership.MAX_COMMISSION_MEMBERS} membros na comissão técnica.'
+                )
 
     def save(self, *args, **kwargs):
         self.full_clean()

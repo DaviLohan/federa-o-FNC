@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -9,7 +9,7 @@ import { teamsAPI, leaveRequestsAPI } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { usePermissions } from '@/lib/hooks';
 import { TEAM_MAX_PLAYERS } from '@/lib/team-constants';
-import { Button, Card, Badge, Input, useToast, TermsModal } from '@/components/shared/ui';
+import { Button, Card, Badge, Input, ImageUpload, Modal, useToast, TermsModal } from '@/components/shared/ui';
 import { MembersTab } from '@/components/teams/MembersTab';
 import { InvitePlayerTab } from '@/components/teams/InvitePlayerTab';
 import { TeamMatchesTab } from '@/components/teams/tabs/TeamMatchesTab';
@@ -27,9 +27,10 @@ import {
   CalendarDays,
   Trash2,
   LogOut,
-  Crown,
-  FileText,
-  BarChart3,
+    Crown,
+    FileText,
+    BarChart3,
+    Pencil,
 } from 'lucide-react';
 import { statisticsAPI } from '@/lib/api';
 
@@ -162,15 +163,15 @@ function StatsTab({ teamStats }: { teamStats: TeamOverallStats | null }) {
 
 // ─── Aba: Campo Tático ────────────────────────────────────────────────────────
 
-function TacticalTab({ team, members, isOwner }: { team: any; members: TeamMembership[]; isOwner: boolean }) {
+function TacticalTab({ team, members, canManageTactics }: { team: any; members: TeamMembership[]; canManageTactics: boolean }) {
   return (
     <div>
       <p className="text-sm text-muted mb-6 leading-relaxed">
-        {isOwner
+        {canManageTactics
           ? 'Selecione uma partida agendada, escolha a formação e posicione os jogadores no campo. A escalação fica salva e os jogadores são notificados automaticamente.'
-          : 'Visualize a escalação definida pelo dono do time. Selecione uma partida para ver o quadro tático.'}
+          : 'Visualize a escalação definida pela comissão técnica. Selecione uma partida para ver o quadro tático.'}
       </p>
-      <TacticalBoard team={team} members={members} readOnly={!isOwner} />
+      <TacticalBoard team={team} members={members} readOnly={!canManageTactics} />
     </div>
   );
 }
@@ -180,10 +181,10 @@ function TacticalTab({ team, members, isOwner }: { team: any; members: TeamMembe
 type MemberSubTab = 'list' | 'invite';
 
 function MemberSubTabs({
-  teamId, members, isLoading, isOwner, isAtLimit, onInviteSent,
+  teamId, members, isLoading, canManageMembers, isAtLimit, onInviteSent,
 }: {
   teamId: number; members: TeamMembership[]; isLoading: boolean;
-  isOwner: boolean; isAtLimit: boolean; onInviteSent: () => void;
+  canManageMembers: boolean; isAtLimit: boolean; onInviteSent: () => void;
 }) {
   const [sub, setSub] = useState<MemberSubTab>('list');
 
@@ -192,7 +193,7 @@ function MemberSubTabs({
       {/* Pill switcher */}
       <div className="flex gap-1 p-1 bg-surface2 rounded-xl w-fit border border-border">
         {(['list', 'invite'] as MemberSubTab[]).map((id) => {
-          if (id === 'invite' && !isOwner) return null;
+          if (id === 'invite' && !canManageMembers) return null;
           const labels = { list: `Elenco (${members.length})`, invite: 'Convidar' };
           const icons  = { list: <Users className="w-3.5 h-3.5" />, invite: <UserPlus className="w-3.5 h-3.5" /> };
           return (
@@ -215,10 +216,10 @@ function MemberSubTabs({
       {sub === 'list' && (
         <MembersTab
           teamId={teamId} members={members} isLoading={isLoading}
-          onMemberRemoved={onInviteSent} readOnly={false}
+          onMemberRemoved={onInviteSent} readOnly={!canManageMembers}
         />
       )}
-      {sub === 'invite' && isOwner && (
+      {sub === 'invite' && canManageMembers && (
         <InvitePlayerTab
           teamId={teamId} isAtLimit={isAtLimit}
           onInviteSent={() => { onInviteSent(); setSub('list'); }}
@@ -360,6 +361,123 @@ function LeaveRequestModal({ teamName, onClose, onConfirm, isLoading }: {
   );
 }
 
+function getApiErrorMessage(error: any, fallback: string) {
+  const data = error?.response?.data;
+  if (!data) return fallback;
+  if (typeof data === 'string') return data;
+  if (data.error) return data.error;
+  if (data.detail) return data.detail;
+
+  for (const value of Object.values(data)) {
+    if (Array.isArray(value) && value.length > 0) return String(value[0]);
+    if (typeof value === 'string') return value;
+  }
+
+  return fallback;
+}
+
+function EditTeamModal({
+  team,
+  isOpen,
+  onClose,
+  onSubmit,
+  isLoading,
+}: {
+  team: any;
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (payload: {
+    name: string;
+    abbreviation: string;
+    description: string;
+    file: File | null;
+  }) => void;
+  isLoading: boolean;
+}) {
+  const [name, setName] = useState(team.name);
+  const [abbreviation, setAbbreviation] = useState(team.abbreviation);
+  const [description, setDescription] = useState(team.description || '');
+  const [file, setFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setName(team.name);
+    setAbbreviation(team.abbreviation);
+    setDescription(team.description || '');
+    setFile(null);
+  }, [isOpen, team]);
+
+  const footer = (
+    <>
+      <Button variant="ghost" onClick={onClose} disabled={isLoading}>Cancelar</Button>
+      <Button
+        variant="primary"
+        loading={isLoading}
+        onClick={() => onSubmit({
+          name: name.trim(),
+          abbreviation: abbreviation.trim().toUpperCase(),
+          description: description.trim(),
+          file,
+        })}
+        disabled={!name.trim() || !abbreviation.trim()}
+      >
+        Salvar alterações
+      </Button>
+    </>
+  );
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Editar Time"
+      description="Atualize a identidade visual e os dados principais do seu time."
+      size="lg"
+      footer={footer}
+    >
+      <div className="grid gap-5 md:grid-cols-[220px_1fr]">
+        <ImageUpload
+          label="Logo do time"
+          value={team.logo}
+          onChange={setFile}
+          previewClassName="w-44 h-44"
+          helpText="PNG, JPG ou WebP com ate 5MB."
+        />
+
+        <div className="space-y-4">
+          <Input
+            label="Nome do time"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ex.: MVL ES"
+            maxLength={100}
+          />
+          <Input
+            label="Sigla"
+            value={abbreviation}
+            onChange={(e) => setAbbreviation(e.target.value.toUpperCase())}
+            placeholder="Ex.: MVL"
+            maxLength={5}
+          />
+          <div>
+            <label className="mb-2 block text-sm font-medium text-text">Descrição</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={5}
+              placeholder="Descreva o time, identidade, objetivos e estilo de jogo..."
+              className="w-full rounded-xl border border-border bg-surface2 px-4 py-3 text-sm text-text placeholder:text-muted focus:border-gold/50 focus:outline-none focus:ring-2 focus:ring-gold/30"
+            />
+          </div>
+          <p className="text-xs text-muted2">
+            O vinculo oficial com a EA nao e alterado por esta tela. Aqui voce edita apenas a personalizacao do time.
+          </p>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ─── Página Principal ─────────────────────────────────────────────────────────
 
 export default function TeamDetailPage() {
@@ -376,6 +494,7 @@ export default function TeamDetailPage() {
   const [activeTab,     setActiveTab]     = useState<TabId>('members');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showLeaveModal,  setShowLeaveModal]  = useState(false);
+  const [showEditModal,   setShowEditModal]   = useState(false);
   const [showTerms,       setShowTerms]       = useState(false);
 
   // ── Queries ────────────────────────────────────────────────────────────────
@@ -413,6 +532,10 @@ export default function TeamDetailPage() {
   const myLeaveRequest = leaveRequests.find(
     (lr) => lr.player?.user_id === user?.id || lr.player?.user_email === user?.email
   );
+  const isCaptain = myMembership?.role === 'CAPTAIN';
+  const isOperationalMember = isCaptain || myMembership?.role === 'COMMISSION';
+  const canManageTactics = isOwner || isOperationalMember;
+  const canManageMembers = isOwner || isCaptain;
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
@@ -425,6 +548,28 @@ export default function TeamDetailPage() {
       router.push('/teams');
     },
     onError: (err: any) => showToast(err.response?.data?.error || 'Erro ao excluir time.', 'error'),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ data, file }: { data: { name: string; abbreviation: string; description: string }; file: File | null }) => {
+      if (file) {
+        const formData = new FormData();
+        formData.append('name', data.name);
+        formData.append('abbreviation', data.abbreviation);
+        formData.append('description', data.description);
+        formData.append('logo', file, file.name || 'logo.jpg');
+        return teamsAPI.updateWithFile(teamId, formData);
+      }
+      return teamsAPI.update(teamId, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['team', teamId] });
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+      queryClient.invalidateQueries({ queryKey: ['my-team'] });
+      setShowEditModal(false);
+      showToast('Time atualizado com sucesso.', 'success');
+    },
+    onError: (err: any) => showToast(getApiErrorMessage(err, 'Erro ao atualizar time.'), 'error'),
   });
 
   const leaveRequestMutation = useMutation({
@@ -673,9 +818,21 @@ export default function TeamDetailPage() {
               {/* Ações */}
               <div className="flex-shrink-0 w-full sm:w-auto self-start sm:self-center">
 
-                {/* Dono */}
-                {isOwner && (
+                {canManageMembers && (
                   <div className="flex flex-col gap-2 w-full sm:min-w-[190px]">
+                    {isOwner && (
+                      <motion.div whileTap={{ scale: 0.97 }}>
+                        <Button
+                          variant="ghost"
+                          onClick={() => setShowEditModal(true)}
+                          className="flex items-center justify-center gap-2 w-full border border-gold/25 text-gold hover:bg-gold/8 hover:border-gold/45"
+                        >
+                          <Pencil className="w-4 h-4" />
+                          Editar Time
+                        </Button>
+                      </motion.div>
+                    )}
+
                     <motion.div whileTap={{ scale: 0.97 }}>
                       <Button
                         variant="primary"
@@ -687,25 +844,29 @@ export default function TeamDetailPage() {
                       </Button>
                     </motion.div>
 
-                    <div className="flex items-center gap-2 my-0.5">
-                      <div className="flex-1 h-px bg-border/60" />
-                      <span className="text-[10px] text-muted uppercase tracking-widest font-mono">ou</span>
-                      <div className="flex-1 h-px bg-border/60" />
-                    </div>
+                    {isOwner && (
+                      <>
+                        <div className="flex items-center gap-2 my-0.5">
+                          <div className="flex-1 h-px bg-border/60" />
+                          <span className="text-[10px] text-muted uppercase tracking-widest font-mono">ou</span>
+                          <div className="flex-1 h-px bg-border/60" />
+                        </div>
 
-                    <motion.div whileTap={{ scale: 0.97 }}>
-                      <Button
-                        variant="ghost"
-                        onClick={() => setShowDeleteModal(true)}
-                        className="flex items-center justify-center gap-2 w-full
-                                   !text-error border border-error/25
-                                   hover:!bg-error/8 hover:border-error/50
-                                   hover:shadow-[0_0_16px_rgba(229,57,53,0.15)]"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Excluir Time
-                      </Button>
-                    </motion.div>
+                        <motion.div whileTap={{ scale: 0.97 }}>
+                          <Button
+                            variant="ghost"
+                            onClick={() => setShowDeleteModal(true)}
+                            className="flex items-center justify-center gap-2 w-full
+                                       !text-error border border-error/25
+                                       hover:!bg-error/8 hover:border-error/50
+                                       hover:shadow-[0_0_16px_rgba(229,57,53,0.15)]"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Excluir Time
+                          </Button>
+                        </motion.div>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -832,7 +993,7 @@ export default function TeamDetailPage() {
                     {isOwner ? (
                         <MemberSubTabs
                           teamId={teamId} members={members} isLoading={membersLoading}
-                          isOwner={isOwner} isAtLimit={isAtLimit}
+                          canManageMembers={canManageMembers} isAtLimit={isAtLimit}
                           onInviteSent={() => queryClient.invalidateQueries({ queryKey: ['team', teamId] })}
                         />
                     ) : (
@@ -847,7 +1008,7 @@ export default function TeamDetailPage() {
 
                 {/* Campo Tático */}
                 {activeTab === 'tactical' && (
-                  <TacticalTab team={team} members={members} isOwner={isOwner} />
+                  <TacticalTab team={team} members={members} canManageTactics={canManageTactics} />
                 )}
 
                 {/* Estatísticas */}
@@ -858,7 +1019,7 @@ export default function TeamDetailPage() {
 
                 {/* Partidas */}
                 {activeTab === 'matches' && (
-                  <TeamMatchesTab teamId={teamId} isOwner={isOwner} />
+                  <TeamMatchesTab teamId={teamId} canManageMatchOps={canManageTactics} />
                 )}
               </motion.div>
             </AnimatePresence>
@@ -883,6 +1044,20 @@ export default function TeamDetailPage() {
       </motion.div>
 
       {/* ── Modais ───────────────────────────────────────────────────────────── */}
+
+      <AnimatePresence>
+        {showEditModal && team && (
+          <EditTeamModal
+            team={team}
+            isOpen={showEditModal}
+            onClose={() => setShowEditModal(false)}
+            onSubmit={({ name, abbreviation, description, file }) =>
+              updateMutation.mutate({ data: { name, abbreviation, description }, file })
+            }
+            isLoading={updateMutation.isPending}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showDeleteModal && team && (

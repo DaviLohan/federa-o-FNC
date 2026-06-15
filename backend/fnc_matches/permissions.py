@@ -10,7 +10,7 @@ def _user_represents_team(user, team) -> bool:
         team_id=team.id,
         player__user_id=user.id,
         is_active=True,
-        role__in=[TeamMembership.Role.OWNER, TeamMembership.Role.CAPTAIN],
+        role__in=[TeamMembership.Role.OWNER, TeamMembership.Role.CAPTAIN, TeamMembership.Role.COMMISSION],
     ).exists()
 
 
@@ -49,9 +49,19 @@ class CanSubmitMatchReport(permissions.BasePermission):
         # Admins sempre podem
         if request.user.has_supervisor_access:
             return True
-        
-        # Verificar se o usuário tem times
-        return hasattr(request.user, 'owned_teams') and request.user.owned_teams.exists()
+
+        if hasattr(request.user, 'owned_teams') and request.user.owned_teams.exists():
+            return True
+
+        return TeamMembership.objects.filter(
+            player__user=request.user,
+            is_active=True,
+            role__in=[
+                TeamMembership.Role.OWNER,
+                TeamMembership.Role.CAPTAIN,
+                TeamMembership.Role.COMMISSION,
+            ],
+        ).exists()
     
     def has_object_permission(self, request, view, obj):
         # Admins sempre podem
@@ -89,8 +99,17 @@ class CanContestMatch(permissions.BasePermission):
     def has_permission(self, request, view):
         if request.user.has_supervisor_access:
             return True
-        # Verificar se o usuário tem times
-        return hasattr(request.user, 'owned_teams') and request.user.owned_teams.exists()
+        if hasattr(request.user, 'owned_teams') and request.user.owned_teams.exists():
+            return True
+        return TeamMembership.objects.filter(
+            player__user=request.user,
+            is_active=True,
+            role__in=[
+                TeamMembership.Role.OWNER,
+                TeamMembership.Role.CAPTAIN,
+                TeamMembership.Role.COMMISSION,
+            ],
+        ).exists()
     
     def has_object_permission(self, request, view, obj):
         # Admins sempre podem visualizar

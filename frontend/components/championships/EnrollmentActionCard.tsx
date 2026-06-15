@@ -39,7 +39,7 @@ export function EnrollmentActionCard({
   let actionDisabled = !isOpen;
   let helperLabel = '';
 
-  const statusLabel = championship.status === 'SCHEDULED' ? 'Status atual: Programado' : 'Aguardando abertura das inscricoes';
+  const statusLabel = championship.status === 'PENDING' ? 'Status atual: Pendente' : 'Aguardando abertura das inscricoes';
 
   if (!isOpen && !myTeam) {
     title = 'As inscricoes ainda nao estao abertas';
@@ -73,9 +73,9 @@ export function EnrollmentActionCard({
     actionDisabled = true;
   } else if (!isOpen) {
     title = 'Inscrições indisponíveis no momento';
-    description = championship.status === 'SCHEDULED'
-      ? 'Este campeonato foi programado e abrira as inscricoes automaticamente na data configurada.'
-      : 'As inscricoes ja foram encerradas ou o campeonato ja entrou em outra fase.';
+      description = championship.status === 'PENDING'
+        ? 'Este campeonato ainda está pendente e aguarda abertura manual das inscrições.'
+        : 'As inscricoes ja foram encerradas ou o campeonato ja entrou em outra fase.';
     actionLabel = 'Inscrições indisponíveis';
     actionIcon = <ShieldAlert className="w-4 h-4 mr-2" />;
     helperLabel = statusLabel;

@@ -116,6 +116,7 @@ class ChampionshipAdmin(admin.ModelAdmin):
         ('Configuração do Campeonato', {
             'fields': (
                 'championship_type',
+                'group_stage_format',
                 'status',
                 'min_teams',
                 'max_teams',
@@ -195,7 +196,7 @@ class ChampionshipAdmin(admin.ModelAdmin):
     def status_badge(self, obj):
         """Badge colorido para status do campeonato."""
         colors = {
-            'SCHEDULED': '#6c757d',
+            'PENDING': '#6c757d',
             'OPEN': '#28a745',
             'IN_PROGRESS': '#007bff',
             'FINISHED': '#ffc107',
@@ -262,7 +263,7 @@ class ChampionshipAdmin(admin.ModelAdmin):
     
     def open_enrollments(self, request, queryset):
         """Abre inscrições dos campeonatos selecionados."""
-        count = queryset.filter(status='SCHEDULED').update(status='OPEN')
+        count = queryset.filter(status='PENDING').update(status='OPEN')
         self.message_user(
             request,
             f'{count} campeonato(s) com inscrições abertas.'
@@ -274,7 +275,7 @@ class ChampionshipAdmin(admin.ModelAdmin):
         count = 0
         for championship in queryset.filter(status='OPEN'):
             if championship.enrolled_teams_count >= championship.min_teams:
-                championship.status = 'SCHEDULED'
+                championship.status = 'PENDING'
                 championship.save()
                 count += 1
         

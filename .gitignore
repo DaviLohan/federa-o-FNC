@@ -72,3 +72,22 @@ erros/
 
 # OpenCode tooling
 .opencode/
+
+# Database dumps & backups (NUNCA versionar — contêm dados de produção)
+*.sql
+*.dump
+prod_backup*
+local_backup*
+
+# Media archives & uploaded media
+*.tar.gz
+prod_media*
+local_media*
+backend/team_logos/
+
+# SSL certificates / secrets
+nginx/certs/
+
+# Sync artifacts (blobs grandes)
+sync_artifacts/
+sync_backups/

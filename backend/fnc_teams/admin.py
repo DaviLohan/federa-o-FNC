@@ -488,7 +488,7 @@ class TeamInvitationAdmin(admin.ModelAdmin):
         
         message = f'{count} convite(s) aceito(s) e jogador(es) adicionado(s) ao time.'
         if blocked:
-            message += f' {blocked} convite(s) permaneceram pendentes porque o time já atingiu o limite máximo de 20 jogadores.'
+            message += f' {blocked} convite(s) permaneceram pendentes porque o time já atingiu o limite máximo de 25 jogadores.'
 
         self.message_user(request, message)
     accept_invitations.short_description = 'Aceitar convites selecionados'

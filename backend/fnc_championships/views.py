@@ -43,6 +43,28 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
     queryset = Championship.objects.all()
     permission_classes = [IsAdminOrReadOnly]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    FORMAT_ALIASES = {
+        'knockout': {'championship_type': Championship.Type.KNOCKOUT},
+        'mata-mata': {'championship_type': Championship.Type.KNOCKOUT},
+        'league': {'championship_type': Championship.Type.LEAGUE},
+        'group_stage': {
+            'championship_type': Championship.Type.GROUPS_KNOCKOUT,
+            'group_stage_format': Championship.GroupStageFormat.SINGLE_ROUND,
+        },
+        'group_stage_round_trip': {
+            'championship_type': Championship.Type.GROUPS_KNOCKOUT,
+            'group_stage_format': Championship.GroupStageFormat.ROUND_TRIP,
+        },
+        'round_trip': {
+            'championship_type': Championship.Type.GROUPS_KNOCKOUT,
+            'group_stage_format': Championship.GroupStageFormat.ROUND_TRIP,
+        },
+        'home_and_away': {
+            'championship_type': Championship.Type.GROUPS_KNOCKOUT,
+            'group_stage_format': Championship.GroupStageFormat.ROUND_TRIP,
+        },
+    }
     
     def get_serializer_class(self):
         """Retorna o serializer apropriado para cada ação."""
@@ -52,7 +74,6 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filtra campeonatos e permite busca."""
-        Championship.sync_automatic_statuses()
         queryset = Championship.objects.all()
         
         # Filtro por status
@@ -64,7 +85,12 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
         # Filtro por formato
         format_type = self.request.query_params.get('format', None)
         if format_type:
-            queryset = queryset.filter(format=format_type)
+            format_key = format_type.strip().lower()
+            alias = self.FORMAT_ALIASES.get(format_key)
+            if alias:
+                queryset = queryset.filter(**alias)
+            else:
+                queryset = queryset.filter(championship_type=format_type)
         
         # Filtro por campeonatos abertos para inscrição
         if self.request.query_params.get('open_for_enrollment', None):
@@ -96,12 +122,15 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        championship = serializer.save(created_by=self.request.user)
-        championship.sync_status()
+        serializer.save(
+            created_by=self.request.user,
+            status=Championship.Status.PENDING,
+            start_date=None,
+            end_date=None,
+        )
 
     def perform_update(self, serializer):
-        championship = serializer.save()
-        championship.sync_status()
+        serializer.save()
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def enroll(self, request, pk=None):
@@ -190,7 +219,7 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
         """
         championship = self.get_object()
         
-        if championship.championship_type != 'KNOCKOUT':
+        if championship.championship_type not in {'KNOCKOUT', 'GROUPS_KNOCKOUT'}:
             return Response(
                 {'error': 'Chaveamento disponível apenas para campeonatos eliminatórios.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -214,7 +243,7 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
         """
         championship = self.get_object()
         
-        if championship.status != 'OPEN':
+        if championship.status != Championship.Status.OPEN:
             return Response(
                 {'error': 'Apenas campeonatos abertos podem ser iniciados.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -223,7 +252,7 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
         # Verificar se há times inscritos suficientes
         enrolled_teams = ChampionshipEnrollment.objects.filter(
             championship=championship,
-            status='APPROVED'
+            status=ChampionshipEnrollment.Status.APPROVED
         ).count()
         
         if enrolled_teams < championship.min_teams:
@@ -233,17 +262,28 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
             )
         
         # Gerar chaveamento/tabela/partidas automaticamente
-        from .services import generate_knockout_bracket, initialize_league_championship
+        from .services import generate_knockout_bracket, initialize_group_stage, initialize_league_championship
         
         try:
             if championship.championship_type == 'KNOCKOUT':
-                # Não deve acontecer - KNOCKOUT está deprecado
-                return Response(
-                    {'error': 'Tipo KNOCKOUT não é mais suportado. Use GROUPS_KNOCKOUT.'},
-                    status=status.HTTP_400_BAD_REQUEST
+                championship.start_date = timezone.now()
+                championship.status = Championship.Status.IN_PROGRESS
+                championship.end_date = None
+                championship.save(update_fields=['start_date', 'status', 'end_date', 'updated_at'])
+
+                bracket = generate_knockout_bracket(championship)
+                first_round = bracket.structure['rounds'][0] if bracket.structure.get('rounds') else {'matches': []}
+                message = (
+                    f'Campeonato mata-mata iniciado com sucesso! '
+                    f'{len(first_round.get("matches", []))} confrontos gerados na primeira rodada.'
                 )
             
             elif championship.championship_type == 'LEAGUE':
+                championship.start_date = timezone.now()
+                championship.status = Championship.Status.IN_PROGRESS
+                championship.end_date = None
+                championship.save(update_fields=['start_date', 'status', 'end_date', 'updated_at'])
+
                 days_between_rounds = request.data.get('days_between_rounds', 7)  # Padrão: 1 semana
                 result = initialize_league_championship(
                     championship=championship,
@@ -258,30 +298,47 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
                 )
             
             elif championship.championship_type == 'GROUPS_KNOCKOUT':
-                # Iniciar campeonato
-                championship.status = 'IN_PROGRESS'
-                championship.save()
-                
-                # Para GROUPS_KNOCKOUT, apenas iniciar - admin gerará grupos e bracket manualmente
-                message = 'Campeonato iniciado com sucesso. Configure os grupos e gere o chaveamento.'
+                championship.status = Championship.Status.IN_PROGRESS
+                championship.start_date = timezone.now()
+                championship.end_date = None
+                championship.save(update_fields=['status', 'start_date', 'end_date', 'updated_at'])
+
+                days_between_rounds = request.data.get('days_between_rounds', 7)
+                group_result = initialize_group_stage(
+                    championship=championship,
+                    days_between_rounds=days_between_rounds,
+                )
+                format_label = championship.get_group_stage_format_display().lower()
+                message = (
+                    f'Campeonato iniciado com sucesso! '
+                    f'{group_result.groups_created or championship.groups.count()} grupos prontos e '
+                    f'{group_result.matches_created} partidas geradas em {group_result.rounds_created} rodadas '
+                    f'para a fase de grupos ({format_label}).'
+                )
             
             else:
-                championship.status = 'IN_PROGRESS'
-                championship.save()
+                championship.status = Championship.Status.IN_PROGRESS
+                championship.start_date = timezone.now()
+                championship.end_date = None
+                championship.save(update_fields=['status', 'start_date', 'end_date', 'updated_at'])
                 message = 'Campeonato iniciado com sucesso.'
         
         except ValueError as e:
             # Se houver erro, reverte o status
-            championship.status = 'OPEN'
-            championship.save()
+            championship.status = Championship.Status.OPEN
+            if championship.start_date is not None:
+                championship.start_date = None
+            championship.save(update_fields=['status', 'start_date', 'updated_at'])
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
         except Exception as e:
             # Erro inesperado
-            championship.status = 'OPEN'
-            championship.save()
+            championship.status = Championship.Status.OPEN
+            if championship.start_date is not None:
+                championship.start_date = None
+            championship.save(update_fields=['status', 'start_date', 'updated_at'])
             return Response(
                 {'error': f'Erro ao iniciar campeonato: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -290,6 +347,35 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
         return Response({
             'message': message,
             'championship': ChampionshipSerializer(championship).data
+        })
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsAdminOrReadOnly])
+    def open_enrollments(self, request, pk=None):
+        """Abre inscrições manualmente (PENDING -> OPEN)."""
+        championship = self.get_object()
+
+        if championship.status == Championship.Status.OPEN:
+            return Response(
+                {'error': 'As inscrições já estão abertas para este campeonato.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if championship.status in [
+            Championship.Status.IN_PROGRESS,
+            Championship.Status.FINISHED,
+            Championship.Status.CANCELLED,
+        ]:
+            return Response(
+                {'error': 'Não é possível abrir inscrições para campeonato em andamento/finalizado/cancelado.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        championship.status = Championship.Status.OPEN
+        championship.save(update_fields=['status', 'updated_at'])
+
+        return Response({
+            'message': 'Inscrições abertas com sucesso.',
+            'championship': ChampionshipSerializer(championship).data,
         })
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsAdminOrReadOnly])
@@ -373,7 +459,7 @@ class ChampionshipViewSet(viewsets.ModelViewSet):
         data = []
         for group in groups:
             standings = GroupStandingsSerializer(
-                group.standings.all().order_by('-points', '-wins', '-goals_for'),
+                group.standings.all().order_by('position', '-points', '-goals_for', 'team__name'),
                 many=True
             ).data
             data.append({

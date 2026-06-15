@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { UserX, Crown, Shield, Sword, Goal } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { UserX, Crown, Shield, Sword, Goal, UserCog } from 'lucide-react';
 import type { TeamMembership } from '@/types';
 
 interface MemberCardProps {
@@ -9,6 +9,10 @@ interface MemberCardProps {
   canRemove: boolean;
   onRemove?: () => void;
   isRemoving: boolean;
+  canManageRole?: boolean;
+  onSetRole?: (role: 'PLAYER' | 'CAPTAIN' | 'COMMISSION') => void;
+  isUpdatingRole?: boolean;
+  canPromoteToCommission?: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -53,11 +57,24 @@ function getGradient(name: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function MemberCard({ member, canRemove, onRemove, isRemoving }: MemberCardProps) {
+export function MemberCard({
+  member,
+  canRemove,
+  onRemove,
+  isRemoving,
+  canManageRole = false,
+  onSetRole,
+  isUpdatingRole = false,
+  canPromoteToCommission = true,
+}: MemberCardProps) {
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [showRoleMenu, setShowRoleMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const sector = getSector(member.player.primary_position);
   const { color, bg, border, Icon } = sectorConfig[sector];
   const isOwner = member.role === 'OWNER';
+  const isCaptain = member.role === 'CAPTAIN';
+  const isCommission = member.role === 'COMMISSION';
   const gradient = getGradient(member.player.player_name);
 
   const handleRemoveClick = () => {
@@ -68,6 +85,21 @@ export function MemberCard({ member, canRemove, onRemove, isRemoving }: MemberCa
       setConfirmRemove(true);
     }
   };
+
+  useEffect(() => {
+    if (!showRoleMenu) return;
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowRoleMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [showRoleMenu]);
+
+  const roleActionLabel = isCommission ? 'Remover da Comissão' : 'Promover para Comissão';
 
   return (
     <div className={`relative group flex items-center gap-4 p-4 rounded-2xl border transition-all duration-200
@@ -108,6 +140,16 @@ export function MemberCard({ member, canRemove, onRemove, isRemoving }: MemberCa
               DONO
             </span>
           )}
+          {isCaptain && (
+            <span className="text-[10px] font-bold text-brand bg-brand/10 px-1.5 py-0.5 rounded-full border border-brand/20 leading-none">
+              CAPITÃO
+            </span>
+          )}
+          {isCommission && (
+            <span className="text-[10px] font-bold text-info bg-info/10 px-1.5 py-0.5 rounded-full border border-info/20 leading-none">
+              COMISSÃO
+            </span>
+          )}
         </div>
         <p className="text-xs text-muted mt-0.5 truncate">@{member.player.gamer_tag}</p>
 
@@ -119,8 +161,8 @@ export function MemberCard({ member, canRemove, onRemove, isRemoving }: MemberCa
       </div>
 
       {/* Remove action */}
-      {canRemove && onRemove && (
-        <div className="flex-shrink-0">
+      {(canRemove && onRemove) || (canManageRole && onSetRole && !isOwner) ? (
+        <div ref={menuRef} className="relative flex-shrink-0">
           {confirmRemove ? (
             <div className="flex items-center gap-1.5">
               <button
@@ -138,16 +180,71 @@ export function MemberCard({ member, canRemove, onRemove, isRemoving }: MemberCa
               </button>
             </div>
           ) : (
-            <button
-              onClick={handleRemoveClick}
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-muted hover:text-error hover:bg-error/10"
-              title="Remover membro"
-            >
-              <UserX className="w-4 h-4" />
-            </button>
+            <>
+              <button
+                onClick={() => setShowRoleMenu((prev) => !prev)}
+                className="p-1.5 rounded-lg text-muted hover:text-gold hover:bg-gold/10 transition-colors"
+                title="Gerenciar função"
+              >
+                <UserCog className="w-4 h-4" />
+              </button>
+
+              {showRoleMenu && (
+                <div className="absolute right-0 top-9 z-20 min-w-[180px] rounded-xl border border-border bg-surface1 p-1 shadow-xl">
+                  {canManageRole && onSetRole && !isOwner && (
+                    <>
+                      <button
+                        onClick={() => {
+                          onSetRole(isCommission ? 'PLAYER' : 'COMMISSION');
+                          setShowRoleMenu(false);
+                        }}
+                        disabled={isUpdatingRole || (!isCommission && !canPromoteToCommission)}
+                        className="w-full text-left text-xs px-3 py-2 rounded-lg hover:bg-surface2 disabled:opacity-40"
+                      >
+                        {roleActionLabel}
+                      </button>
+                      {!isCaptain && !isCommission && (
+                        <button
+                          onClick={() => {
+                            onSetRole('CAPTAIN');
+                            setShowRoleMenu(false);
+                          }}
+                          disabled={isUpdatingRole}
+                          className="w-full text-left text-xs px-3 py-2 rounded-lg hover:bg-surface2 disabled:opacity-40"
+                        >
+                          Definir como Capitão
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          onSetRole('PLAYER');
+                          setShowRoleMenu(false);
+                        }}
+                        disabled={isUpdatingRole || member.role === 'PLAYER'}
+                        className="w-full text-left text-xs px-3 py-2 rounded-lg hover:bg-surface2 disabled:opacity-40"
+                      >
+                        Definir como Jogador
+                      </button>
+                    </>
+                  )}
+
+                  {canRemove && onRemove && (
+                    <button
+                      onClick={() => {
+                        setShowRoleMenu(false);
+                        setConfirmRemove(true);
+                      }}
+                      className="w-full text-left text-xs px-3 py-2 rounded-lg text-error hover:bg-error/10"
+                    >
+                      <span className="inline-flex items-center gap-2"><UserX className="w-3.5 h-3.5" /> Remover membro</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

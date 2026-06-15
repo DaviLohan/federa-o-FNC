@@ -66,6 +66,28 @@ def resolve_championship_round_datetime(championship, round_number: int, *, star
     return current
 
 
+def resolve_next_championship_slot(championship, reference_datetime):
+    """Retorna o próximo slot oficial após uma data de referência."""
+    base = _normalize_base_datetime(reference_datetime)
+
+    if not championship_uses_official_schedule(championship):
+        return base + timedelta(days=7)
+
+    valid_weekdays = [
+        WEEKDAY_BY_CODE[code]
+        for code in championship.game_days
+        if code in WEEKDAY_BY_CODE
+    ]
+
+    if not valid_weekdays:
+        return base + timedelta(days=7)
+
+    aligned = _apply_start_time(base, championship.game_start_time)
+    if aligned > base and aligned.weekday() in valid_weekdays:
+        return aligned
+    return _next_scheduled_slot(aligned, valid_weekdays, championship.game_start_time)
+
+
 def _normalize_base_datetime(value):
     if timezone.is_naive(value):
         return timezone.make_aware(value, timezone.get_current_timezone())

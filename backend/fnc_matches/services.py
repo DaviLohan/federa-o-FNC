@@ -258,8 +258,8 @@ def update_standings(match):
     if not match.championship:
         return
     
-    # Só atualiza standings para campeonatos de pontos corridos
-    if match.championship.championship_type != 'LEAGUE':
+    # Só atualiza standings para formatos que possuem classificação acumulada.
+    if match.championship.championship_type not in {'LEAGUE', 'GROUPS_KNOCKOUT'}:
         return
     
     recompute_standings_for_championship(match.championship)
@@ -426,10 +426,19 @@ def recompute_player_statistics_for_championship(championship):
 
 def recompute_match_derived_data_for_championship(championship):
     """Recalcula os agregados recuperáveis de um campeonato a partir das partidas finalizadas."""
+    if not championship:
+        return
+
     recompute_standings_for_championship(championship)
+    from fnc_championships.services import recompute_group_standings_for_championship
+    recompute_group_standings_for_championship(championship)
     recompute_team_statistics_for_championship(championship)
     recompute_player_statistics_for_championship(championship)
     recompute_top_scorers_for_championship(championship)
+
+    from fnc_championships.services import finalize_championship_if_completed
+
+    finalize_championship_if_completed(championship)
 
 
 def recompute_top_scorers_for_championship(championship):

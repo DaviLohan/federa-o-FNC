@@ -14,16 +14,17 @@ interface ChampionshipHeroProps {
 }
 
 const statusConfig = {
-  SCHEDULED: { label: 'Programado', variant: 'default' as const },
+  PENDING: { label: 'Pendente', variant: 'default' as const },
   OPEN: { label: 'Inscrições Abertas', variant: 'pending' as const },
   IN_PROGRESS: { label: 'Em Andamento', variant: 'live' as const },
   FINISHED: { label: 'Finalizado', variant: 'finished' as const },
   CANCELLED: { label: 'Cancelado', variant: 'error' as const },
+  SCHEDULED: { label: 'Programado', variant: 'default' as const },
 };
 
 export function ChampionshipHero({ championship, canManage = false, onEdit }: ChampionshipHeroProps) {
   const router = useRouter();
-  const status = statusConfig[championship.status];
+  const status = statusConfig[championship.status] || statusConfig.PENDING;
 
   const formatCurrency = (value: string) => {
     const numValue = parseFloat(value);

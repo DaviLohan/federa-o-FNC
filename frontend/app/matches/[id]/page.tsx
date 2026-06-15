@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { matchesAPI } from '@/lib/api';
+import { matchesAPI, statisticsAPI } from '@/lib/api';
 import { Card, Badge, Button, Skeleton } from '@/components/shared/ui';
 import { LineupDisplay } from '@/components/matches/LineupDisplay';
 import { MatchScorecard } from '@/components/matches/MatchScorecard';
@@ -11,7 +11,99 @@ import { ReportStatusBar } from '@/components/matches/ReportStatusBar';
 import { formatDateTimeLong } from '@/lib/utils/date';
 import { EAReportModal } from '@/components/championships/modals';
 import { usePermissions } from '@/lib/hooks';
+import type { TeamPerformancePlayer } from '@/types';
 import { ArrowLeft, SearchX, Handshake, BarChart3 } from 'lucide-react';
+
+type MatchDetailedStats = {
+  match_id: number;
+  home_team: {
+    id: number;
+    name: string;
+    score: number;
+    cards: { yellow: number; red: number };
+    has_advanced_data?: boolean;
+    advanced_players?: number;
+    lineup_players?: number;
+    players?: TeamPerformancePlayer[];
+  };
+  away_team: {
+    id: number;
+    name: string;
+    score: number;
+    cards: { yellow: number; red: number };
+    has_advanced_data?: boolean;
+    advanced_players?: number;
+    lineup_players?: number;
+    players?: TeamPerformancePlayer[];
+  };
+  total_goals: number;
+  total_cards: number;
+};
+
+function MatchPlayerStatsTable({ team }: { team: MatchDetailedStats['home_team'] }) {
+  const players = team.players || [];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h4 className="font-semibold text-text">{team.name}</h4>
+          <p className="text-xs text-muted">{team.score} gol(s) | {players.length} jogador(es) no snapshot</p>
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs text-muted">
+          <span className={`inline-flex items-center rounded-full border px-3 py-1 ${team.has_advanced_data ? 'border-gold/20 bg-gold/10 text-gold' : 'border-border bg-surface2'}`}>
+            {team.advanced_players ?? 0} partidas com dados avançados
+          </span>
+          <span className="inline-flex items-center rounded-full border border-border bg-surface2 px-3 py-1">
+            {team.lineup_players ?? 0} jogadores escalados
+          </span>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-2xl border border-border">
+        <table className="min-w-full divide-y divide-border bg-surface1 text-sm">
+          <thead className="bg-surface2/80 text-xs uppercase tracking-wider text-muted">
+            <tr>
+              {['Jogador', 'Pos', 'PJ', 'Nota', 'Gols', 'Assistências', 'P. Certos', 'P. Errados', 'P%', 'Desarmamentos', 'Des. Errados', 'D%', 'Defesas'].map((label) => (
+                <th key={label} className="px-4 py-3 text-left font-semibold">{label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/60">
+            {players.map((player) => (
+              <tr key={`${player.player_id ?? player.player_name}`} className="hover:bg-surface2/60 transition-colors">
+                <td className="px-4 py-3">
+                  <div className="min-w-[180px]">
+                    <p className="font-medium text-text">{player.player_name}</p>
+                    <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted">
+                      {player.has_advanced_data ? (
+                        <span className="rounded-full border border-gold/20 bg-gold/10 px-2 py-0.5 text-gold">EA</span>
+                      ) : (
+                        <span className="rounded-full border border-border bg-surface2 px-2 py-0.5">Básico</span>
+                      )}
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-text">{player.position}</td>
+                <td className="px-4 py-3 text-text">{player.matches_played}</td>
+                <td className="px-4 py-3 text-text">{player.average_rating?.toFixed(2) ?? '—'}</td>
+                <td className="px-4 py-3 font-semibold text-text">{player.goals}</td>
+                <td className="px-4 py-3 text-text">{player.assists}</td>
+                <td className="px-4 py-3 text-text">{player.passes_made}</td>
+                <td className="px-4 py-3 text-text">{player.passes_missed}</td>
+                <td className="px-4 py-3 text-text">{player.pass_accuracy?.toFixed(1) ?? '—'}{player.pass_accuracy !== null ? '%' : ''}</td>
+                <td className="px-4 py-3 text-text">{player.tackles_made}</td>
+                <td className="px-4 py-3 text-text">{player.tackles_missed}</td>
+                <td className="px-4 py-3 text-text">{player.tackle_accuracy?.toFixed(1) ?? '—'}{player.tackle_accuracy !== null ? '%' : ''}</td>
+                <td className="px-4 py-3 text-text">{player.saves}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 export default function MatchDetailsPage() {
   const params = useParams();
@@ -27,6 +119,14 @@ export default function MatchDetailsPage() {
 
   const { canReportMatch, canContestMatch } = usePermissions();
   const [eaReportingMatch, setEaReportingMatch] = useState(false);
+
+  const isReported = Boolean(match?.report);
+
+  const { data: matchStats, isLoading: isLoadingMatchStats } = useQuery<MatchDetailedStats>({
+    queryKey: ['match-stats', matchId],
+    queryFn: () => statisticsAPI.getMatchDetails(matchId) as Promise<MatchDetailedStats>,
+    enabled: !!matchId && !!match && match.status === 'FINISHED' && isReported,
+  });
 
   if (isLoading) {
     return (
@@ -199,16 +299,47 @@ export default function MatchDetailsPage() {
         </Card>
       )}
 
-      {/* Statistics Placeholder */}
+      {/* Match Statistics */}
       {match.status === 'FINISHED' && (
         <Card title="Estatísticas da Partida">
-          <div className="text-center py-12 space-y-3">
-            <BarChart3 className="w-12 h-12 text-muted2 mx-auto" />
-            <h3 className="text-lg font-semibold text-text">Estatísticas em breve</h3>
-            <p className="text-muted text-sm max-w-md mx-auto">
-              As estatísticas detalhadas desta partida serão exibidas aqui após o processamento do relatório EA Sports.
-            </p>
-          </div>
+          {!isReported ? (
+            <div className="text-center py-12 space-y-3">
+              <BarChart3 className="w-12 h-12 text-muted2 mx-auto" />
+              <h3 className="text-lg font-semibold text-text">Aguardando reporte</h3>
+              <p className="text-muted text-sm max-w-md mx-auto">
+                As estatísticas detalhadas serão exibidas após o reporte da partida.
+              </p>
+            </div>
+          ) : isLoadingMatchStats ? (
+            <div className="py-6 space-y-3">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : !matchStats ? (
+            <div className="text-center py-12 space-y-3">
+              <BarChart3 className="w-12 h-12 text-muted2 mx-auto" />
+              <h3 className="text-lg font-semibold text-text">Sem estatísticas disponíveis</h3>
+              <p className="text-muted text-sm max-w-md mx-auto">
+                A partida foi reportada, mas ainda não há eventos detalhados registrados.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <MatchPlayerStatsTable team={matchStats.home_team} />
+              <MatchPlayerStatsTable team={matchStats.away_team} />
+
+              <div className="rounded-xl border border-border p-4">
+                <h4 className="font-semibold text-text mb-3">Resumo da Partida</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+                  <div className="flex justify-between"><span className="text-muted">Total de gols</span><span className="text-text font-semibold">{matchStats.total_goals}</span></div>
+                  <div className="flex justify-between"><span className="text-muted">Total de cartões</span><span className="text-text font-semibold">{matchStats.total_cards}</span></div>
+                  <div className="flex justify-between"><span className="text-muted">Jogadores avançados</span><span className="text-text font-semibold">{(matchStats.home_team.advanced_players ?? 0) + (matchStats.away_team.advanced_players ?? 0)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted">Escalações registradas</span><span className="text-text font-semibold">{(matchStats.home_team.lineup_players ?? 0) + (matchStats.away_team.lineup_players ?? 0)}</span></div>
+                </div>
+              </div>
+            </div>
+          )}
         </Card>
       )}
 

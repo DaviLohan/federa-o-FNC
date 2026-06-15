@@ -25,6 +25,7 @@ from .serializers import (
     ForgotPasswordSerializer,
     ResetPasswordSerializer,
 )
+from .purge_service import UserPurgeService
 
 User = get_user_model()
 
@@ -226,6 +227,41 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(
             {'message': 'Usuário desativado com sucesso.'},
             status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsAdminOrSupervisor])
+    def purge(self, request, pk=None):
+        """Exclusão definitiva controlada de usuário (admin/supervisor)."""
+        user = self.get_object()
+        dry_run = str(request.data.get('dry_run', 'false')).lower() == 'true'
+
+        summary = UserPurgeService.summarize(user)
+        payload = {
+            'user_id': summary.user_id,
+            'owned_teams_total': summary.owned_teams_total,
+            'active_owned_teams': summary.active_owned_teams,
+            'submitted_reports_total': summary.submitted_reports_total,
+            'contestations_made_total': summary.contestations_made_total,
+            'sent_invitations_total': summary.sent_invitations_total,
+        }
+
+        if dry_run:
+            return Response({'dry_run': True, 'summary': payload}, status=status.HTTP_200_OK)
+
+        result = UserPurgeService.purge(user)
+        return Response(
+            {
+                'message': 'Purge de usuário concluído com sucesso.',
+                'summary': {
+                    'user_id': result.user_id,
+                    'owned_teams_total': result.owned_teams_total,
+                    'active_owned_teams': result.active_owned_teams,
+                    'submitted_reports_total': result.submitted_reports_total,
+                    'contestations_made_total': result.contestations_made_total,
+                    'sent_invitations_total': result.sent_invitations_total,
+                },
+            },
+            status=status.HTTP_200_OK,
         )
 
 

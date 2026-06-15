@@ -323,15 +323,45 @@ class TeamMembershipSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'joined_at']
     
     def validate(self, data):
-        """Valida se o jogador já não está no time."""
+        """Valida regras de membership e limite da comissão técnica."""
+        if self.instance:
+            team_obj = self.instance.team
+            role = data.get('role', self.instance.role)
+            is_active = data.get('is_active', self.instance.is_active)
+
+            if is_active and role == TeamMembership.Role.COMMISSION:
+                commission_count = TeamMembership.objects.filter(
+                    team=team_obj,
+                    role=TeamMembership.Role.COMMISSION,
+                    is_active=True,
+                ).exclude(pk=self.instance.pk).count()
+                if commission_count >= TeamMembership.MAX_COMMISSION_MEMBERS:
+                    raise serializers.ValidationError(
+                        f'Cada time pode ter no máximo {TeamMembership.MAX_COMMISSION_MEMBERS} membros na comissão técnica.'
+                    )
+            return data
+
         team = data.get('team_id')
         player = data.get('player_id')
-        
+        role = data.get('role', TeamMembership.Role.PLAYER)
+
         if TeamMembership.objects.filter(team_id=team, player_id=player, is_active=True).exists():
             raise serializers.ValidationError('Este jogador já é membro deste time.')
 
-        _validate_team_capacity(_get_team_or_validation_error(team))
-        
+        team_obj = _get_team_or_validation_error(team)
+        _validate_team_capacity(team_obj)
+
+        if role == TeamMembership.Role.COMMISSION:
+            commission_count = TeamMembership.objects.filter(
+                team=team_obj,
+                role=TeamMembership.Role.COMMISSION,
+                is_active=True,
+            ).count()
+            if commission_count >= TeamMembership.MAX_COMMISSION_MEMBERS:
+                raise serializers.ValidationError(
+                    f'Cada time pode ter no máximo {TeamMembership.MAX_COMMISSION_MEMBERS} membros na comissão técnica.'
+                )
+
         return data
 
 

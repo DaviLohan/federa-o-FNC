@@ -24,12 +24,18 @@ export function usePermissions() {
   const canReportMatch = (match: Match): boolean => {
     if (!user) return false;
 
+    const isSupervisor = user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor;
+
+    if (match.report) {
+      return isSupervisor;
+    }
+
     if (typeof match.can_report === 'boolean') {
       return match.can_report;
     }
 
     // Admin e Supervisor sempre podem
-    if (user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor) {
+    if (isSupervisor) {
       return match.status === 'IN_PROGRESS' || match.status === 'FINISHED' || match.status === 'CONTESTED';
     }
 
@@ -62,6 +68,14 @@ export function usePermissions() {
    */
   const canContestMatch = (match: Match, userTeamId?: number): boolean => {
     if (!user) return false;
+
+    if (typeof match.can_contest === 'boolean') {
+      return match.can_contest;
+    }
+
+    if (typeof match.can_report === 'boolean') {
+      return match.can_report;
+    }
 
     // Admin e Supervisor sempre podem
     if (user.user_type === 'ADMIN' || user.user_type === 'SUPERVISOR' || !!user.is_supervisor) {

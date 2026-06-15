@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils import timezone
+from .services import recompute_match_derived_data_for_championship
 from .models import (
     Match, MatchReport, Goal, Assist, Card, Contestation,
     MatchProposal, MatchConfirmation
@@ -142,6 +143,35 @@ class MatchAdmin(admin.ModelAdmin):
     )
     
     inlines = [GoalInline, CardInline]
+
+    def save_model(self, request, obj, form, change):
+        previous_status = None
+        previous_home_score = None
+        previous_away_score = None
+        previous_championship_id = None
+
+        if change and obj.pk:
+            previous = Match.objects.get(pk=obj.pk)
+            previous_status = previous.status
+            previous_home_score = previous.home_score
+            previous_away_score = previous.away_score
+            previous_championship_id = previous.championship_id
+
+        super().save_model(request, obj, form, change)
+
+        if change and (
+            previous_status != obj.status
+            or previous_home_score != obj.home_score
+            or previous_away_score != obj.away_score
+            or previous_championship_id != obj.championship_id
+        ):
+            championships = []
+            if previous_championship_id and previous_championship_id != obj.championship_id:
+                championships.append(previous.championship)
+            if obj.championship_id:
+                championships.append(obj.championship)
+            for championship in {c for c in championships if c}:
+                recompute_match_derived_data_for_championship(championship)
     
     raw_id_fields = ('home_team', 'away_team', 'championship', 'home_formation', 'away_formation', 'walkover_team')
     
@@ -288,10 +318,21 @@ class MatchAdmin(admin.ModelAdmin):
     
     def finish_matches(self, request, queryset):
         """Finaliza partidas em andamento."""
+        from .services import recompute_match_derived_data_for_championship
+
+        matches_to_finish = list(
+            queryset.filter(status='IN_PROGRESS').select_related('championship')
+        )
+        championships = {m.championship for m in matches_to_finish if m.championship_id}
+
         count = queryset.filter(status='IN_PROGRESS').update(
             status='FINISHED',
             finished_at=timezone.now()
         )
+
+        for championship in championships:
+            recompute_match_derived_data_for_championship(championship)
+
         self.message_user(
             request,
             f'{count} partida(s) finalizada(s).'
@@ -478,11 +519,13 @@ class MatchReportAdmin(admin.ModelAdmin):
     
     def approve_reports(self, request, queryset):
         """Aprova súmulas pendentes."""
-        count = queryset.filter(status__in=['PENDING', 'SUBMITTED']).update(
-            status='APPROVED',
-            approved_by=request.user,
-            approved_at=timezone.now()
+        reports = list(queryset.filter(status__in=['PENDING', 'SUBMITTED']).select_related('match__championship'))
+        championships = {report.match.championship for report in reports if report.match and report.match.championship_id and report.match.status == 'FINISHED'}
+        count = queryset.filter(id__in=[report.id for report in reports]).update(
+            status='APPROVED', approved_by=request.user, approved_at=timezone.now()
         )
+        for championship in championships:
+            recompute_match_derived_data_for_championship(championship)
         self.message_user(
             request,
             f'{count} súmula(s) aprovada(s).'

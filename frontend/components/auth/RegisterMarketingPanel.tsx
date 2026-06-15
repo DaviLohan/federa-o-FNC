@@ -1,11 +1,53 @@
-import React from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
+import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, TrendingUp, ClipboardList, CircleDollarSign, BadgeCheck } from 'lucide-react';
 import { BenefitItem } from './BenefitItem';
 import { SocialProofCard } from './SocialProofCard';
+import { platformStatsAPI, type PlatformStats } from '@/lib/api';
+import { BrandLockup } from '@/components/branding/BrandLockup';
+
+const FALLBACK_STATS: PlatformStats = {
+  players: 500,
+  teams: 150,
+  championships: 12,
+  matches: 500,
+};
 
 export function RegisterMarketingPanel() {
+  const [stats, setStats] = useState<PlatformStats>(FALLBACK_STATS);
+
+  useEffect(() => {
+    let mounted = true;
+
+    platformStatsAPI
+      .get()
+      .then((data) => {
+        if (!mounted) return;
+        setStats({
+          players: Number(data?.players || 0),
+          teams: Number(data?.teams || 0),
+          championships: Number(data?.championships || 0),
+          matches: Number(data?.matches || 0),
+        });
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setStats(FALLBACK_STATS);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const formatted = useMemo(
+    () => ({
+      teams: `${Intl.NumberFormat('pt-BR').format(stats.teams)}+`,
+      matches: `${Intl.NumberFormat('pt-BR').format(stats.matches)}+`,
+      championships: `${Intl.NumberFormat('pt-BR').format(stats.championships)}+`,
+    }),
+    [stats],
+  );
+
   return (
     <div className="relative lg:sticky lg:top-0 h-full lg:max-h-screen flex flex-col justify-center px-2 py-10 lg:py-16">
       {/* Background decorativo com grid sutil */}
@@ -17,28 +59,15 @@ export function RegisterMarketingPanel() {
       
       <div className="relative z-10 space-y-8">
         {/* Logo Section */}
-        <Link href="/" className="inline-flex items-center gap-3 group animate-reveal">
-          <Image
-            src="/logo-imperium.png"
-            alt="Imperium Logo"
-            width={48}
-            height={48}
-            className="rounded-xl transition-transform group-hover:scale-105"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
-          <div>
-            <div className="text-3xl font-bold text-gold">IMPERIUM</div>
-            <div className="text-xs text-muted uppercase tracking-wider">Elite Esports Platform</div>
-          </div>
-        </Link>
+        <BrandLockup variant="auth" href="/" className="animate-reveal" />
 
         {/* Headline */}
         <div className="space-y-4 animate-reveal" style={{ animationDelay: '0.1s' }}>
           <h1 className="text-3xl lg:text-4xl font-bold leading-tight">
-            Entre para a elite do <span className="text-gold">EA SPORTS FC brasileiro</span>
+            Entre para a nova era do <span className="text-gold">EA SPORTS FC competitivo</span>
           </h1>
           <p className="text-base text-muted leading-relaxed">
-            Crie seu time, dispute campeonatos e suba no ranking nacional. A plataforma oficial para Pro Clubs competitivo.
+            Crie seu time, dispute campeonatos e suba no ranking nacional. A nova plataforma oficial da Pro Eleven para Pro Clubs competitivo.
           </p>
         </div>
 
@@ -84,9 +113,9 @@ export function RegisterMarketingPanel() {
         <div className="animate-reveal" style={{ animationDelay: '0.3s' }}>
           <div className="text-xs text-muted uppercase tracking-wider mb-3">Junte-se a comunidade</div>
           <div className="grid grid-cols-3 gap-3">
-            <SocialProofCard value="150+" label="Times" color="gold" />
-            <SocialProofCard value="500+" label="Jogos" color="gold" />
-            <SocialProofCard value="12+" label="Ligas" color="gold" />
+            <SocialProofCard value={formatted.teams} label="Times" color="gold" />
+            <SocialProofCard value={formatted.matches} label="Jogos" color="gold" />
+            <SocialProofCard value={formatted.championships} label="Ligas" color="gold" />
           </div>
         </div>
       </div>

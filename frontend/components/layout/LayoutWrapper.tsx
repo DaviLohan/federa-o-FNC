@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/lib/auth-store';
 import { usersAPI } from '@/lib/api';
 import { Navbar } from './Navbar';
+import { AppFooter } from './AppFooter';
 
 // Public pages that should NOT have navbar
 const PUBLIC_PAGES = ['/', '/home', '/login', '/register'];
@@ -63,7 +64,12 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
 
   // Páginas públicas nunca precisam esperar hidratação
   if (isPublicPage) {
-    return <>{children}</>;
+    return (
+      <div className="min-h-screen bg-bg1">
+        {children}
+        <AppFooter />
+      </div>
+    );
   }
 
   // Para páginas autenticadas: enquanto hidrata, renderiza sem layout
@@ -74,13 +80,14 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
 
   // Usuário autenticado + hidratado → layout completo com navbar horizontal
   return (
-    <>
+    <div className="min-h-screen bg-bg1">
       <Navbar />
-      <main className="min-h-screen bg-bg1 pt-16">
+      <main className="min-h-[calc(100vh-64px)] bg-bg1 pt-16">
         <div className="max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8">
           {children}
         </div>
       </main>
-    </>
+      <AppFooter />
+    </div>
   );
 }

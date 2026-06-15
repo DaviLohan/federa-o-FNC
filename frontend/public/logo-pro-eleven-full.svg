@@ -1,0 +1,50 @@
+<svg width="880" height="220" viewBox="0 0 880 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="peGold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F3D36B"/>
+      <stop offset="58%" stop-color="#D6A11E"/>
+      <stop offset="100%" stop-color="#B78312"/>
+    </linearGradient>
+    <linearGradient id="peWhite" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.98"/>
+      <stop offset="100%" stop-color="#DCE3F5" stop-opacity="0.88"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(0,8)">
+    <path d="M74 14H220V156L147 191L74 156V14Z" fill="#131313"/>
+    <path d="M66 6H228V162L147 200L66 162V6Z" stroke="url(#peGold)" stroke-width="12"/>
+    <path d="M100 44H164C182 44 195 49 205 59C214 69 219 82 219 97C219 108 217 117 213 125L202 152L165 176L181 99L165 74C162 71 157 69 151 69H111V134L100 128V44Z" fill="url(#peGold)"/>
+    <path d="M100 89H119V164L100 156V89Z" fill="url(#peGold)"/>
+    <path d="M193 63L228 34H256L224 167L200 179L217 102L193 63Z" fill="url(#peGold)"/>
+    <path d="M233 63L268 34H296L264 160L241 171L252 102L233 63Z" fill="url(#peGold)"/>
+  </g>
+
+  <g transform="translate(312,58)">
+    <path d="M0 62L16 0H73C93 0 104 10 100 31C97 49 81 62 61 62H23L11 112H-24L0 0H45L38 34H57C64 34 69 31 70 24C71 18 67 15 60 15H20L16 31H-16L0 62Z" fill="url(#peGold)" opacity="0.98"/>
+    <path d="M132 62L148 0H205C225 0 236 10 232 31C229 49 213 62 193 62H155L143 112H108L132 0H177L170 34H189C196 34 201 31 202 24C203 18 199 15 192 15H152L148 31H116L132 62Z" fill="url(#peGold)" opacity="0.98"/>
+    <path d="M260 0H319C343 0 357 13 352 38L343 74C338 99 320 112 296 112H237C213 112 199 99 204 74L213 38C218 13 236 0 260 0ZM246 77C244 86 247 90 255 90H286C294 90 299 86 301 77L308 35C310 26 307 22 299 22H268C260 22 255 26 253 35L246 77Z" fill="url(#peGold)" opacity="0.98"/>
+  </g>
+
+  <g transform="translate(565,58)">
+    <path d="M18 0H56L40 90H110L105 112H0L18 0Z" fill="url(#peWhite)"/>
+    <path d="M135 0H235L230 22H167L163 39H220L216 58H159L154 90H221L216 112H116L135 0Z" fill="url(#peWhite)"/>
+    <path d="M258 0H295L305 75L351 0H388L318 112H280L258 0Z" fill="url(#peWhite)"/>
+    <path d="M401 0H501L496 22H433L429 39H486L482 58H425L420 90H487L482 112H382L401 0Z" fill="url(#peWhite)"/>
+    <path d="M519 0H556L540 90H611L606 112H501L519 0Z" fill="url(#peWhite)"/>
+    <path d="M632 0H669L651 112H614L632 0Z" fill="url(#peWhite)"/>
+  </g>
+
+  <g transform="translate(809,52)">
+    <path d="M6 10L43 0L22 112L-9 122L6 10Z" fill="url(#peGold)"/>
+    <path d="M44 10L81 0L60 112L29 122L44 10Z" fill="url(#peGold)"/>
+  </g>
+
+  <g transform="translate(362,186)">
+    <path d="M0 8H84" stroke="url(#peGold)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M324 8H408" stroke="url(#peGold)" stroke-width="4" stroke-linecap="round"/>
+    <text x="204" y="15" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600" letter-spacing="0.32em" fill="rgba(255,255,255,0.88)">
+      ONDE O TALENTO VIRA LEGADO!
+    </text>
+  </g>
+</svg>

@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -24,6 +23,7 @@ import {
 import React, { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Z_INDEX } from '@/lib/ui/z-index';
+import { BrandLockup } from '@/components/branding/BrandLockup';
 
 export interface NavItem {
   label: string;
@@ -105,24 +105,7 @@ export function Navbar() {
               <Menu className="h-5 w-5" />
             </button>
 
-            <Link
-              href="/dashboard"
-              className="group flex items-center gap-2.5"
-            >
-              <Image
-                src="/logo-imperium.png"
-                alt="Imperium Logo"
-                width={36}
-                height={36}
-                className="rounded-full transition-transform group-hover:scale-105"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-              <span className="text-lg font-bold tracking-wide text-gold font-heading">
-                IMPERIUM
-              </span>
-            </Link>
+            <BrandLockup variant="navbar" href="/dashboard" />
 
             {/* Separator between logo and nav */}
             <div className="mx-1 hidden h-6 w-px bg-border/50 lg:block" />

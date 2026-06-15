@@ -18,12 +18,13 @@ from django.utils import timezone
 from fnc_matches.models import (
     Match, MatchReport, Goal, Assist, Card, Contestation, ContestationAuditLog,
 )
+from fnc_matches.report_utils import ensure_match_report_exists
 from fnc_teams.models import TeamMembership, Team
 from users.models import User, PlayerProfile
 
 from .ea_client import EAProClubsClient, EAApiError
 from .date_utils import ensure_aware_utc, format_dt_pair
-from .models import EAClub, EAMatch, EAPlayerMatchStats
+from .models import EAClub, EAClubAlias, EAMatch, EAPlayerMatchStats
 from .services import MatchSyncService
 from .validation import (
     MatchValidationService, ValidationResult, ValidationIssue,
@@ -32,6 +33,7 @@ from .validation import (
 
 
 REPORT_SEARCH_MATCH_TYPES = ('leagueMatch', 'friendlyMatch', 'playoffMatch')
+REPORT_SEARCH_MAX_RESULTS = 25
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,7 @@ class MatchReportEAService:
         self.sync_service = sync_service or MatchSyncService(
             client=self.client, validator=self.validator,
         )
+        self._last_fetch_errors: list[dict] = []
 
     # ═══════════════════════════════════════════════════════════════════════
     # 1. FETCH EA REPORT (busca + preview)
@@ -98,10 +101,22 @@ class MatchReportEAService:
         # ── Validações iniciais ─────────────────────────────────────────
         self._validate_match_status(match)
         self._validate_user_permission(match, user)
+        self._validate_repeated_report_permission(match, user)
 
         # ── Buscar EAClubs de ambos os times ────────────────────────────
+        self._last_fetch_errors = []
         home_ea_club = self._get_ea_club(match.home_team, 'mandante')
         away_ea_club = self._get_ea_club(match.away_team, 'visitante')
+
+        best_existing_candidate = self._find_best_existing_candidate(match, home_ea_club, away_ea_club)
+        if best_existing_candidate:
+            self._ensure_match_linked_to_candidate(match, best_existing_candidate)
+            logger.info(
+                'Usando melhor EAMatch já sincronizado para Match PK=%d: EA match %s',
+                match.pk,
+                best_existing_candidate.ea_match_id,
+            )
+            return self._build_preview(best_existing_candidate, match, user)
 
         # ── Verificar se já existe um EAMatch linkado ───────────────────
         existing_ea_match = self._find_existing_ea_match(match)
@@ -118,6 +133,9 @@ class MatchReportEAService:
         )
 
         if not ea_match:
+            specific_error = self._build_fetch_error_message(match)
+            if specific_error:
+                raise MatchReportEAError(specific_error)
             raise MatchReportEAError(
                 'Nenhuma partida recente encontrada na EA entre '
                 f'{match.home_team.name} e {match.away_team.name}. '
@@ -126,8 +144,7 @@ class MatchReportEAService:
             )
 
         # ── Linkar ao Match interno ─────────────────────────────────────
-        ea_match.linked_match = match
-        ea_match.save(update_fields=['linked_match', 'updated_at'])
+        self._ensure_match_linked_to_candidate(match, ea_match)
 
         # ── Rodar validação ─────────────────────────────────────────────
         try:
@@ -176,6 +193,7 @@ class MatchReportEAService:
         # ── Validações ──────────────────────────────────────────────────
         self._validate_match_status(match)
         self._validate_user_permission(match, user)
+        self._validate_repeated_report_permission(match, user)
 
         ea_match = self._get_ea_match(ea_match_id, match)
         warnings = self._build_warnings(ea_match)
@@ -223,13 +241,17 @@ class MatchReportEAService:
             'confirmed_by_team', 'admin_override', 'decision_reason', 'updated_at',
         ])
 
+        # ── Tornar confirmação idempotente ───────────────────────────────
+        # Reprocessamentos admin/supervisor não podem duplicar eventos.
+        self._reset_match_events(match)
+
         # ── Criar Goals, Assists, Cards ─────────────────────────────────
         self._create_goals_and_assists(ea_match, match, side_map)
         self._create_cards(ea_match, match, side_map)
 
         # ── Criar MatchReport ───────────────────────────────────────────
-        MatchReport.objects.create(
-            match=match,
+        ensure_match_report_exists(
+            match,
             reported_by=user,
             notes=self._build_report_notes(
                 ea_match=ea_match,
@@ -237,9 +259,6 @@ class MatchReportEAService:
                 allow_irregular_confirmation=allow_irregular_confirmation,
                 decision_reason=decision_reason.strip(),
             ),
-            status=MatchReport.Status.APPROVED,
-            approved_by=user,
-            approved_at=timezone.now(),
         )
 
         # ── Atualizar EAMatch ───────────────────────────────────────────
@@ -260,6 +279,17 @@ class MatchReportEAService:
         )
 
         return match
+
+    def _reset_match_events(self, match: Match) -> None:
+        """Remove eventos existentes da partida para evitar duplicação."""
+        goals_deleted, _ = Goal.objects.filter(match=match).delete()
+        cards_deleted, _ = Card.objects.filter(match=match).delete()
+        logger.info(
+            'Reset de eventos da partida PK=%d antes de recriar via EA: goals=%d cards=%d',
+            match.pk,
+            goals_deleted,
+            cards_deleted,
+        )
 
     # ═══════════════════════════════════════════════════════════════════════
     # 3. CONTEST REPORT
@@ -369,6 +399,14 @@ class MatchReportEAService:
                 'Você só pode reportar partidas do seu time.'
             )
 
+    def _validate_repeated_report_permission(self, match: Match, user: User) -> None:
+        """Restringe reprocessamento de report a admin/supervisor."""
+        has_report = MatchReport.objects.filter(match=match).exists()
+        if has_report and not user.has_supervisor_access:
+            raise MatchReportEAError(
+                'Esta partida já foi reportada. Reprocessamento permitido apenas para admin/supervisor.'
+            )
+
     def _get_ea_club(self, team, label: str) -> EAClub:
         """Busca o EAClub vinculado a um Team."""
         try:
@@ -393,6 +431,40 @@ class MatchReportEAService:
         except EAMatch.DoesNotExist:
             return None
 
+    def _ensure_match_linked_to_candidate(self, match: Match, candidate: EAMatch) -> None:
+        if candidate.linked_match_id == match.id:
+            return
+
+        current = self._find_existing_ea_match(match)
+        if current and current.id != candidate.id:
+            current.linked_match = None
+            current.save(update_fields=['linked_match', 'updated_at'])
+
+        if candidate.linked_match_id is None:
+            candidate.linked_match = match
+            candidate.save(update_fields=['linked_match', 'updated_at'])
+
+    def _find_best_existing_candidate(self, match: Match, home_ea_club: EAClub, away_ea_club: EAClub):
+        reference_date = ensure_aware_utc(match.scheduled_date or timezone.now())
+        window = timedelta(hours=EA_MATCH_TIME_WINDOW_HOURS)
+        window_start = reference_date - window
+        window_end = reference_date + window
+
+        home_target_ids = self._build_team_club_identity_ids(match.home_team_id, home_ea_club)
+        away_target_ids = self._build_team_club_identity_ids(match.away_team_id, away_ea_club)
+
+        candidate = self._find_existing_ea_match_in_window(
+            match=match,
+            home_target_ids=home_target_ids,
+            away_target_ids=away_target_ids,
+            window_start=window_start,
+            window_end=window_end,
+            reference_date=reference_date,
+        )
+        if candidate and candidate.linked_match_id not in {None, match.id}:
+            return None
+        return candidate
+
     def _fetch_and_find_ea_match(
         self,
         match: Match,
@@ -412,21 +484,22 @@ class MatchReportEAService:
         window_start = reference_date - window
         window_end = reference_date + window
 
-        target_club_ids = {
-            str(home_ea_club.ea_club_id),
-            str(away_ea_club.ea_club_id),
-        }
+        home_target_ids = self._build_team_club_identity_ids(match.home_team_id, home_ea_club)
+        away_target_ids = self._build_team_club_identity_ids(match.away_team_id, away_ea_club)
+        union_target_ids = sorted(home_target_ids | away_target_ids)
 
         logger.info(
             'Buscando partida EA: match_pk=%d clubs=%s reference=%s janela=[%s, %s]',
-            match.pk, target_club_ids,
+            match.pk, union_target_ids,
             format_dt_pair(reference_date),
             format_dt_pair(window_start),
             format_dt_pair(window_end),
         )
 
         existing = self._find_existing_ea_match_in_window(
-            target_club_ids=target_club_ids,
+            match=match,
+            home_target_ids=home_target_ids,
+            away_target_ids=away_target_ids,
             window_start=window_start,
             window_end=window_end,
             reference_date=reference_date,
@@ -445,7 +518,9 @@ class MatchReportEAService:
         for search_club in [home_ea_club, away_ea_club]:
             for match_type in match_types:
                 ea_match = self._search_from_club(
-                    search_club, target_club_ids,
+                    search_club,
+                    home_target_ids,
+                    away_target_ids,
                     window_start, window_end,
                     match_type=match_type,
                 )
@@ -456,33 +531,73 @@ class MatchReportEAService:
             'Nenhuma partida EA encontrada para Match PK=%d '
             '(clubs=%s, janela=%s a %s). '
             'Verificado: %s para ambos os clubes.',
-            match.pk, target_club_ids,
+            match.pk, union_target_ids,
             format_dt_pair(window_start),
             format_dt_pair(window_end),
             ', '.join(match_types),
         )
         return None
 
-    def _find_existing_ea_match_in_window(self, *, target_club_ids: set[str], window_start, window_end, reference_date):
+    def _find_existing_ea_match_in_window(self, *, match: Match, home_target_ids: set[str], away_target_ids: set[str], window_start, window_end, reference_date):
+        union_ids = home_target_ids | away_target_ids
         candidates = EAMatch.objects.filter(
-            Q(home_club__ea_club_id__in=target_club_ids) & Q(away_club__ea_club_id__in=target_club_ids),
+            Q(home_club__ea_club_id__in=union_ids) & Q(away_club__ea_club_id__in=union_ids),
             played_at__gte=window_start,
             played_at__lte=window_end,
         ).order_by('-played_at')
 
         best_match = None
-        best_diff = None
+        best_score = None
         for candidate in candidates:
-            diff = abs((candidate.played_at - reference_date).total_seconds())
-            if best_diff is None or diff < best_diff:
+            if not self._is_valid_pair(
+                str(candidate.home_club.ea_club_id),
+                str(candidate.away_club.ea_club_id),
+                home_target_ids,
+                away_target_ids,
+            ):
+                continue
+
+            score = self._score_existing_candidate_match(candidate, match, reference_date)
+            if best_score is None or score > best_score:
                 best_match = candidate
-                best_diff = diff
+                best_score = score
         return best_match
+
+    def _score_existing_candidate_match(self, candidate: EAMatch, match: Match, reference_date) -> tuple:
+        side_map = self._get_side_mapping(candidate, match)
+        home_roster = self._get_roster_gamertag_map(match.home_team)
+        away_roster = self._get_roster_gamertag_map(match.away_team)
+
+        exact_matches = self._count_exact_roster_matches(candidate, side_map['ea_home_club'], home_roster)
+        exact_matches += self._count_exact_roster_matches(candidate, side_map['ea_away_club'], away_roster)
+
+        total_goals = (side_map['home_score'] or 0) + (side_map['away_score'] or 0)
+        diff_seconds = abs((candidate.played_at - reference_date).total_seconds())
+
+        # Prioriza candidate com melhor aderência de roster e placar não nulo;
+        # em empate, usa proximidade do horário agendado.
+        return (
+            exact_matches,
+            1 if total_goals > 0 else 0,
+            -diff_seconds,
+            candidate.played_at.timestamp(),
+        )
+
+    def _count_exact_roster_matches(self, ea_match: EAMatch, ea_club: EAClub | None, roster: dict) -> int:
+        if not ea_club or not roster:
+            return 0
+
+        player_names = EAPlayerMatchStats.objects.filter(
+            ea_match=ea_match,
+            ea_club=ea_club,
+        ).values_list('player_name', flat=True)
+        return sum(1 for player_name in player_names if player_name and player_name.lower().strip() in roster)
 
     def _search_from_club(
         self,
         search_club: EAClub,
-        target_club_ids: set[str],
+        home_target_ids: set[str],
+        away_target_ids: set[str],
         window_start,
         window_end,
         match_type: str = 'friendlyMatch',
@@ -496,17 +611,30 @@ class MatchReportEAService:
                 club_id=str(search_club.ea_club_id),
                 platform=search_club.platform,
                 match_type=match_type,
+                max_results=REPORT_SEARCH_MAX_RESULTS,
             )
         except EAApiError as e:
+            self._last_fetch_errors.append({
+                'club_name': search_club.name,
+                'club_id': str(search_club.ea_club_id),
+                'platform': search_club.platform,
+                'match_type': match_type,
+                'status_code': e.status_code,
+                'details': getattr(e, 'details', ''),
+            })
             logger.error(
-                'Erro ao buscar partidas EA para %s (match_type=%s): %s',
-                search_club.name, match_type, e,
+                'Erro ao buscar partidas EA para %s (match_type=%s, platform=%s, club_id=%s): %s | details=%s',
+                search_club.name, match_type, search_club.platform, search_club.ea_club_id, e, getattr(e, 'details', ''),
             )
             return None
 
         logger.info(
-            'EA retornou %d partidas para club=%s match_type=%s buscando clubs=%s',
-            len(raw_matches), search_club.ea_club_id, match_type, target_club_ids,
+            'EA retornou %d partidas para club=%s match_type=%s buscando clubs=%s (max_results=%d)',
+            len(raw_matches),
+            search_club.ea_club_id,
+            match_type,
+            sorted(home_target_ids | away_target_ids),
+            REPORT_SEARCH_MAX_RESULTS,
         )
 
         discarded_wrong_clubs = 0
@@ -517,7 +645,13 @@ class MatchReportEAService:
             clubs_data = match_data.get('clubs', {})
             club_ids_in_match = set(clubs_data.keys())
 
-            if not target_club_ids.issubset(club_ids_in_match):
+            if len(club_ids_in_match) < 2:
+                discarded_wrong_clubs += 1
+                continue
+
+            has_home = any(str(cid) in home_target_ids for cid in club_ids_in_match)
+            has_away = any(str(cid) in away_target_ids for cid in club_ids_in_match)
+            if not (has_home and has_away):
                 discarded_wrong_clubs += 1
                 continue
 
@@ -581,6 +715,49 @@ class MatchReportEAService:
             )
 
         return None
+
+    def _build_fetch_error_message(self, match: Match) -> str | None:
+        if not self._last_fetch_errors:
+            return None
+
+        statuses = {item['status_code'] for item in self._last_fetch_errors if item['status_code'] is not None}
+        club_summary = ', '.join(
+            f"{item['club_name']}[{item['club_id']}/{item['platform']}] {item['match_type']}"
+            for item in self._last_fetch_errors[:6]
+        )
+
+        if statuses == {403}:
+            return (
+                'A EA bloqueou temporariamente a consulta automatica das partidas (HTTP 403 / Access Denied). '
+                'O sistema tentou buscar Friendly Match, League Match e Playoff Match para os clubes vinculados, '
+                f'mas a EA negou acesso para: {club_summary}. Tente novamente mais tarde ou use o fluxo administrativo.'
+            )
+
+        if statuses:
+            return (
+                'Nao foi possivel consultar a EA para localizar a partida. '
+                f'Codigos retornados: {sorted(statuses)}. Tentativas: {club_summary}.'
+            )
+
+        return None
+
+    def _build_team_club_identity_ids(self, team_id: int, primary_ea_club: EAClub) -> set[str]:
+        alias_ids = set(
+            EAClubAlias.objects.filter(
+                team_id=team_id,
+                platform=primary_ea_club.platform,
+                is_active=True,
+            ).values_list('ea_club_id', flat=True)
+        )
+        alias_ids.add(str(primary_ea_club.ea_club_id))
+        return {str(value) for value in alias_ids}
+
+    def _is_valid_pair(self, first_id: str, second_id: str, home_ids: set[str], away_ids: set[str]) -> bool:
+        if not first_id or not second_id:
+            return False
+        direct = first_id in home_ids and second_id in away_ids
+        reversed_pair = first_id in away_ids and second_id in home_ids
+        return direct or reversed_pair
 
     def _build_preview(self, ea_match: EAMatch, match: Match, user: User) -> dict:
         """
@@ -746,7 +923,7 @@ class MatchReportEAService:
             team_id=team_id,
             player__user_id=user_id,
             is_active=True,
-            role__in=[TeamMembership.Role.OWNER, TeamMembership.Role.CAPTAIN],
+            role__in=[TeamMembership.Role.OWNER, TeamMembership.Role.CAPTAIN, TeamMembership.Role.COMMISSION],
         ).exists():
             return True
 
@@ -815,8 +992,8 @@ class MatchReportEAService:
 
         O home/away na EA pode estar invertido em relação ao Match interno.
         """
-        ea_home_team = ea_match.home_club.team if ea_match.home_club else None
-        ea_away_team = ea_match.away_club.team if ea_match.away_club else None
+        ea_home_team = self._resolve_team_for_ea_club(ea_match.home_club) if ea_match.home_club else None
+        ea_away_team = self._resolve_team_for_ea_club(ea_match.away_club) if ea_match.away_club else None
 
         if match.home_team == ea_home_team and match.away_team == ea_away_team:
             # Mesma ordem
@@ -856,6 +1033,30 @@ class MatchReportEAService:
                 'ea_away_club_name': ea_match.away_club_name,
                 'inverted': False,
             }
+
+    def _resolve_team_for_ea_club(self, ea_club: EAClub | None):
+        """Resolve o time interno mesmo quando a row do clube EA for órfã/duplicada."""
+        if not ea_club:
+            return None
+
+        if ea_club.team_id:
+            return ea_club.team
+
+        linked_same_id = EAClub.objects.filter(
+            ea_club_id=ea_club.ea_club_id,
+            team_id__isnull=False,
+        ).select_related('team').order_by('platform').first()
+        if linked_same_id:
+            return linked_same_id.team
+
+        alias = EAClubAlias.objects.filter(
+            ea_club_id=ea_club.ea_club_id,
+            is_active=True,
+        ).select_related('team').order_by('platform').first()
+        if alias:
+            return alias.team
+
+        return None
 
     def _get_roster_gamertag_map(self, team) -> dict:
         """
@@ -1109,26 +1310,121 @@ class MatchReportEAService:
                     )
 
     def _update_statistics(self, match: Match) -> None:
-        """Atualiza todas as estatísticas após confirmar um report."""
-        try:
-            from fnc_matches.services import (
-                update_player_statistics,
-                update_team_performance,
-                update_team_statistics,
-                recompute_standings_for_championship,
-                update_top_scorers,
+        """Atualiza dados derivados após confirmar um report.
+
+        A tabela/classificação é tratada como etapa crítica: se ela não refletir a
+        partida recém-confirmada, a confirmação deve falhar para não deixar o
+        sistema em estado parcialmente atualizado.
+        """
+        from fnc_championships.services import recompute_after_match
+        from fnc_championships.models import Championship
+
+        if match.championship:
+            logger.info(
+                'Iniciando recompute critico apos report: Match PK=%d Championship PK=%d',
+                match.pk,
+                match.championship_id,
             )
-            update_player_statistics(match)
-            update_team_statistics(match)
-            update_team_performance(match)
-            recompute_standings_for_championship(match.championship)
-            update_top_scorers(match)
-            logger.info('Estatísticas atualizadas para Match PK=%d', match.pk)
-        except Exception as e:
-            logger.error(
-                'Erro ao atualizar estatísticas para Match PK=%d: %s',
-                match.pk, e, exc_info=True,
+
+        # Recompute centralizado (tabela, standings de grupo, avanço de chaveamento,
+        # performance) — compartilhado com o caminho automático de validação EA.
+        recompute_after_match(match)
+
+        # Verificação estrita de consistência de standings permanece no fluxo manual:
+        # se a tabela não refletir a partida, a confirmação (atômica) deve falhar.
+        if (
+            match.championship
+            and match.championship.championship_type == Championship.Type.GROUPS_KNOCKOUT
+        ):
+            self._verify_group_standings_consistency(match)
+            logger.info(
+                'Recompute critico concluido com sucesso: Match PK=%d Championship PK=%d',
+                match.pk,
+                match.championship_id,
             )
+
+    def _verify_group_standings_consistency(self, match: Match) -> None:
+        from fnc_championships.models import GroupStandings
+
+        expected_home = self._build_group_standing_snapshot(match.championship_id, match.home_team_id)
+        expected_away = self._build_group_standing_snapshot(match.championship_id, match.away_team_id)
+
+        actual_home = GroupStandings.objects.filter(
+            group__championship_id=match.championship_id,
+            team_id=match.home_team_id,
+        ).values('matches_played', 'wins', 'draws', 'losses', 'goals_for', 'goals_against', 'points').first()
+        actual_away = GroupStandings.objects.filter(
+            group__championship_id=match.championship_id,
+            team_id=match.away_team_id,
+        ).values('matches_played', 'wins', 'draws', 'losses', 'goals_for', 'goals_against', 'points').first()
+
+        if actual_home != expected_home or actual_away != expected_away:
+            logger.critical(
+                'Falha de consistencia apos report: match=%d expected_home=%s actual_home=%s expected_away=%s actual_away=%s',
+                match.pk,
+                expected_home,
+                actual_home,
+                expected_away,
+                actual_away,
+            )
+            raise MatchReportEAError(
+                'O resultado foi salvo, mas a tabela do campeonato nao refletiu a partida corretamente. '
+                'Tente novamente ou acione o suporte/admin.'
+            )
+
+    def _build_group_standing_snapshot(self, championship_id: int, team_id: int) -> dict:
+        from fnc_championships.models import GroupStandings
+
+        team_group_id = GroupStandings.objects.filter(
+            group__championship_id=championship_id,
+            team_id=team_id,
+        ).values_list('group_id', flat=True).first()
+
+        finished_matches = Match.objects.filter(
+            championship_id=championship_id,
+            status=Match.Status.FINISHED,
+        ).filter(
+            Q(home_team_id=team_id) | Q(away_team_id=team_id)
+        )
+
+        snapshot = {
+            'matches_played': 0,
+            'wins': 0,
+            'draws': 0,
+            'losses': 0,
+            'goals_for': 0,
+            'goals_against': 0,
+            'points': 0,
+        }
+
+        for finished_match in finished_matches:
+            if team_group_id:
+                opponent_team_id = finished_match.away_team_id if finished_match.home_team_id == team_id else finished_match.home_team_id
+                opponent_group_id = GroupStandings.objects.filter(
+                    group__championship_id=championship_id,
+                    team_id=opponent_team_id,
+                ).values_list('group_id', flat=True).first()
+                if opponent_group_id != team_group_id:
+                    continue
+
+            is_home = finished_match.home_team_id == team_id
+            goals_for = finished_match.home_score if is_home else finished_match.away_score
+            goals_against = finished_match.away_score if is_home else finished_match.home_score
+
+            snapshot['matches_played'] += 1
+            snapshot['goals_for'] += goals_for
+            snapshot['goals_against'] += goals_against
+
+            if goals_for > goals_against:
+                snapshot['wins'] += 1
+                snapshot['points'] += 3
+            elif goals_for < goals_against:
+                snapshot['losses'] += 1
+            else:
+                snapshot['draws'] += 1
+                snapshot['points'] += 1
+
+        return snapshot
 
     def _notify_contest(
         self,
@@ -1185,7 +1481,7 @@ class MatchReportEAService:
                     EmailService.send_notification_email(
                         to_email=email,
                         subject=(
-                            f'[IMPERIUM] Contestação de partida — '
+                            f'[PRO ELEVEN] Contestação de partida — '
                             f'{match.home_team.name} vs {match.away_team.name}'
                         ),
                         template_name='match_contested',

@@ -109,12 +109,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: https://imperiumfederacao.com
+        NEXT_PUBLIC_API_URL: https://proeleven11.tech
     container_name: fnc_frontend
     expose:
       - "3000"
     environment:
-      - NEXT_PUBLIC_API_URL=https://imperiumfederacao.com
+      - NEXT_PUBLIC_API_URL=https://proeleven11.tech
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/ || exit 1"]
       interval: 10s

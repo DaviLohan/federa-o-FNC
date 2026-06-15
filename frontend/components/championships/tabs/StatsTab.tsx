@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, EmptyState, Skeleton, Tabs, Tab } from '@/components/shared/ui';
 import { statisticsAPI } from '@/lib/api';
-import { Trophy, Target, Users, BarChart3 } from 'lucide-react';
+import { Trophy, Target, Users, BarChart3, Goal, ShieldCheck, Swords, TimerReset } from 'lucide-react';
 
 interface StatsTabProps {
   championshipId: number;
@@ -13,35 +13,47 @@ interface StatsTabProps {
 export function StatsTab({ championshipId }: StatsTabProps) {
   const [activeTab, setActiveTab] = useState('scorers');
 
-  // Fetch player statistics
-  const { data: playerStatsData, isLoading: isLoadingPlayers } = useQuery({
-    queryKey: ['player-statistics', championshipId],
-    queryFn: () => statisticsAPI.getPlayerStats({ championship: championshipId }),
+  const { data: dashboard, isLoading, isError, refetch } = useQuery({
+    queryKey: ['championship-stats-dashboard', championshipId],
+    queryFn: () => statisticsAPI.getChampionshipDashboard(championshipId),
   });
 
-  // Fetch team statistics
-  const { data: teamStatsData, isLoading: isLoadingTeams } = useQuery({
-    queryKey: ['team-statistics', championshipId],
-    queryFn: () => statisticsAPI.getTeamStats({ championship: championshipId }),
-  });
+  const topScorers = dashboard?.top_scorers || [];
+  const topAssisters = dashboard?.top_assisters || [];
+  const bestTeams = dashboard?.teams || [];
+  const overview = dashboard?.overview;
+  const hasAnyStats = topScorers.length > 0 || topAssisters.length > 0 || bestTeams.length > 0 || !!overview;
 
-  const playerStats = playerStatsData?.results || [];
-  const teamStats = teamStatsData?.results || [];
-
-  const topScorers = [...playerStats].sort((a, b) => b.goals - a.goals).slice(0, 10);
-  const topAssisters = [...playerStats].sort((a, b) => b.assists - a.assists).slice(0, 10);
-  const bestTeams = [...teamStats].sort((a, b) => b.win_rate - a.win_rate).slice(0, 10);
-
-  if (isLoadingPlayers || isLoadingTeams) {
+  if (isLoading) {
     return (
       <div className="space-y-4">
+        <Skeleton className="h-36 w-full" />
         <Skeleton className="h-64 w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
     );
   }
 
-  if (playerStats.length === 0 && teamStats.length === 0) {
+  if (isError) {
+    return (
+      <EmptyState
+        icon={<BarChart3 className="w-16 h-16 text-gold mx-auto" />}
+        title="Não foi possível carregar as estatísticas"
+        description="Tente novamente em instantes. Se o problema continuar, reprocessar o campeonato pode ser necessário."
+        action={
+          <button
+            onClick={() => refetch()}
+            className="inline-flex items-center rounded-2xl border border-gold px-5 py-3 text-sm font-semibold text-gold transition-colors hover:bg-gold/10"
+          >
+            Tentar novamente
+          </button>
+        }
+        size="lg"
+      />
+    );
+  }
+
+  if (!hasAnyStats) {
     return (
       <EmptyState
         icon={<BarChart3 className="w-16 h-16 text-gold mx-auto" />}
@@ -54,6 +66,59 @@ export function StatsTab({ championshipId }: StatsTabProps) {
 
   return (
     <div className="space-y-6">
+      {overview && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="p-5 bg-surface1 border-border">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl border border-gold/20 bg-gold/10 p-3 text-gold">
+                <Swords className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted2">Partidas</p>
+                <p className="mt-1 text-xl font-bold text-text">{overview.matches_finished}/{overview.matches_total}</p>
+                <p className="text-sm text-muted">finalizadas</p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-5 bg-surface1 border-border">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl border border-gold/20 bg-gold/10 p-3 text-gold">
+                <Goal className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted2">Gols</p>
+                <p className="mt-1 text-xl font-bold text-text">{overview.goals_total}</p>
+                <p className="text-sm text-muted">média {overview.avg_goals_per_match.toFixed(2)}</p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-5 bg-surface1 border-border">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl border border-gold/20 bg-gold/10 p-3 text-gold">
+                <Users className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted2">Estrutura</p>
+                <p className="mt-1 text-xl font-bold text-text">{overview.teams_count} times</p>
+                <p className="text-sm text-muted">{overview.groups_count} grupos</p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-5 bg-surface1 border-border">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl border border-gold/20 bg-gold/10 p-3 text-gold">
+                <TimerReset className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted2">Pendências</p>
+                <p className="mt-1 text-xl font-bold text-text">{overview.matches_pending}</p>
+                <p className="text-sm text-muted">contestadas {overview.matches_contested}</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="border-b border-stroke">
         <Tabs value={activeTab} onChange={setActiveTab}>
@@ -273,9 +338,43 @@ export function StatsTab({ championshipId }: StatsTabProps) {
               description="O desempenho dos times será calculado conforme as partidas forem reportadas e confirmadas."
             />
           ) : (
-            <Card>
-              <div className="overflow-x-auto">
-                <table className="w-full">
+            <div className="space-y-4">
+              {(dashboard?.best_attack || dashboard?.best_defense) && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {dashboard?.best_attack && (
+                    <Card className="p-5 bg-surface1 border-border">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl border border-gold/20 bg-gold/10 p-3 text-gold">
+                          <Trophy className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em] text-muted2">Melhor Ataque</p>
+                          <p className="mt-1 text-lg font-bold text-text">{dashboard.best_attack.team.name}</p>
+                          <p className="text-sm text-muted">{dashboard.best_attack.goals_scored} gols marcados</p>
+                        </div>
+                      </div>
+                    </Card>
+                  )}
+                  {dashboard?.best_defense && (
+                    <Card className="p-5 bg-surface1 border-border">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl border border-gold/20 bg-gold/10 p-3 text-gold">
+                          <ShieldCheck className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em] text-muted2">Melhor Defesa</p>
+                          <p className="mt-1 text-lg font-bold text-text">{dashboard.best_defense.team.name}</p>
+                          <p className="text-sm text-muted">{dashboard.best_defense.goals_conceded} gols sofridos</p>
+                        </div>
+                      </div>
+                    </Card>
+                  )}
+                </div>
+              )}
+
+              <Card>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
                   <thead>
                     <tr className="border-b border-stroke">
                       <th className="text-left py-4 px-4 text-sm font-semibold text-muted2 w-16">Pos</th>
@@ -342,8 +441,9 @@ export function StatsTab({ championshipId }: StatsTabProps) {
                     ))}
                   </tbody>
                 </table>
-              </div>
-            </Card>
+                </div>
+              </Card>
+            </div>
           )}
         </div>
       )}

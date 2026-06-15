@@ -9,7 +9,7 @@ from fnc_championships.models import Championship
 from fnc_championships.serializers import ChampionshipListSerializer
 from fnc_matches.models import Match
 from fnc_matches.serializers import MatchListSerializer
-from users.models import User, PlayerProfile
+from users.models import PlayerProfile
 from users.serializers import PlayerProfileSerializer
 
 
@@ -53,10 +53,11 @@ def global_search(request):
     
     # Buscar jogadores
     players = PlayerProfile.objects.filter(
-        Q(user__username__icontains=query) |
+        Q(user__email__icontains=query) |
         Q(user__first_name__icontains=query) |
         Q(user__last_name__icontains=query) |
-        Q(gamertag__icontains=query)
+        Q(player_name__icontains=query) |
+        Q(gamer_tag__icontains=query)
     )[:limit]
     
     # Buscar campeonatos
@@ -66,10 +67,10 @@ def global_search(request):
     
     # Buscar partidas (por times participantes)
     matches = Match.objects.filter(
-        Q(team_a__name__icontains=query) |
-        Q(team_b__name__icontains=query) |
+        Q(home_team__name__icontains=query) |
+        Q(away_team__name__icontains=query) |
         Q(championship__name__icontains=query)
-    ).select_related('team_a', 'team_b', 'championship')[:limit]
+    ).select_related('home_team', 'away_team', 'championship')[:limit]
     
     # Serializar resultados
     results = {

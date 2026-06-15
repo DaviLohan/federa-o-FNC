@@ -149,12 +149,14 @@ export function EAReportModal({ match, isOpen, onClose }: EAReportModalProps) {
       });
     },
     onSuccess: () => {
-      showToast('Resultado mantido com irregularidade registrada.', 'success');
+      handleClose();
       queryClient.invalidateQueries({ queryKey: ['matches'] });
       queryClient.invalidateQueries({ queryKey: ['championship'] });
       queryClient.invalidateQueries({ queryKey: ['match', match.id] });
       queryClient.invalidateQueries({ queryKey: ['contestations'] });
-      handleClose();
+      setTimeout(() => {
+        showToast('Resultado mantido com irregularidade registrada.', 'success');
+      }, 50);
     },
     onError: (err: any) => {
       const msg = err.response?.data?.error || 'Erro ao confirmar resultado com irregularidade.';
@@ -520,50 +522,125 @@ function ErrorState({
   onRetry: () => void;
   onClose: () => void;
 }) {
+  const isEaBlocked = error.toLowerCase().includes('ea bloqueou temporariamente');
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col items-center justify-center py-6">
         <div className="w-16 h-16 rounded-full bg-error/10 flex items-center justify-center mb-4">
           <XCircle className="w-8 h-8 text-error" />
         </div>
-        <h3 className="text-lg font-semibold text-text mb-2">Partida nao encontrada</h3>
-        <p className="text-sm text-muted text-center max-w-md">{error}</p>
+        <h3 className="text-lg font-semibold text-text mb-2">
+          {isEaBlocked ? 'Nao foi possivel consultar a EA agora' : 'Partida nao encontrada'}
+        </h3>
+        <p className="text-sm text-muted text-center max-w-md">
+          {isEaBlocked
+            ? 'A EA recusou temporariamente a busca automatica dessa partida. Tente novamente em alguns minutos ou utilize o fluxo administrativo para registrar o resultado.'
+            : error}
+        </p>
       </div>
+
+      {isEaBlocked && (
+        <div className="rounded-xl border border-warning/20 bg-warning/10 p-4">
+          <div className="flex gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+            <div className="space-y-2 text-sm text-muted">
+              <p className="font-semibold text-text">Motivo identificado</p>
+              <p>
+                A EA recusou a consulta automatica dessa partida neste momento, entao o sistema nao conseguiu buscar os jogos recentes.
+              </p>
+              <p>
+                Isso nao significa necessariamente que a partida nao existe. Significa apenas que a EA bloqueou temporariamente a consulta automatica.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-panel2 rounded-xl p-4">
         <h4 className="text-sm font-semibold text-text mb-3 flex items-center gap-2">
           <Info className="w-4 h-4 text-info" />
-          Possiveis causas
+          {isEaBlocked ? 'O que fazer agora' : 'Possiveis causas'}
         </h4>
         <ul className="text-sm text-muted space-y-2">
           <li className="flex gap-2 items-start">
             <span className="w-1 h-1 rounded-full bg-muted2 mt-2 shrink-0" />
             <span>
-              A partida pode aparecer na EA como{' '}
-              <strong className="text-text">League Match</strong> ou{' '}
-              <strong className="text-text">Friendly Match</strong>
+              {isEaBlocked ? (
+                <>
+                  Aguarde alguns minutos e tente novamente. Bloqueios temporarios da EA podem se normalizar sem nenhuma alteracao no sistema.
+                </>
+              ) : (
+                <>
+                  A partida pode aparecer na EA como{' '}
+                  <strong className="text-text">League Match</strong> ou{' '}
+                  <strong className="text-text">Friendly Match</strong>
+                </>
+              )}
             </span>
           </li>
           <li className="flex gap-2 items-start">
             <span className="w-1 h-1 rounded-full bg-muted2 mt-2 shrink-0" />
             <span>
-              O sistema procura partidas da EA em uma{' '}
-              <strong className="text-text">janela de ate 48 horas</strong> em relacao ao horario agendado
+              {isEaBlocked ? (
+                <>
+                  Se a urgencia for alta, use o fluxo administrativo/manual para registrar o resultado sem depender da consulta automatica.
+                </>
+              ) : (
+                <>
+                  O sistema procura partidas da EA em uma{' '}
+                  <strong className="text-text">janela de ate 48 horas</strong> em relacao ao horario agendado
+                </>
+              )}
             </span>
           </li>
           <li className="flex gap-2 items-start">
             <span className="w-1 h-1 rounded-full bg-muted2 mt-2 shrink-0" />
-            <span>Ambos os times devem usar os clubes EA vinculados na plataforma</span>
+            <span>
+              {isEaBlocked
+                ? 'Se a urgencia for alta, registre o resultado pelo fluxo administrativo/manual e valide com as evidencias da partida.'
+                : 'Ambos os times devem usar os clubes EA vinculados na plataforma'}
+            </span>
           </li>
           <li className="flex gap-2 items-start">
             <span className="w-1 h-1 rounded-full bg-muted2 mt-2 shrink-0" />
-            <span>Aguarde alguns minutos apos o fim da partida para a EA disponibilizar o historico</span>
+            <span>
+              {isEaBlocked
+                ? 'Ao clicar em Tentar Novamente, a busca e refeita na hora e nao depende do resultado vazio anterior.'
+                : 'Aguarde alguns minutos apos o fim da partida para a EA disponibilizar o historico'}
+            </span>
           </li>
-          <li className="flex gap-2 items-start">
-            <span className="w-1 h-1 rounded-full bg-muted2 mt-2 shrink-0" />
-            <span>Partidas contestadas tambem podem ser reprocessadas pelo botao Reportar EA</span>
-          </li>
+          {!isEaBlocked && (
+            <li className="flex gap-2 items-start">
+              <span className="w-1 h-1 rounded-full bg-muted2 mt-2 shrink-0" />
+              <span>Partidas contestadas tambem podem ser reprocessadas pelo botao Reportar EA</span>
+            </li>
+          )}
         </ul>
+
+        {isEaBlocked && (
+          <div className="mt-4 border-t border-warning/10 pt-4">
+            <button
+              type="button"
+              onClick={() => setShowTechnicalDetails((prev) => !prev)}
+              className="text-xs font-medium text-warning transition-colors hover:text-warning/80"
+            >
+              {showTechnicalDetails ? 'Ocultar detalhes tecnicos' : 'Ver detalhes tecnicos'}
+            </button>
+
+            {showTechnicalDetails && (
+              <div className="mt-3 rounded-lg border border-white/5 bg-bg/40 p-3 text-xs text-muted2">
+                <p>
+                  <strong className="text-text">Resposta da EA:</strong> HTTP 403 / Access Denied
+                </p>
+                <p className="mt-1">
+                  <strong className="text-text">Tipos consultados:</strong> Friendly Match, League Match e Playoff Match
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex gap-3">

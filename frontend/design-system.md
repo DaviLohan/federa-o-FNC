@@ -1,6 +1,6 @@
-# IMPERIUM — Design System
+# PRO ELEVEN — Design System
 
-> Identidade visual oficial extraída do logo "IMPERIUM." (escudo dourado + coroa + ponto vermelho).
+> Identidade visual oficial da Pro Eleven, baseada na nova marca P11 com escudo dourado/preto e linguagem premium.
 > Este documento é a fonte da verdade para todas as decisões visuais do projeto.
 
 ---
@@ -55,7 +55,7 @@ className="gradient-text"
 
 ### 2.3 Vermelho — Acento de Alerta
 
-Extraído do ponto final do logo "IMPERIUM**.**"
+Inspirado no brilho e contraste do sistema visual da marca Pro Eleven.
 
 | Uso | Hex | Token |
 |---|---|---|
@@ -418,4 +418,4 @@ Antes de mergear qualquer componente, verificar:
 
 ---
 
-*Versão 1.0 — Criado com base na identidade visual "IMPERIUM." (logo do escudo dourado com coroa)*
+*Versão 1.1 — Atualizado com base na identidade visual Pro Eleven (logo P11 em escudo dourado/preto)*

@@ -95,6 +95,7 @@ services:
   frontend:
     build:
       context: ./frontend
+      target: deps
     container_name: fnc_frontend
     command: npm run dev
     volumes:
@@ -105,6 +106,7 @@ services:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - NODE_ENV=development
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true
     depends_on:

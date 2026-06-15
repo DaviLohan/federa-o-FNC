@@ -19,7 +19,7 @@ def _user_represents_team(user_id: int, team) -> bool:
         team_id=team.id,
         player__user_id=user_id,
         is_active=True,
-        role__in=[TeamMembership.Role.OWNER, TeamMembership.Role.CAPTAIN],
+        role__in=[TeamMembership.Role.OWNER, TeamMembership.Role.CAPTAIN, TeamMembership.Role.COMMISSION],
     ).exists()
 
 
@@ -176,6 +176,10 @@ class MatchSerializer(serializers.ModelSerializer):
     can_start_now = serializers.SerializerMethodField()
     start_block_reason = serializers.SerializerMethodField()
     can_report = serializers.SerializerMethodField()
+    can_contest = serializers.SerializerMethodField()
+    has_report = serializers.SerializerMethodField()
+    report_status = serializers.SerializerMethodField()
+    report = serializers.SerializerMethodField()
     
     class Meta:
         model = Match
@@ -208,6 +212,10 @@ class MatchSerializer(serializers.ModelSerializer):
             'can_start_now',
             'start_block_reason',
             'can_report',
+            'can_contest',
+            'has_report',
+            'report_status',
+            'report',
             'created_at',
             'updated_at'
         ]
@@ -235,6 +243,31 @@ class MatchSerializer(serializers.ModelSerializer):
             return obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
         is_team_representative = _user_represents_team(user.id, obj.home_team) or _user_represents_team(user.id, obj.away_team)
         return is_team_representative and obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
+
+    def get_can_contest(self, obj):
+        return self.get_can_report(obj)
+
+    def get_has_report(self, obj):
+        try:
+            return bool(obj.report)
+        except MatchReport.DoesNotExist:
+            return False
+
+    def get_report_status(self, obj):
+        try:
+            return obj.report.status
+        except MatchReport.DoesNotExist:
+            return None
+
+    def get_report(self, obj):
+        try:
+            report = obj.report
+            return {
+                'id': report.id,
+                'status': report.status,
+            }
+        except MatchReport.DoesNotExist:
+            return None
     
     def validate(self, data):
         """Validações da partida."""
@@ -479,6 +512,9 @@ class MatchDetailSerializer(serializers.ModelSerializer):
     can_start_now = serializers.SerializerMethodField()
     start_block_reason = serializers.SerializerMethodField()
     can_report = serializers.SerializerMethodField()
+    can_contest = serializers.SerializerMethodField()
+    has_report = serializers.SerializerMethodField()
+    report_status = serializers.SerializerMethodField()
     
     class Meta:
         model = Match
@@ -505,6 +541,9 @@ class MatchDetailSerializer(serializers.ModelSerializer):
             'can_start_now',
             'start_block_reason',
             'can_report',
+            'can_contest',
+            'has_report',
+            'report_status',
             'home_formation',
             'away_formation',
             'winner',
@@ -540,6 +579,21 @@ class MatchDetailSerializer(serializers.ModelSerializer):
             return obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
         is_team_representative = _user_represents_team(user.id, obj.home_team) or _user_represents_team(user.id, obj.away_team)
         return is_team_representative and obj.status in [Match.Status.IN_PROGRESS, Match.Status.FINISHED, Match.Status.CONTESTED]
+
+    def get_can_contest(self, obj):
+        return self.get_can_report(obj)
+
+    def get_has_report(self, obj):
+        try:
+            return bool(obj.report)
+        except MatchReport.DoesNotExist:
+            return False
+
+    def get_report_status(self, obj):
+        try:
+            return obj.report.status
+        except MatchReport.DoesNotExist:
+            return None
 
 
 class ContestationAdminDetailSerializer(ContestationSerializer):

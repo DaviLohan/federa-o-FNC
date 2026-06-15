@@ -1,7 +1,7 @@
 """
 config/celery.py
 
-Configuração do Celery para o projeto IMPERIUM (FNC).
+Configuração do Celery para o projeto PRO ELEVEN (FNC).
 Descobre automaticamente tasks em todas as apps INSTALLED_APPS.
 """
 

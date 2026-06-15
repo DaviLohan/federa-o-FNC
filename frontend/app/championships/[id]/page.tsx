@@ -2,19 +2,20 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useChampionship } from '@/lib/hooks';
 import { usePermissions } from '@/lib/hooks';
 import { TabsPremium, TabPremium, Button, Skeleton } from '@/components/shared/ui';
 import { Calendar, Trophy, Users, BarChart, FileText, AlertTriangle, Eye } from 'lucide-react';
 import { ChampionshipHero } from '@/components/championships/ChampionshipHero';
-import { teamsAPI } from '@/lib/api';
+import { championshipsAPI, teamsAPI } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { EnrollmentModal } from '@/components/championships/EnrollmentModal';
 import { PaymentPixModal } from '@/components/championships/PaymentPixModal';
 import { EnrollmentActionCard } from '@/components/championships/EnrollmentActionCard';
+import { useToast } from '@/components/shared/ui';
 
 // Import tab components
 import { OverviewTab } from '@/components/championships/tabs/OverviewTab';
@@ -29,6 +30,8 @@ import { ReportsTab } from '@/components/championships/tabs/ReportsTab';
 export default function ChampionshipDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const championshipId = parseInt(params.id as string);
   
   const [activeTab, setActiveTab] = useState('overview');
@@ -47,8 +50,36 @@ export default function ChampionshipDetailsPage() {
     error, 
     standingsError 
   } = useChampionship(championshipId);
+  const activeMatches = useMemo(
+    () => matches.filter((match) => match.status !== 'CANCELLED'),
+    [matches],
+  );
   
   const { canManageChampionships, canViewReports } = usePermissions();
+
+  const openEnrollmentsMutation = useMutation({
+    mutationFn: (id: number) => championshipsAPI.openEnrollments(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['championship', championshipId] });
+      queryClient.invalidateQueries({ queryKey: ['championships'] });
+      showToast('Inscrições abertas com sucesso!', 'success');
+    },
+    onError: (error: any) => {
+      showToast(error?.response?.data?.error || 'Erro ao abrir inscrições', 'error');
+    },
+  });
+
+  const startChampionshipMutation = useMutation({
+    mutationFn: (id: number) => championshipsAPI.start(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['championship', championshipId] });
+      queryClient.invalidateQueries({ queryKey: ['championships'] });
+      showToast('Campeonato iniciado com sucesso!', 'success');
+    },
+    onError: (error: any) => {
+      showToast(error?.response?.data?.error || 'Erro ao iniciar campeonato', 'error');
+    },
+  });
 
   const { data: myTeam } = useQuery({
     queryKey: ['my-team'],
@@ -92,7 +123,7 @@ export default function ChampionshipDetailsPage() {
 
   // Determinar quais abas mostrar baseado no tipo de campeonato
   const showGroupsTab = championship.championship_type === 'GROUPS_KNOCKOUT';
-  const showBracketTab = championship.championship_type === 'GROUPS_KNOCKOUT';
+  const showBracketTab = championship.championship_type === 'GROUPS_KNOCKOUT' || championship.championship_type === 'KNOCKOUT';
   const showStandingsTab = championship.championship_type === 'LEAGUE';
 
   return (
@@ -106,6 +137,29 @@ export default function ChampionshipDetailsPage() {
           onEdit={() => router.push(`/championships?edit=${championship.id}`)}
         />
       </div>
+
+      {canManageChampionships && (
+        <div className="reveal-fade-delay-1 flex flex-wrap gap-3">
+          {championship.status === 'PENDING' && (
+            <Button
+              variant="secondary"
+              onClick={() => openEnrollmentsMutation.mutate(championship.id)}
+              disabled={openEnrollmentsMutation.isPending}
+            >
+              Abrir Inscrições
+            </Button>
+          )}
+          {championship.status === 'OPEN' && (
+            <Button
+              variant="primary"
+              onClick={() => startChampionshipMutation.mutate(championship.id)}
+              disabled={startChampionshipMutation.isPending}
+            >
+              Iniciar Campeonato
+            </Button>
+          )}
+        </div>
+      )}
 
       {user && (
         <div className="reveal-fade-delay-1">
@@ -140,7 +194,7 @@ export default function ChampionshipDetailsPage() {
           {showBracketTab && (
             <TabPremium 
               value="bracket" 
-              label="Chavamento" 
+                label="Chaveamento" 
               icon={<Trophy className="w-4 h-4" />}
             />
           )}
@@ -158,7 +212,7 @@ export default function ChampionshipDetailsPage() {
             value="matches"
             label="Partidas"
             icon={<Calendar className="w-4 h-4" />}
-            badge={matches.length > 0 ? matches.length : undefined}
+            badge={activeMatches.length > 0 ? activeMatches.length : undefined}
           />
           
           <TabPremium
@@ -210,7 +264,7 @@ export default function ChampionshipDetailsPage() {
         )}
         
         {activeTab === 'matches' && (
-          <MatchesTab matches={matches} championship={championship} />
+          <MatchesTab matches={activeMatches} championship={championship} />
         )}
         
         {activeTab === 'teams' && (

@@ -12,7 +12,7 @@ import { formatDate, formatTime } from '@/lib/utils/date';
 
 interface TeamMatchesTabProps {
   teamId: number;
-  isOwner: boolean;
+  canManageMatchOps: boolean;
 }
 
 type FilterStatus = 'all' | 'SCHEDULED' | 'IN_PROGRESS' | 'FINISHED';
@@ -33,7 +33,7 @@ const filterTabs: { id: FilterStatus; label: string }[] = [
   { id: 'FINISHED',    label: 'Finalizadas'   },
 ];
 
-export function TeamMatchesTab({ teamId, isOwner }: TeamMatchesTabProps) {
+export function TeamMatchesTab({ teamId, canManageMatchOps }: TeamMatchesTabProps) {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   const [reportingMatch, setReportingMatch] = useState<Match | null>(null);
@@ -117,7 +117,7 @@ export function TeamMatchesTab({ teamId, isOwner }: TeamMatchesTabProps) {
         {sorted.map((match) => {
           const status = statusConfig[match.status] ?? statusConfig['PENDING'];
           const canReport =
-            isOwner &&
+            canManageMatchOps &&
             (match.status === 'SCHEDULED' || match.status === 'IN_PROGRESS');
 
           const isHome = match.home_team.id === teamId;

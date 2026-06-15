@@ -8,10 +8,12 @@ Não requer autenticação — apenas headers similares a um navegador.
 """
 
 import logging
+import os
 from typing import Optional
 
 import requests
 from requests.exceptions import ConnectionError, HTTPError, Timeout
+from decouple import config
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +40,10 @@ DEFAULT_SYNC_MATCH_TYPES = ('leagueMatch', 'friendlyMatch')
 class EAApiError(Exception):
     """Erro genérico da API da EA."""
 
-    def __init__(self, message: str, status_code: int | None = None, response=None):
+    def __init__(self, message: str, status_code: int | None = None, response=None, details: str = ''):
         self.status_code = status_code
         self.response = response
+        self.details = details
         super().__init__(message)
 
 
@@ -50,7 +53,7 @@ class EAProClubsClient:
 
     Uso:
         client = EAProClubsClient()
-        clubs = client.search_club('Imperium', platform='common-gen5')
+        clubs = client.search_club('Pro Eleven', platform='common-gen5')
         matches = client.get_matches(club_id='12345', platform='common-gen5')
     """
 
@@ -62,6 +65,9 @@ class EAProClubsClient:
     ):
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
+        self.relay_url = config('EA_RELAY_URL', default='').strip()
+        self.relay_token = config('EA_RELAY_TOKEN', default='').strip()
+        self.relay_verify_ssl = config('EA_RELAY_VERIFY_SSL', default=True, cast=bool)
 
         self.session = requests.Session()
         self.session.headers.update(headers or DEFAULT_HEADERS)
@@ -140,7 +146,24 @@ class EAProClubsClient:
             'matchType': match_type,
             'maxResultCount': min(max_results, 10),  # EA limita em 10
         }
-        data = self._get('/clubs/matches', params=params)
+        try:
+            data = self._get('/clubs/matches', params=params)
+        except EAApiError as exc:
+            if exc.status_code == 403 and self.relay_url and self.relay_token:
+                logger.warning(
+                    'EA direta retornou 403 para club=%s match_type=%s. Tentando relay %s',
+                    club_id,
+                    match_type,
+                    self.relay_url,
+                )
+                data = self._get_matches_via_relay(
+                    club_id=club_id,
+                    platform=platform,
+                    match_type=match_type,
+                    max_results=max_results,
+                )
+            else:
+                raise
 
         # A resposta é uma lista de partidas
         if isinstance(data, list):
@@ -149,6 +172,52 @@ class EAProClubsClient:
                     item['matchType'] = match_type
             return data
         return []
+
+    def _get_matches_via_relay(
+        self,
+        club_id: str,
+        platform: str,
+        match_type: str,
+        max_results: int,
+    ) -> list[dict]:
+        if not self.relay_url or not self.relay_token:
+            raise EAApiError('Relay da EA nao configurado.')
+
+        try:
+            response = requests.get(
+                self.relay_url,
+                params={
+                    'club_id': club_id,
+                    'platform': platform,
+                    'match_type': match_type,
+                    'max_results': min(max_results, 25),
+                },
+                headers={'X-EA-Relay-Token': self.relay_token},
+                timeout=self.timeout,
+                verify=self.relay_verify_ssl,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            return payload.get('results', []) if isinstance(payload, dict) else []
+        except requests.RequestException as exc:
+            status = exc.response.status_code if getattr(exc, 'response', None) is not None else None
+            details = ''
+            if getattr(exc, 'response', None) is not None:
+                try:
+                    details = exc.response.text[:300].replace('\n', ' ').strip()
+                except Exception:
+                    details = ''
+            logger.error(
+                'Relay da EA falhou para club=%s match_type=%s: status=%s error=%s details=%s',
+                club_id,
+                match_type,
+                status,
+                exc,
+                details,
+            )
+            raise EAApiError('Falha no relay da EA.', status_code=status, details=details)
+        except ValueError:
+            raise EAApiError('Relay da EA retornou resposta invalida.')
 
     def get_all_match_types(
         self,
@@ -246,15 +315,22 @@ class EAProClubsClient:
             raise EAApiError(f'Erro de conexão com {url}')
 
         except HTTPError as e:
-            status = e.response.status_code if e.response else None
+            status = e.response.status_code if e.response is not None else None
+            response_snippet = ''
+            if e.response is not None:
+                try:
+                    response_snippet = e.response.text[:300].replace('\n', ' ').strip()
+                except Exception:
+                    response_snippet = ''
             logger.error(
-                'EA API retornou HTTP %s para %s: %s',
-                status, url, e,
+                'EA API retornou HTTP %s para %s: %s | body=%s',
+                status, url, e, response_snippet,
             )
             raise EAApiError(
                 f'EA API retornou HTTP {status}',
                 status_code=status,
                 response=e.response,
+                details=response_snippet,
             )
 
         except ValueError:

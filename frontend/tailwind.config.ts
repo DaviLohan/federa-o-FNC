@@ -9,7 +9,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Base Imperium (Black/Carbon)
+        // Base Pro Eleven (Black/Carbon)
         bg: "rgb(var(--bg) / <alpha-value>)",
         surface1: "rgb(var(--surface1) / <alpha-value>)",
         surface2: "rgb(var(--surface2) / <alpha-value>)",
@@ -17,12 +17,12 @@ const config: Config = {
         text: "rgb(var(--text) / <alpha-value>)",
         muted: "rgb(var(--muted) / <alpha-value>)",
         
-        // Gold (Imperium Brand)
+        // Gold (Pro Eleven Brand)
         gold: "rgb(var(--gold) / <alpha-value>)",
         gold2: 'var(--gold2)',
         gold3: 'var(--gold3)',
         
-        // Mapped colors (neon → Imperium for compatibility)
+        // Mapped colors (neon -> Pro Eleven for compatibility)
         cyan: "rgb(var(--cyan) / <alpha-value>)",     // Mapped to gold
         cyan2: "rgb(var(--cyan2) / <alpha-value>)",   // Mapped to gold3
         teal: "rgb(var(--teal) / <alpha-value>)",     // Mapped to gold

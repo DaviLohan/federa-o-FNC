@@ -6,6 +6,10 @@ from django.db.models.functions import Coalesce
 from .models import Match, Goal, Card
 from fnc_teams.models import Team
 from users.models import PlayerProfile
+from player_stats.models import TeamPerformanceMatch, TeamPlayerPerformance
+from player_stats.team_performance_sync import TeamPerformanceSyncService
+from player_stats.models import PlayerStatistics, TeamStatistics
+from fnc_championships.models import Championship, Group, ChampionshipEnrollment
 
 
 class PlayerStats:
@@ -328,6 +332,93 @@ class TeamStats:
 
 class MatchStats:
     """Estatísticas de partidas."""
+
+    @staticmethod
+    def _safe_percentage(made, attempts):
+        if not attempts:
+            return None
+        return round((made / attempts) * 100, 1)
+
+    @classmethod
+    def _serialize_team_players(cls, team_snapshot, player_snapshots):
+        players = []
+        for stat in player_snapshots:
+            players.append({
+                'player_id': stat.player_id,
+                'player_name': stat.player_name_snapshot,
+                'position': stat.position or '—',
+                'matches_played': stat.matches_played,
+                'average_rating': float(stat.rating) if stat.rating is not None else None,
+                'goals': stat.goals,
+                'assists': stat.assists,
+                'passes_made': stat.passes_made,
+                'passes_missed': max(stat.pass_attempts - stat.passes_made, 0),
+                'pass_accuracy': cls._safe_percentage(stat.passes_made, stat.pass_attempts),
+                'tackles_made': stat.tackles_made,
+                'tackles_missed': max(stat.tackle_attempts - stat.tackles_made, 0),
+                'tackle_accuracy': cls._safe_percentage(stat.tackles_made, stat.tackle_attempts),
+                'saves': stat.saves,
+                'cards': stat.cards,
+                'has_advanced_data': stat.has_advanced_data,
+            })
+
+        players.sort(
+            key=lambda item: (
+                -(item['average_rating'] or 0),
+                -(item['goals'] + item['assists']),
+                item['player_name'].lower(),
+            )
+        )
+
+        advanced_players = sum(1 for item in players if item['has_advanced_data'])
+        return {
+            'id': team_snapshot.team_id,
+            'name': team_snapshot.team.name,
+            'score': team_snapshot.goals_scored,
+            'cards': {
+                'yellow': 0,
+                'red': sum(item['cards'] for item in players),
+            },
+            'has_advanced_data': team_snapshot.has_advanced_data,
+            'advanced_players': advanced_players,
+            'lineup_players': team_snapshot.lineup_players,
+            'players': players,
+        }
+
+    @classmethod
+    def _build_snapshot_payload(cls, match):
+        for team in (match.home_team, match.away_team):
+            TeamPerformanceSyncService.sync_matches_for_team(team, [match])
+
+        snapshots = list(
+            TeamPerformanceMatch.objects.filter(match=match)
+            .select_related('team', 'match')
+            .order_by('team_id')
+        )
+        if len(snapshots) < 2:
+            return None
+
+        player_snapshots = TeamPlayerPerformance.objects.filter(match=match).select_related('player', 'team')
+        players_by_team = {}
+        for row in player_snapshots:
+            players_by_team.setdefault(row.team_id, []).append(row)
+
+        snapshot_map = {snapshot.team_id: snapshot for snapshot in snapshots}
+        home_snapshot = snapshot_map.get(match.home_team_id)
+        away_snapshot = snapshot_map.get(match.away_team_id)
+        if not home_snapshot or not away_snapshot:
+            return None
+
+        home_payload = cls._serialize_team_players(home_snapshot, players_by_team.get(match.home_team_id, []))
+        away_payload = cls._serialize_team_players(away_snapshot, players_by_team.get(match.away_team_id, []))
+
+        return {
+            'match_id': match.id,
+            'home_team': home_payload,
+            'away_team': away_payload,
+            'total_goals': (match.home_score or 0) + (match.away_score or 0),
+            'total_cards': home_payload['cards']['red'] + away_payload['cards']['red'],
+        }
     
     @staticmethod
     def get_match_detailed_stats(match_id):
@@ -344,6 +435,10 @@ class MatchStats:
             match = Match.objects.get(id=match_id)
         except Match.DoesNotExist:
             return None
+
+        snapshot_payload = MatchStats._build_snapshot_payload(match)
+        if snapshot_payload:
+            return snapshot_payload
         
         # Gols
         goals = Goal.objects.filter(match=match).select_related('scorer', 'team')
@@ -351,15 +446,9 @@ class MatchStats:
         away_goals = goals.filter(team=match.away_team)
         
         # Cartões
-        cards = Card.objects.filter(match=match).select_related('player')
-        home_cards = cards.filter(
-            Q(match__home_team=match.home_team) |
-            Q(player__user__in=match.home_team.members.values('user'))
-        )
-        away_cards = cards.filter(
-            Q(match__away_team=match.away_team) |
-            Q(player__user__in=match.away_team.members.values('user'))
-        )
+        cards = Card.objects.filter(match=match).select_related('player', 'team')
+        home_cards = cards.filter(team=match.home_team)
+        away_cards = cards.filter(team=match.away_team)
         
         return {
             'match_id': match.id,
@@ -398,6 +487,68 @@ class MatchStats:
 
 class ChampionshipStats:
     """Estatísticas de campeonatos."""
+
+    @staticmethod
+    def get_championship_dashboard(championship_id):
+        championship = Championship.objects.get(id=championship_id)
+
+        match_queryset = Match.objects.filter(championship_id=championship_id)
+        valid_matches = match_queryset.exclude(status=Match.Status.CANCELLED)
+        finished_matches = valid_matches.filter(status=Match.Status.FINISHED)
+
+        player_stats_queryset = PlayerStatistics.objects.filter(
+            championship_id=championship_id
+        ).select_related('player', 'team', 'championship')
+
+        team_stats_queryset = TeamStatistics.objects.filter(
+            championship_id=championship_id
+        ).select_related('team', 'championship')
+
+        top_scorers = player_stats_queryset.filter(goals__gt=0).order_by(
+            '-goals', '-assists', '-average_rating', 'player__player_name'
+        )[:10]
+        top_assisters = player_stats_queryset.filter(assists__gt=0).order_by(
+            '-assists', '-goals', '-average_rating', 'player__player_name'
+        )[:10]
+
+        team_stats = list(team_stats_queryset)
+        team_rankings = sorted(
+            team_stats,
+            key=lambda item: (-item.points, -item.goal_difference, -item.goals_scored, item.team.name.lower()),
+        )
+
+        best_attack = max(team_stats, key=lambda item: (item.goals_scored, item.goal_difference), default=None)
+        best_defense = min(team_stats, key=lambda item: (item.goals_conceded, -item.clean_sheets), default=None)
+
+        goals_total = finished_matches.aggregate(
+            total=Coalesce(Sum(F('home_score') + F('away_score'), output_field=IntegerField()), 0)
+        )['total'] or 0
+
+        approved_teams_count = ChampionshipEnrollment.objects.filter(
+            championship_id=championship_id,
+            status='APPROVED',
+        ).count()
+
+        return {
+            'championship': championship,
+            'overview': {
+                'matches_total': valid_matches.count(),
+                'matches_finished': finished_matches.count(),
+                'matches_pending': valid_matches.filter(status__in=[Match.Status.SCHEDULED, Match.Status.IN_PROGRESS]).count(),
+                'matches_contested': valid_matches.filter(status=Match.Status.CONTESTED).count(),
+                'goals_total': goals_total,
+                'avg_goals_per_match': round(goals_total / finished_matches.count(), 2) if finished_matches.exists() else 0,
+                'teams_count': approved_teams_count or len(team_rankings),
+                'groups_count': Group.objects.filter(championship_id=championship_id).count(),
+                'best_attack_id': best_attack.id if best_attack else None,
+                'best_defense_id': best_defense.id if best_defense else None,
+            },
+            'top_scorers': top_scorers,
+            'top_assisters': top_assisters,
+            'team_rankings': team_rankings,
+            'best_attack': best_attack,
+            'best_defense': best_defense,
+        }
     
     @staticmethod
     def get_championship_overview(championship_id):

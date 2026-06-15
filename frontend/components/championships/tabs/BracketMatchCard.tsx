@@ -1,167 +1,126 @@
 'use client';
 
-import { Badge } from '@/components/shared/ui';
-import type { BracketMatch } from '@/types';
+import { Button } from '@/components/shared/ui';
+import { AlertTriangle, CheckCircle2, Eye, Gamepad2, ShieldAlert } from 'lucide-react';
+import type { Match, Team } from '@/types';
 
-interface BracketMatchCardProps {
-  match: BracketMatch;
-  compact?: boolean;
-  onClick?: () => void;
+export interface BracketTieView {
+  id: string;
+  roundName: string;
+  teamA?: Team;
+  teamB?: Team;
+  firstLeg?: Match;
+  secondLeg?: Match;
+  winnerId?: number;
+  aggregate?: { home: number; away: number; label: string };
+  aggregateReady?: boolean;
+  aggregatePartial?: boolean;
+  firstLegLabel?: string;
+  secondLegLabel?: string;
+  statusLabel: string;
+  statusTone: 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+  canReport: boolean;
+  canOpenReport: boolean;
+  reportMatch?: Match;
 }
 
-export function BracketMatchCard({ match, compact = false, onClick }: BracketMatchCardProps) {
-  const hasWinner = !!match.winner;
-  const isScheduled = match.team1 && match.team2 && !hasWinner;
-  const isTBD = !match.team1 || !match.team2;
+interface BracketMatchCardProps {
+  tie: BracketTieView;
+  compact?: boolean;
+  onReportEA?: (match: Match) => void;
+  onViewMatch?: (match: Match) => void;
+}
 
-  // Determina status
-  let status: 'finished' | 'scheduled' | 'tbd' = 'tbd';
-  if (hasWinner) status = 'finished';
-  else if (isScheduled) status = 'scheduled';
-
-  const statusConfig = {
-    finished: { label: 'Finalizado', color: 'bg-green/20 text-green border-green/30' },
-    scheduled: { label: 'Agendado', color: 'bg-gold/20 text-gold border-gold/30' },
-    tbd: { label: 'TBD', color: 'bg-muted2/20 text-muted2 border-muted2/30' },
-  };
-
+function TeamRow({ team, score, winner, compact }: { team?: Team; score?: number; winner: boolean; compact: boolean }) {
   return (
     <div
-      onClick={onClick}
-      className={`
-        group relative overflow-hidden rounded-2xl transition-all duration-300 cursor-pointer
-        ${compact ? 'p-3' : 'p-4'}
-        ${hasWinner 
-          ? 'bg-gradient-to-br from-green/5 via-surface2 to-surface1 border-2 border-green/30 shadow-lg shadow-green/10' 
-          : 'bg-gradient-to-br from-surface1 to-surface2 border-2 border-border hover:border-gold/30'
-        }
-        hover:scale-[1.02] hover:shadow-xl hover:shadow-gold/10
-      `}
+      className={`flex items-center justify-between rounded-xl ${compact ? 'p-2.5' : 'p-3'} ${winner ? 'border border-green/40 bg-green/10' : 'border border-border bg-surface1/50'}`}
     >
-      {/* Status Badge */}
-      <div className="absolute top-3 right-3 z-10">
-        <div className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusConfig[status].color}`}>
-          {statusConfig[status].label}
+      <div className="flex min-w-0 items-center gap-2.5">
+        {team?.logo ? (
+          <img src={team.logo} alt={team.name} className={`${compact ? 'h-7 w-7' : 'h-8 w-8'} rounded-lg object-cover ring-1 ring-border`} />
+        ) : (
+          <div className={`${compact ? 'h-7 w-7' : 'h-8 w-8'} rounded-lg border border-border bg-surface2 text-center text-xs leading-7 text-muted2`}>?</div>
+        )}
+        <span className={`truncate ${winner ? 'font-semibold text-green' : team ? 'text-text' : 'italic text-muted2'}`}>{team?.name || 'A definir'}</span>
+      </div>
+      {typeof score === 'number' && <span className="ml-3 font-mono text-lg font-bold text-text">{score}</span>}
+    </div>
+  );
+}
+
+export function BracketMatchCard({ tie, compact = false, onReportEA, onViewMatch }: BracketMatchCardProps) {
+  const tone = {
+    success: 'border-green/35 bg-green/10 text-green',
+    warning: 'border-yellow-500/35 bg-yellow-500/10 text-yellow-300',
+    danger: 'border-red-500/35 bg-red-500/10 text-red-300',
+    info: 'border-blue-500/35 bg-blue-500/10 text-blue-300',
+    neutral: 'border-border bg-surface2/50 text-muted2',
+  }[tie.statusTone];
+
+  const ida = tie.firstLeg;
+  const volta = tie.secondLeg;
+  const mainMatch = volta || ida;
+
+  return (
+    <div className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br from-[#0B0F16] to-[#101828] ${compact ? 'p-3' : 'p-4'} border-border shadow-lg shadow-black/30`}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-widest text-gold">{tie.roundName}</p>
+        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${tone}`}>{tie.statusLabel}</span>
+      </div>
+
+      <div className="space-y-2">
+        <TeamRow team={tie.teamA} compact={compact} winner={tie.winnerId === tie.teamA?.id} />
+        <TeamRow team={tie.teamB} compact={compact} winner={tie.winnerId === tie.teamB?.id} />
+      </div>
+
+      <div className="mt-3 space-y-2 rounded-xl border border-border bg-black/20 p-3 text-xs">
+        <div className="flex items-center justify-between">
+          <span className="text-muted2">Ida</span>
+          <span className="font-mono text-text">{tie.firstLegLabel || 'Aguardando partida'}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-muted2">Volta</span>
+          <span className="font-mono text-text">{tie.secondLegLabel || (ida ? 'Jogo único' : 'Aguardando partida')}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-muted2">Agregado</span>
+          <span className="font-mono font-semibold text-gold">
+            {tie.aggregateReady ? tie.aggregate?.label : (tie.aggregatePartial ? 'Aguardando volta' : 'Aguardando resultados')}
+          </span>
         </div>
       </div>
 
-      {/* Match Content */}
-      <div className={`space-y-2 ${compact ? 'mt-6' : 'mt-8'}`}>
-        {/* Team 1 */}
-        <div
-          className={`
-            flex items-center justify-between rounded-xl transition-all duration-300
-            ${compact ? 'p-2.5' : 'p-3.5'}
-            ${match.winner?.id === match.team1?.id 
-              ? 'bg-gradient-to-r from-green/20 via-green/10 to-transparent border-2 border-green/40 shadow-md shadow-green/20' 
-              : 'bg-surface1/50 border border-border/50 group-hover:border-border'
-            }
-          `}
-        >
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            {match.team1?.logo ? (
-              <img
-                src={match.team1.logo}
-                alt={match.team1.name}
-                className={`rounded-lg object-cover flex-shrink-0 ring-1 ring-border ${compact ? 'w-7 h-7' : 'w-9 h-9'}`}
-              />
-            ) : (
-              <div className={`bg-surface2 border border-border rounded-lg flex-shrink-0 flex items-center justify-center ${compact ? 'w-7 h-7 text-xs' : 'w-9 h-9 text-sm'}`}>
-                <span className="text-muted2 font-bold">?</span>
-              </div>
-            )}
-            <span
-              className={`font-medium ${compact ? 'text-sm' : 'text-base'} ${
-                match.winner?.id === match.team1?.id
-                  ? 'font-bold text-green'
-                  : match.team1
-                  ? 'text-text'
-                  : 'text-muted2 opacity-60 italic'
-              }`}
-              title={match.team1?.name || 'A definir'}
-            >
-              <span className="truncate block max-w-[180px]">
-                {match.team1?.name || 'A definir'}
-              </span>
-            </span>
-            {match.winner?.id === match.team1?.id && (
-              <span className="text-green text-xs ml-1">✓</span>
-            )}
-          </div>
-          {match.score && (
-            <span
-              className={`font-mono font-bold ml-3 flex-shrink-0 ${compact ? 'text-lg' : 'text-2xl'} ${
-                match.winner?.id === match.team1?.id ? 'text-green' : 'text-muted2'
-              }`}
-            >
-              {match.score.split('-')[0]}
-            </span>
-          )}
+      {tie.winnerId && (
+        <div className="mt-2 flex items-center gap-2 text-xs text-green">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          <span>Vencedor definido</span>
         </div>
+      )}
 
-        {/* VS Divider */}
-        <div className="flex items-center justify-center py-1">
-          <div className="px-3 py-0.5 rounded-full bg-surface2 border border-border">
-            <span className={`font-heading font-bold text-muted2 ${compact ? 'text-xs' : 'text-sm'}`}>VS</span>
-          </div>
-        </div>
-
-        {/* Team 2 */}
-        <div
-          className={`
-            flex items-center justify-between rounded-xl transition-all duration-300
-            ${compact ? 'p-2.5' : 'p-3.5'}
-            ${match.winner?.id === match.team2?.id 
-              ? 'bg-gradient-to-r from-green/20 via-green/10 to-transparent border-2 border-green/40 shadow-md shadow-green/20' 
-              : 'bg-surface1/50 border border-border/50 group-hover:border-border'
-            }
-          `}
-        >
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            {match.team2?.logo ? (
-              <img
-                src={match.team2.logo}
-                alt={match.team2.name}
-                className={`rounded-lg object-cover flex-shrink-0 ring-1 ring-border ${compact ? 'w-7 h-7' : 'w-9 h-9'}`}
-              />
-            ) : (
-              <div className={`bg-surface2 border border-border rounded-lg flex-shrink-0 flex items-center justify-center ${compact ? 'w-7 h-7 text-xs' : 'w-9 h-9 text-sm'}`}>
-                <span className="text-muted2 font-bold">?</span>
-              </div>
-            )}
-            <span
-              className={`font-medium ${compact ? 'text-sm' : 'text-base'} ${
-                match.winner?.id === match.team2?.id
-                  ? 'font-bold text-green'
-                  : match.team2
-                  ? 'text-text'
-                  : 'text-muted2 opacity-60 italic'
-              }`}
-              title={match.team2?.name || 'A definir'}
-            >
-              <span className="truncate block max-w-[180px]">
-                {match.team2?.name || 'A definir'}
-              </span>
-            </span>
-            {match.winner?.id === match.team2?.id && (
-              <span className="text-green text-xs ml-1">✓</span>
-            )}
-          </div>
-          {match.score && (
-            <span
-              className={`font-mono font-bold ml-3 flex-shrink-0 ${compact ? 'text-lg' : 'text-2xl'} ${
-                match.winner?.id === match.team2?.id ? 'text-green' : 'text-muted2'
-              }`}
-            >
-              {match.score.split('-')[1]}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Hover gradient effect */}
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-        <div className="absolute top-0 right-0 w-24 h-24 bg-gold/5 rounded-full blur-2xl"></div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {tie.canReport && tie.canOpenReport && tie.reportMatch && onReportEA && (
+          <Button size="sm" variant="primary" onClick={() => onReportEA(tie.reportMatch!)}>
+            <Gamepad2 className="mr-1.5 h-3.5 w-3.5" />
+            Reportar Resultado
+          </Button>
+        )}
+        {mainMatch && onViewMatch && (
+          <Button size="sm" variant="ghost" onClick={() => onViewMatch(mainMatch)}>
+            <Eye className="mr-1.5 h-3.5 w-3.5" />
+            Ver Partida
+          </Button>
+        )}
+        {tie.statusTone === 'danger' && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-red-500/35 bg-red-500/10 px-2 py-1 text-[11px] text-red-300">
+            <ShieldAlert className="h-3 w-3" /> Contestação aberta
+          </span>
+        )}
+        {!tie.canReport && tie.reportMatch && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface2/60 px-2 py-1 text-[11px] text-muted2">
+            <AlertTriangle className="h-3 w-3" /> Sem permissão para reportar
+          </span>
+        )}
       </div>
     </div>
   );

@@ -51,6 +51,7 @@ class ChampionshipSerializer(serializers.ModelSerializer):
             'num_groups',
             'teams_per_group',
             'qualified_per_group',
+            'group_stage_format',
             'has_third_place_match',
             'tiebreak_criteria',
             'current_phase',
@@ -65,7 +66,16 @@ class ChampionshipSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at'
         ]
-        read_only_fields = ['id', 'status', 'status_display', 'created_by', 'created_at', 'updated_at']
+        read_only_fields = [
+            'id',
+            'status',
+            'status_display',
+            'created_by',
+            'start_date',
+            'end_date',
+            'created_at',
+            'updated_at',
+        ]
     
     def validate_game_days(self, value):
         """Trata game_days que chega como string JSON via FormData (multipart)."""
@@ -80,24 +90,15 @@ class ChampionshipSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         """Validações customizadas."""
-        # Bloqueia criação de novos campeonatos KNOCKOUT
-        if data.get('championship_type') == 'KNOCKOUT' and not self.instance:
-            raise serializers.ValidationError({
-                'championship_type': 'Não é permitido criar novos campeonatos Mata-Mata. Use "Grupos + Mata-Mata" para torneios eliminatórios.'
-            })
-        
+        championship_type = data.get('championship_type')
+        if championship_type is None and self.instance is not None:
+            championship_type = self.instance.championship_type
+
         # Valida datas de inscrição
         if data.get('enrollment_start') and data.get('enrollment_end'):
             if data['enrollment_start'] >= data['enrollment_end']:
                 raise serializers.ValidationError({
                     'enrollment_end': 'Data de término deve ser posterior ao início.'
-                })
-        
-        # Valida datas do campeonato
-        if data.get('start_date') and data.get('enrollment_end'):
-            if data['start_date'] <= data['enrollment_end']:
-                raise serializers.ValidationError({
-                    'start_date': 'Campeonato deve iniciar após o período de inscrições.'
                 })
         
         # Valida número de times
@@ -109,14 +110,18 @@ class ChampionshipSerializer(serializers.ModelSerializer):
             })
         
         # Validações específicas para GROUPS_KNOCKOUT
-        if data.get('championship_type') == 'GROUPS_KNOCKOUT':
+        if championship_type == 'GROUPS_KNOCKOUT':
             num_groups = data.get('num_groups')
+            if num_groups is None and self.instance is not None:
+                num_groups = self.instance.num_groups
             if not num_groups:
                 raise serializers.ValidationError({
                     'num_groups': 'Campo obrigatório para campeonatos Grupos + Mata-Mata.'
                 })
             
             teams_per_group = data.get('teams_per_group', 4)
+            if 'teams_per_group' not in data and self.instance is not None:
+                teams_per_group = self.instance.teams_per_group or teams_per_group
             expected_teams = num_groups * teams_per_group
             
             if data.get('max_teams') and data['max_teams'] != expected_teams:
@@ -135,6 +140,10 @@ class ChampionshipSerializer(serializers.ModelSerializer):
             # Define fase inicial
             if not data.get('current_phase'):
                 data['current_phase'] = 'GROUPS'
+            if not data.get('group_stage_format'):
+                data['group_stage_format'] = Championship.GroupStageFormat.SINGLE_ROUND
+        elif 'group_stage_format' in data and not data['group_stage_format']:
+            data['group_stage_format'] = Championship.GroupStageFormat.SINGLE_ROUND
         
         # Valida dias de jogo
         game_days = data.get('game_days')
@@ -511,6 +520,7 @@ class ChampionshipDetailSerializer(serializers.ModelSerializer):
             'num_groups',
             'teams_per_group',
             'qualified_per_group',
+            'group_stage_format',
             'has_third_place_match',
             'tiebreak_criteria',
             'current_phase',

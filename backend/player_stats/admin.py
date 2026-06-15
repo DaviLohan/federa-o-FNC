@@ -1,6 +1,13 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import PlayerStatistics, TeamStatistics, SeasonSummary, TopScorer
+from .models import (
+    PlayerStatistics,
+    TeamStatistics,
+    SeasonSummary,
+    TopScorer,
+    GlobalTeamRanking,
+    GlobalTeamRankingEntry,
+)
 
 
 # ============================================================================
@@ -363,25 +370,25 @@ class TeamStatisticsAdmin(admin.ModelAdmin):
             obj.points
         )
     points_display.short_description = 'Pontos'
-    
+
     def win_rate_display(self, obj):
         """Exibe o aproveitamento."""
         rate = obj.win_rate
         color = 'green' if rate >= 60 else 'orange' if rate >= 40 else 'red'
-        
+
         return format_html(
             '<span style="color: {}; font-weight: bold;">{:.1f}%</span>',
             color,
             rate
         )
     win_rate_display.short_description = 'Aproveit.'
-    
+
     def goal_difference_display(self, obj):
         """Saldo de gols."""
         diff = obj.goal_difference
         color = 'green' if diff > 0 else 'red' if diff < 0 else 'gray'
         sign = '+' if diff > 0 else ''
-        
+
         return format_html(
             '<span style="color: {}; font-weight: bold;">{}{}</span>',
             color,
@@ -389,21 +396,56 @@ class TeamStatisticsAdmin(admin.ModelAdmin):
             diff
         )
     goal_difference_display.short_description = 'Saldo'
-    
+
     def goals_per_match_display(self, obj):
         """Média de gols marcados."""
         return f'{obj.goals_per_match:.2f}'
     goals_per_match_display.short_description = 'Gols/Jogo'
-    
+
     def goals_conceded_per_match_display(self, obj):
         """Média de gols sofridos."""
         return f'{obj.goals_conceded_per_match:.2f}'
     goals_conceded_per_match_display.short_description = 'Gols Sofridos/Jogo'
-    
+
     def clean_sheet_rate_display(self, obj):
         """Taxa de jogos sem sofrer gols."""
         return f'{obj.clean_sheet_rate:.1f}%'
     clean_sheet_rate_display.short_description = 'Taxa Clean Sheet'
+
+
+@admin.register(GlobalTeamRanking)
+class GlobalTeamRankingAdmin(admin.ModelAdmin):
+    list_display = (
+        'team',
+        'tier',
+        'total_points',
+        'matches_played',
+        'wins',
+        'draws',
+        'losses',
+        'goal_difference',
+        'updated_at',
+    )
+    list_filter = ('tier',)
+    search_fields = ('team__name',)
+    ordering = ('-total_points', '-wins', '-goal_difference', 'losses', 'team__name')
+
+
+@admin.register(GlobalTeamRankingEntry)
+class GlobalTeamRankingEntryAdmin(admin.ModelAdmin):
+    list_display = (
+        'match',
+        'team',
+        'result',
+        'points_awarded',
+        'goals_for',
+        'goals_against',
+        'counted',
+        'updated_at',
+    )
+    list_filter = ('result', 'counted')
+    search_fields = ('team__name', 'match__id')
+    ordering = ('-match__finished_at', '-match_id')
 
 
 # ============================================================================

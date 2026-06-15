@@ -463,3 +463,200 @@ class TeamPlayerPerformance(models.Model):
 
     def __str__(self):
         return f'{self.player_name_snapshot} - {self.team} ({self.match_id})'
+
+
+class RankingCycle(models.Model):
+    """Ciclo mensal do ranking competitivo de jogadores."""
+
+    class Status(models.TextChoices):
+        OPEN = 'OPEN', 'Aberto'
+        CLOSED = 'CLOSED', 'Fechado'
+
+    slug = models.CharField('identificador do ciclo', max_length=7, unique=True, help_text='Formato YYYY-MM')
+    starts_at = models.DateTimeField('início do ciclo')
+    ends_at = models.DateTimeField('fim do ciclo')
+    status = models.CharField('status', max_length=10, choices=Status.choices, default=Status.OPEN)
+    processed_at = models.DateTimeField('processado em', null=True, blank=True)
+    created_at = models.DateTimeField('criado em', auto_now_add=True)
+    updated_at = models.DateTimeField('atualizado em', auto_now=True)
+
+    class Meta:
+        verbose_name = 'ciclo de ranking'
+        verbose_name_plural = 'ciclos de ranking'
+        ordering = ['-starts_at']
+
+    def __str__(self):
+        return f'Ciclo {self.slug} ({self.get_status_display()})'
+
+
+class PlayerTierState(models.Model):
+    """Estado consolidado por jogador em um ciclo."""
+
+    class Tier(models.TextChoices):
+        BRONZE = 'BRONZE', 'Bronze'
+        SILVER = 'SILVER', 'Prata'
+        GOLD = 'GOLD', 'Ouro'
+        PLATINUM = 'PLATINUM', 'Platina'
+
+    cycle = models.ForeignKey(
+        RankingCycle,
+        on_delete=models.CASCADE,
+        related_name='player_states',
+        verbose_name='ciclo',
+    )
+    player = models.ForeignKey(
+        PlayerProfile,
+        on_delete=models.CASCADE,
+        related_name='tier_states',
+        verbose_name='jogador',
+    )
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='player_tier_states',
+        verbose_name='time atual',
+    )
+    tier = models.CharField('rank', max_length=10, choices=Tier.choices, default=Tier.BRONZE)
+    score = models.DecimalField('pontuação final', max_digits=7, decimal_places=2, default=0)
+    average_rating = models.DecimalField('nota média', max_digits=5, decimal_places=2, default=0)
+    goals = models.PositiveIntegerField('gols', default=0)
+    assists = models.PositiveIntegerField('assistências', default=0)
+    matches_played = models.PositiveIntegerField('partidas jogadas', default=0)
+    tier_position = models.PositiveIntegerField('posição no rank', default=0)
+    general_position = models.PositiveIntegerField('posição geral', default=0)
+    is_promotion_zone = models.BooleanField('está na zona de promoção', default=False)
+    promotion_eligible = models.BooleanField('elegível para promoção', default=False)
+    promoted_to_tier = models.CharField('promovido para rank', max_length=10, choices=Tier.choices, blank=True)
+    created_at = models.DateTimeField('criado em', auto_now_add=True)
+    updated_at = models.DateTimeField('atualizado em', auto_now=True)
+
+    class Meta:
+        verbose_name = 'estado de rank do jogador'
+        verbose_name_plural = 'estados de rank dos jogadores'
+        ordering = ['general_position', '-score']
+        constraints = [
+            models.UniqueConstraint(fields=['cycle', 'player'], name='unique_player_tier_state_cycle_player'),
+        ]
+
+    def __str__(self):
+        return f'{self.player} - {self.get_tier_display()} ({self.cycle.slug})'
+
+
+class TierPromotionAudit(models.Model):
+    """Histórico de promoções aplicadas no fechamento do ciclo."""
+
+    cycle = models.ForeignKey(
+        RankingCycle,
+        on_delete=models.CASCADE,
+        related_name='promotion_audits',
+        verbose_name='ciclo',
+    )
+    player = models.ForeignKey(
+        PlayerProfile,
+        on_delete=models.CASCADE,
+        related_name='tier_promotion_audits',
+        verbose_name='jogador',
+    )
+    from_tier = models.CharField('rank anterior', max_length=10, choices=PlayerTierState.Tier.choices)
+    to_tier = models.CharField('novo rank', max_length=10, choices=PlayerTierState.Tier.choices)
+    score_at_promotion = models.DecimalField('pontuação na promoção', max_digits=7, decimal_places=2, default=0)
+    tier_position = models.PositiveIntegerField('posição no rank', default=0)
+    promoted_at = models.DateTimeField('promovido em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'auditoria de promoção'
+        verbose_name_plural = 'auditorias de promoção'
+        ordering = ['-promoted_at']
+        constraints = [
+            models.UniqueConstraint(fields=['cycle', 'player'], name='unique_tier_promotion_per_cycle_player'),
+        ]
+
+    def __str__(self):
+        return f'{self.player} {self.from_tier}->{self.to_tier} ({self.cycle.slug})'
+
+
+class GlobalTeamRanking(models.Model):
+    """Ranking geral acumulado de um time na plataforma."""
+
+    class Tier(models.TextChoices):
+        TIER_1 = 'TIER_1', 'Tier 1'
+        TIER_2 = 'TIER_2', 'Tier 2'
+        TIER_3 = 'TIER_3', 'Tier 3'
+
+    team = models.OneToOneField(
+        Team,
+        on_delete=models.CASCADE,
+        related_name='global_ranking',
+        verbose_name='time',
+    )
+    total_points = models.PositiveIntegerField('pontos totais', default=0)
+    matches_played = models.PositiveIntegerField('partidas jogadas', default=0)
+    wins = models.PositiveIntegerField('vitórias', default=0)
+    draws = models.PositiveIntegerField('empates', default=0)
+    losses = models.PositiveIntegerField('derrotas', default=0)
+    goals_for = models.PositiveIntegerField('gols marcados', default=0)
+    goals_against = models.PositiveIntegerField('gols sofridos', default=0)
+    goal_difference = models.IntegerField('saldo de gols', default=0)
+    tier = models.CharField(
+        'tier',
+        max_length=10,
+        choices=Tier.choices,
+        default=Tier.TIER_3,
+    )
+    updated_at = models.DateTimeField('atualizado em', auto_now=True)
+
+    class Meta:
+        verbose_name = 'ranking geral do time'
+        verbose_name_plural = 'ranking geral dos times'
+        ordering = ['-total_points', '-wins', '-goal_difference', 'losses', 'team__name']
+
+    def __str__(self):
+        return f'{self.team.name} - {self.total_points} pts ({self.get_tier_display()})'
+
+    @property
+    def win_rate(self):
+        if self.matches_played > 0:
+            return round((self.wins / self.matches_played) * 100, 2)
+        return 0.0
+
+
+class GlobalTeamRankingEntry(models.Model):
+    """Histórico de pontos aplicados por partida para cada time."""
+
+    class Result(models.TextChoices):
+        WIN = 'WIN', 'Vitória'
+        DRAW = 'DRAW', 'Empate'
+        LOSS = 'LOSS', 'Derrota'
+
+    match = models.ForeignKey(
+        Match,
+        on_delete=models.CASCADE,
+        related_name='global_ranking_entries',
+        verbose_name='partida',
+    )
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name='global_ranking_entries',
+        verbose_name='time',
+    )
+    result = models.CharField('resultado', max_length=10, choices=Result.choices)
+    points_awarded = models.PositiveIntegerField('pontos concedidos', default=0)
+    goals_for = models.PositiveIntegerField('gols marcados', default=0)
+    goals_against = models.PositiveIntegerField('gols sofridos', default=0)
+    counted = models.BooleanField('contabilizado no ranking', default=True)
+    created_at = models.DateTimeField('criado em', auto_now_add=True)
+    updated_at = models.DateTimeField('atualizado em', auto_now=True)
+
+    class Meta:
+        verbose_name = 'entrada de ranking global'
+        verbose_name_plural = 'entradas de ranking global'
+        ordering = ['-match__finished_at', '-match_id', 'team__name']
+        constraints = [
+            models.UniqueConstraint(fields=['match', 'team'], name='unique_global_ranking_entry_match_team'),
+        ]
+
+    def __str__(self):
+        return f'Match {self.match_id} - {self.team.name}: {self.points_awarded} pts'

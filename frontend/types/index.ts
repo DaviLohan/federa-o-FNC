@@ -138,6 +138,48 @@ export interface TeamPerformancePayload {
   };
 }
 
+export interface WeeklySelectionPlayer {
+  player_id: number | null;
+  player_name: string;
+  team_id: number;
+  team_name: string;
+  team_logo: string | null;
+  position: string;
+  group: 'GK' | 'DEF' | 'MID' | 'ATT';
+  average_rating: number;
+  goals: number;
+  assists: number;
+  cards: number;
+  saves: number;
+  matches_played: number;
+  has_advanced_data: boolean;
+  score: number;
+  is_mvp: boolean;
+}
+
+export interface WeeklySelectionPayload {
+  championship: {
+    id: number;
+    name: string;
+    logo: string | null;
+  };
+  round_number: number | null;
+  available_rounds: number[];
+  formation: '3-5-2';
+  mvp: WeeklySelectionPlayer | null;
+  lineup: {
+    GK: WeeklySelectionPlayer[];
+    DEF: WeeklySelectionPlayer[];
+    MID: WeeklySelectionPlayer[];
+    ATT: WeeklySelectionPlayer[];
+  };
+  players: WeeklySelectionPlayer[];
+  meta: {
+    matches_analyzed: number;
+    players_considered: number;
+  };
+}
+
 // Auth Types
 export interface LoginRequest {
   email: string;
@@ -302,7 +344,7 @@ export interface TeamMembership {
   id: number;
   team: Team;
   player: PlayerProfile;
-  role: 'OWNER' | 'CAPTAIN' | 'PLAYER';
+  role: 'OWNER' | 'CAPTAIN' | 'COMMISSION' | 'PLAYER';
   role_display: string;
   is_active: boolean;
   joined_at: string;
@@ -412,13 +454,14 @@ export interface Championship {
   num_groups?: number;
   teams_per_group?: number;
   qualified_per_group?: number;
+  group_stage_format?: 'SINGLE_ROUND' | 'ROUND_TRIP';
   has_third_place_match?: boolean;
   tiebreak_criteria?: string[];
   current_phase?: 'GROUPS' | 'KNOCKOUT' | 'FINISHED';
   game_days?: string[];
   game_start_time?: string;
   game_end_time?: string;
-  status: 'SCHEDULED' | 'OPEN' | 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED';
+  status: 'PENDING' | 'OPEN' | 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED';
   is_enrollment_open: boolean;
   enrolled_teams_count: number;
   enrollments?: Enrollment[];
@@ -450,6 +493,9 @@ export interface Match {
   can_start_now?: boolean;
   start_block_reason?: string;
   can_report?: boolean;
+  can_contest?: boolean;
+  has_report?: boolean;
+  report_status?: 'PENDING' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | null;
   winner?: Team;
   is_draw: boolean;
   duration_minutes: number;
@@ -659,6 +705,109 @@ export interface TeamStatistics {
   goals_per_match: number;
   goals_conceded_per_match: number;
   clean_sheet_rate: number;
+}
+
+export interface ChampionshipStatsOverview {
+  matches_total: number;
+  matches_finished: number;
+  matches_pending: number;
+  matches_contested: number;
+  goals_total: number;
+  avg_goals_per_match: number;
+  teams_count: number;
+  groups_count: number;
+  best_attack_id: number | null;
+  best_defense_id: number | null;
+}
+
+export interface ChampionshipStatsDashboard {
+  championship_id: number;
+  overview: ChampionshipStatsOverview;
+  top_scorers: PlayerStatistics[];
+  top_assisters: PlayerStatistics[];
+  teams: TeamStatistics[];
+  best_attack: TeamStatistics | null;
+  best_defense: TeamStatistics | null;
+}
+
+export type TeamRankingTier = 'TIER_1' | 'TIER_2' | 'TIER_3';
+
+export interface GlobalTeamRankingRow {
+  position: number;
+  team_id: number;
+  team_name: string;
+  tier: TeamRankingTier;
+  tier_display: string;
+  points: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  matches_played: number;
+  goals_for: number;
+  goals_against: number;
+  goal_difference: number;
+  win_rate: number;
+  updated_at: string;
+}
+
+export type PlayerTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
+
+export interface CompetitiveRankingPlayerRow {
+  position: number;
+  generalPosition: number;
+  playerId: number;
+  playerName: string;
+  teamName: string;
+  avatar: string | null;
+  tier: PlayerTier;
+  tierDisplay: string;
+  score: number;
+  averageRating: number;
+  goals: number;
+  assists: number;
+  matchesPlayed: number;
+  isPromotionZone: boolean;
+  nextTier: PlayerTier | null;
+  isPromotionEligible: boolean;
+}
+
+export interface CompetitiveRankingPayload {
+  cycle: {
+    slug: string;
+    starts_at: string;
+    ends_at: string;
+    status: 'OPEN' | 'CLOSED';
+    min_matches_for_promotion: number;
+    promotion_slots: number;
+    is_fallback_cycle: boolean;
+  };
+  general: CompetitiveRankingPlayerRow[];
+  tiers: {
+    bronze: CompetitiveRankingPlayerRow[];
+    prata: CompetitiveRankingPlayerRow[];
+    ouro: CompetitiveRankingPlayerRow[];
+    platina: CompetitiveRankingPlayerRow[];
+  };
+  total_players: number;
+  me?: CompetitiveMyRankingPayload | null;
+}
+
+export interface CompetitiveMyRankingPayload {
+  playerId: number;
+  playerName: string;
+  teamName?: string | null;
+  currentTier: PlayerTier;
+  nextTier: PlayerTier | null;
+  generalPosition: number | null;
+  tierPosition: number | null;
+  score: number;
+  averageRating: number;
+  goals: number;
+  assists: number;
+  matchesPlayed: number;
+  isPromotionZone: boolean;
+  positionsToPromotion: number | null;
+  pointsToPromotion: number | null;
 }
 
 // API Response Types

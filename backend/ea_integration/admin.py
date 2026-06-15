@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import EAClub, EAMatch, EAPlayerMatchStats, MatchValidationLog
+from .models import EAClub, EAClubAlias, EAMatch, EAPlayerMatchStats, MatchValidationLog
 
 
 @admin.register(EAClub)
@@ -84,3 +84,12 @@ class MatchValidationLogAdmin(admin.ModelAdmin):
         if obj.details and len(obj.details) > 80:
             return f'{obj.details[:80]}...'
         return obj.details or '-'
+
+
+@admin.register(EAClubAlias)
+class EAClubAliasAdmin(admin.ModelAdmin):
+    list_display = ['team', 'ea_club_id', 'platform', 'label', 'is_active', 'last_seen_at']
+    list_filter = ['platform', 'is_active']
+    search_fields = ['team__name', 'ea_club_id', 'label']
+    raw_id_fields = ['team']
+    readonly_fields = ['created_at', 'updated_at']

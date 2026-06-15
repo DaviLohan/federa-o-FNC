@@ -1,12 +1,55 @@
 'use client';
 
-import Link from 'next/link';
-import Image from 'next/image';
+import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, Trophy, Swords, TrendingUp } from 'lucide-react';
 import { BenefitItem } from './BenefitItem';
 import { SocialProofCard } from './SocialProofCard';
+import { platformStatsAPI, type PlatformStats } from '@/lib/api';
+import { BrandLockup } from '@/components/branding/BrandLockup';
+
+const FALLBACK_STATS: PlatformStats = {
+  players: 500,
+  teams: 150,
+  championships: 12,
+  matches: 500,
+};
 
 export function LoginMarketingPanel() {
+  const [stats, setStats] = useState<PlatformStats>(FALLBACK_STATS);
+
+  useEffect(() => {
+    let mounted = true;
+
+    platformStatsAPI
+      .get()
+      .then((data) => {
+        if (!mounted) return;
+        setStats({
+          players: Number(data?.players || 0),
+          teams: Number(data?.teams || 0),
+          championships: Number(data?.championships || 0),
+          matches: Number(data?.matches || 0),
+        });
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setStats(FALLBACK_STATS);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const formatted = useMemo(
+    () => ({
+      players: `${Intl.NumberFormat('pt-BR').format(stats.players)}+`,
+      teams: `${Intl.NumberFormat('pt-BR').format(stats.teams)}+`,
+      championships: `${Intl.NumberFormat('pt-BR').format(stats.championships)}+`,
+    }),
+    [stats],
+  );
+
   return (
     <div className="relative h-full min-h-screen bg-gradient-to-br from-surface1 via-bg0 to-surface2 p-10 flex flex-col justify-between overflow-hidden">
       {/* Background decoration */}
@@ -17,26 +60,16 @@ export function LoginMarketingPanel() {
       {/* Content */}
       <div className="relative z-10">
         {/* Logo */}
-        <Link href="/" className="inline-flex items-center space-x-3 mb-8 group">
-          <Image
-            src="/logo-imperium.png"
-            alt="Imperium Logo"
-            width={40}
-            height={40}
-            className="rounded-lg transition-transform group-hover:scale-105"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
-          <span className="text-4xl font-bold text-gold">IMPERIUM</span>
-        </Link>
+        <BrandLockup variant="auth" href="/" className="mb-8" showSubtitle={false} />
 
         {/* Headline */}
         <h2 className="text-3xl font-bold text-text mb-4 leading-tight">
           Bem-vindo de volta<br />
-          <span className="text-gold">à elite do EA SPORTS FC</span>
+          <span className="text-gold">ao novo nível do EA SPORTS FC</span>
         </h2>
 
         <p className="text-lg text-muted mb-10 leading-relaxed max-w-md">
-          Acesse sua conta e continue dominando nos campeonatos mais competitivos do Brasil.
+          Acesse sua conta e continue dominando nos campeonatos mais competitivos da Pro Eleven.
         </p>
 
         {/* Benefits */}
@@ -74,9 +107,9 @@ export function LoginMarketingPanel() {
           Plataforma em crescimento
         </p>
         <div className="grid grid-cols-3 gap-3">
-          <SocialProofCard value="500+" label="Jogadores" color="gold" />
-          <SocialProofCard value="150+" label="Times" color="gold" />
-          <SocialProofCard value="12+" label="Ligas" color="gold" />
+          <SocialProofCard value={formatted.players} label="Jogadores" color="gold" />
+          <SocialProofCard value={formatted.teams} label="Times" color="gold" />
+          <SocialProofCard value={formatted.championships} label="Ligas" color="gold" />
         </div>
       </div>
     </div>

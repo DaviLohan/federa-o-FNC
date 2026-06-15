@@ -6,7 +6,7 @@ Isso evita o bloqueio de porta SMTP (587) em ambientes como Railway.
 
 Configuração no settings.py / variáveis de ambiente:
     BREVO_API_KEY = 'xkeysib-...'
-    DEFAULT_FROM_EMAIL = 'IMPERIUM <noreply@example.com>'
+    DEFAULT_FROM_EMAIL = 'PRO ELEVEN <noreply@example.com>'
 
 Em desenvolvimento (sem BREVO_API_KEY), usa o backend SMTP/console configurado
 via EMAIL_BACKEND normal do Django.
@@ -18,6 +18,42 @@ from typing import List, Optional
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _get_notification_related_team(notification):
+    if not getattr(notification, 'related_team_id', None):
+        return None
+
+    from fnc_teams.models import Team
+
+    try:
+        return Team.objects.select_related('owner').get(id=notification.related_team_id)
+    except Team.DoesNotExist:
+        return None
+
+
+def _get_notification_related_invitation(notification):
+    if not getattr(notification, 'related_invitation_id', None):
+        return None
+
+    from fnc_teams.models import TeamInvitation
+
+    try:
+        return TeamInvitation.objects.select_related('invited_by', 'team', 'player__user').get(id=notification.related_invitation_id)
+    except TeamInvitation.DoesNotExist:
+        return None
+
+
+def _get_notification_related_championship(notification):
+    if not getattr(notification, 'related_championship_id', None):
+        return None
+
+    from fnc_championships.models import Championship
+
+    try:
+        return Championship.objects.get(id=notification.related_championship_id)
+    except Championship.DoesNotExist:
+        return None
 
 
 def _parse_email_address(address: str):
@@ -268,23 +304,27 @@ def send_email_for_notification(notification):
     if not notification.user.email:
         return False
     
+    related_team = _get_notification_related_team(notification)
+    related_invitation = _get_notification_related_invitation(notification)
+    related_championship = _get_notification_related_championship(notification)
+
     # Mapear tipo de notificação para método de email
     email_methods = {
         'TEAM_INVITATION': lambda n: EmailService.send_team_invitation_email(
             user_email=n.user.email,
-            team_name=n.related_team.name if n.related_team else 'Time',
+            team_name=related_team.name if related_team else 'Time',
             inviter_name=(
-                n.related_invitation.invited_by.get_full_name()
-                if n.related_invitation and n.related_invitation.invited_by
-                else (n.related_team.owner.get_full_name() if n.related_team else 'Administrador')
+                related_invitation.invited_by.get_full_name()
+                if related_invitation and related_invitation.invited_by
+                else (related_team.owner.get_full_name() if related_team else 'Administrador')
             ),
             invitation_url=f'{settings.SITE_URL}{n.action_url}' if n.action_url else ''
         ),
         
         'CHAMPIONSHIP_ENROLLED': lambda n: EmailService.send_enrollment_approved_email(
             team_emails=[n.user.email],
-            team_name=n.related_team.name if n.related_team else 'Seu time',
-            championship_name=n.related_championship.name if n.related_championship else 'Campeonato'
+            team_name=related_team.name if related_team else 'Seu time',
+            championship_name=related_championship.name if related_championship else 'Campeonato'
         ),
         
         'MATCH_SCHEDULED': lambda n: EmailService.send_match_scheduled_email(

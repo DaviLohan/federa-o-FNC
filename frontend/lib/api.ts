@@ -40,6 +40,11 @@ import type {
   EAReportIrregularConfirmRequest,
   TeamPerformancePayload,
   TeamLineupStyle,
+  GlobalTeamRankingRow,
+  CompetitiveRankingPayload,
+  CompetitiveMyRankingPayload,
+  WeeklySelectionPayload,
+  ChampionshipStatsDashboard,
 } from '@/types';
 
 // Auth API
@@ -184,6 +189,9 @@ export const championshipsAPI = {
   
   start: (id: number) =>
     apiClient.post(`/api/v1/championships/${id}/start/`),
+
+  openEnrollments: (id: number) =>
+    apiClient.post(`/api/v1/championships/${id}/open_enrollments/`),
   
   finish: (id: number) =>
     apiClient.post(`/api/v1/championships/${id}/finish/`),
@@ -200,6 +208,9 @@ export const championshipsAPI = {
   
   getGroups: (championshipId: number) =>
     apiClient.get<Group[]>(`/api/v1/championships/${championshipId}/groups/`),
+
+  getGroupMatches: (championshipId: number) =>
+    apiClient.get<any>(`/api/v1/championships/${championshipId}/group-matches/`),
 };
 
 export const paymentsAPI = {
@@ -321,15 +332,35 @@ export const statisticsAPI = {
     apiClient.get('/api/v1/statistics/rankings/', { 
       championship_id: championshipId 
     }),
-  
+
+  getCompetitiveRankings: () =>
+    apiClient.get<CompetitiveRankingPayload>('/api/v1/statistics/rankings/'),
+
+  getCompetitiveRankingMe: () =>
+    apiClient.get<CompetitiveMyRankingPayload>('/api/v1/statistics/rankings/me/'),
+
   getMatchDetails: (matchId: number) =>
-    apiClient.get('/api/v1/statistics/match_details/', { 
-      match_id: matchId 
+    apiClient.get('/api/v1/statistics/match_details/', {
+      match_id: matchId,
     }),
+
+  getGlobalRankings: (params?: { tier?: 'TIER_1' | 'TIER_2' | 'TIER_3'; include_zero_points?: boolean }) =>
+    apiClient.get<{ count: number; results: GlobalTeamRankingRow[] }>('/api/v1/statistics/global_rankings/', params),
   
   getChampionshipOverview: (championshipId: number) =>
     apiClient.get('/api/v1/statistics/championship_overview/', { 
       championship_id: championshipId 
+    }),
+
+  getChampionshipDashboard: (championshipId: number) =>
+    apiClient.get<ChampionshipStatsDashboard>('/api/v1/statistics/championship_dashboard/', {
+      championship_id: championshipId,
+    }),
+
+  getWeeklySelection: (championshipId: number, roundNumber?: number) =>
+    apiClient.get<WeeklySelectionPayload>('/api/v1/statistics/weekly_selection/', {
+      championship_id: championshipId,
+      round_number: roundNumber,
     }),
 };
 
@@ -355,6 +386,11 @@ export const invitationsAPI = {
 export const membershipsAPI = {
   removeMember: (id: number) =>
     apiClient.delete(`/api/v1/memberships/${id}/`),
+  setRole: (teamId: number, membershipId: number, role: 'PLAYER' | 'CAPTAIN' | 'COMMISSION') =>
+    apiClient.post(`/api/v1/teams/${teamId}/set_member_role/`, {
+      membership_id: membershipId,
+      role,
+    }),
 };
 
 // Leave Requests API

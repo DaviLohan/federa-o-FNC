@@ -8,6 +8,39 @@ import type { Championship, Standings, Bracket, Match } from '@/types';
  * Hook para buscar dados de um campeonato específico
  */
 export function useChampionship(championshipId: number | null) {
+  const fetchAllChampionshipMatches = async (targetChampionshipId: number) => {
+    const pageSize = 100;
+    let page = 1;
+    let allResults: Match[] = [];
+    let totalCount = 0;
+
+    while (true) {
+      const response = await matchesAPI.getAll({
+        championship: targetChampionshipId,
+        include_championship_all: 1,
+        ordering: 'round_number,scheduled_date,id',
+        page,
+        page_size: pageSize,
+      });
+
+      allResults = allResults.concat(response.results || []);
+      totalCount = response.count || allResults.length;
+
+      if (!response.next || allResults.length >= totalCount) {
+        break;
+      }
+
+      page += 1;
+    }
+
+    return {
+      count: totalCount,
+      results: allResults,
+      next: null,
+      previous: null,
+    };
+  };
+
   // Buscar dados básicos do campeonato
   const {
     data: championship,
@@ -27,11 +60,7 @@ export function useChampionship(championshipId: number | null) {
     refetch: refetchMatches,
   } = useQuery({
     queryKey: ['matches', championshipId],
-    queryFn: () =>
-      matchesAPI.getAll({
-        championship: championshipId,
-        ordering: 'round_number,scheduled_date,id',
-      }),
+    queryFn: () => fetchAllChampionshipMatches(championshipId!),
     enabled: !!championshipId,
     staleTime: 30000,
   });

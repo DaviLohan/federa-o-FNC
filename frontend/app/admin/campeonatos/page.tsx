@@ -14,7 +14,8 @@ import { useToast } from '@/components/shared/ui/Toast';
 import Link from 'next/link';
 
 const STATUS_LABELS: Record<string, string> = {
-  SCHEDULED: 'Agendado',
+  PENDING: 'Pendente',
+  SCHEDULED: 'Programado',
   OPEN: 'Aberto',
   IN_PROGRESS: 'Em andamento',
   FINISHED: 'Finalizado',
@@ -22,6 +23,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_VARIANTS: Record<string, 'default' | 'info' | 'gold' | 'success' | 'error' | 'warning'> = {
+  PENDING: 'info',
   SCHEDULED: 'info',
   OPEN: 'gold',
   IN_PROGRESS: 'warning',
@@ -180,10 +182,12 @@ export default function AdminCampeonatosPage() {
           <h1 className="text-2xl font-bold text-text">Campeonatos</h1>
           <p className="text-muted mt-1">{totalCount} campeonatos cadastrados</p>
         </div>
-        <Button variant="primary" onClick={() => { setSelectedChampionship(null); setDrawerOpen(true); }}>
-          <Plus className="w-4 h-4 mr-2" />
-          Novo Campeonato
-        </Button>
+        <Link href="/championships">
+          <Button variant="primary">
+            <Plus className="w-4 h-4 mr-2" />
+            Novo Campeonato
+          </Button>
+        </Link>
       </div>
 
       {/* Filters */}
@@ -204,7 +208,7 @@ export default function AdminCampeonatosPage() {
           className="px-4 py-2.5 bg-surface2 border border-border rounded-xl text-text focus:outline-none focus:border-gold/50 transition-colors"
         >
           <option value="">Todos os status</option>
-          <option value="SCHEDULED">Agendado</option>
+          <option value="PENDING">Pendente</option>
           <option value="OPEN">Aberto</option>
           <option value="IN_PROGRESS">Em andamento</option>
           <option value="FINISHED">Finalizado</option>
@@ -264,7 +268,7 @@ export default function AdminCampeonatosPage() {
             {/* Badges */}
             <div className="flex gap-2 flex-wrap">
               <Badge variant={STATUS_VARIANTS[selectedChampionship.status] || 'default'}>
-                {STATUS_LABELS[selectedChampionship.status]}
+                {STATUS_LABELS[selectedChampionship.status] || selectedChampionship.status}
               </Badge>
               <Badge variant="info">{TYPE_LABELS[selectedChampionship.championship_type]}</Badge>
               {selectedChampionship.is_enrollment_open && <Badge variant="gold">Inscrições abertas</Badge>}

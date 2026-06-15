@@ -7,11 +7,13 @@ ViewSets DRF para a integração EA Pro Clubs.
 import logging
 
 from django.db.models import Avg, Sum, Count, Q
+from django.conf import settings
 from rest_framework.exceptions import ValidationError
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .date_utils import custom_bounds, period_bounds
 from .ea_client import EAProClubsClient, EAApiError, DEFAULT_SYNC_MATCH_TYPES
@@ -28,6 +30,45 @@ from .serializers import (
 from .services import MatchSyncService
 
 logger = logging.getLogger(__name__)
+
+
+class EAProxyMatchesRelayView(APIView):
+    """Relay protegido para consultas de partidas da EA via servidor antigo."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        token = request.headers.get('X-EA-Relay-Token', '')
+        if not settings.EA_RELAY_TOKEN or token != settings.EA_RELAY_TOKEN:
+            return Response({'error': 'unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+
+        club_id = request.query_params.get('club_id', '').strip()
+        platform = request.query_params.get('platform', 'common-gen5').strip()
+        match_type = request.query_params.get('match_type', 'leagueMatch').strip()
+        max_results = int(request.query_params.get('max_results', '10'))
+
+        if not club_id:
+            return Response({'error': 'club_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        client = EAProClubsClient()
+        try:
+            results = client.get_matches(
+                club_id=club_id,
+                platform=platform,
+                match_type=match_type,
+                max_results=max_results,
+            )
+            return Response({'results': results}, status=status.HTTP_200_OK)
+        except EAApiError as exc:
+            return Response(
+                {
+                    'error': str(exc),
+                    'status_code': exc.status_code,
+                    'details': getattr(exc, 'details', ''),
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
 
 class EAClubViewSet(viewsets.ModelViewSet):
@@ -63,69 +104,118 @@ class EAClubViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='search')
     def search(self, request):
         """
-        Busca clubes na API da EA pelo nome.
+        Busca clubes na API da EA pelo nome, com fallback para clubes EA já
+        cadastrados localmente (mesmo quando a busca textual da EA não
+        retorna o clube esperado).
 
         POST /api/v1/ea/clubs/search/
-        Body: {"club_name": "Imperium", "platform": "common-gen5"}
+        Body: {"club_name": "Pro Eleven", "platform": "common-gen5"}
         """
         serializer = EAClubSearchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        platform = serializer.validated_data.get('platform', 'common-gen5')
+        searched_name = serializer.validated_data['club_name']
+
+        def _enrich(result: dict, source: str) -> dict:
+            ea_club_id = str(
+                result.get('ea_club_id')
+                or result.get('clubId')
+                or (result.get('clubInfo') or {}).get('clubId')
+                or ''
+            ).strip()
+            club_name = (
+                result.get('name')
+                or result.get('clubName')
+                or (result.get('clubInfo') or {}).get('name')
+                or ''
+            ).strip()
+
+            existing_link = EAClub.objects.select_related('team').filter(
+                ea_club_id=ea_club_id,
+                platform=platform,
+            ).first()
+            existing_team_is_active = bool(
+                existing_link
+                and existing_link.team_id
+                and existing_link.team
+                and existing_link.team.is_active
+            )
+
+            return {
+                **result,
+                'ea_club_id': ea_club_id,
+                'name': club_name,
+                'platform': platform,
+                'source': source,
+                'already_linked': existing_team_is_active,
+                'has_legacy_link': bool(existing_link and not existing_team_is_active),
+                'existing_team': (
+                    {
+                        'id': existing_link.team_id,
+                        'name': existing_link.team.name,
+                        'is_active': existing_link.team.is_active,
+                    }
+                    if existing_link and existing_link.team_id
+                    else None
+                ),
+            }
+
+        enriched_results: list[dict] = []
+        seen_keys: set[tuple[str, str]] = set()
+
+        # 1) Fallback local: clubes EA já cadastrados com nome exato
+        local_matches = EAClub.objects.select_related('team').filter(
+            name__iexact=searched_name,
+            platform=platform,
+        )
+        for ea_club in local_matches:
+            entry = _enrich(
+                {
+                    'ea_club_id': ea_club.ea_club_id,
+                    'clubId': ea_club.ea_club_id,
+                    'name': ea_club.name,
+                    'clubName': ea_club.name,
+                },
+                source='local_cache',
+            )
+            key = (entry['ea_club_id'], entry['platform'])
+            if entry['ea_club_id'] and key not in seen_keys:
+                seen_keys.add(key)
+                enriched_results.append(entry)
+
+        # 2) Busca textual oficial na EA
         client = EAProClubsClient()
         try:
-            platform = serializer.validated_data.get('platform', 'common-gen5')
             results = client.search_club(
-                club_name=serializer.validated_data['club_name'],
+                club_name=searched_name,
                 platform=platform,
             )
 
-            enriched_results = []
             for result in results:
-                ea_club_id = str(
-                    result.get('ea_club_id')
-                    or result.get('clubId')
-                    or (result.get('clubInfo') or {}).get('clubId')
-                    or ''
-                ).strip()
-                club_name = (
-                    result.get('name')
-                    or result.get('clubName')
-                    or (result.get('clubInfo') or {}).get('name')
-                    or ''
-                ).strip()
-
-                existing_link = EAClub.objects.select_related('team').filter(
-                    ea_club_id=ea_club_id,
-                    platform=platform,
-                ).first()
-                existing_team_is_active = bool(
-                    existing_link and existing_link.team_id and existing_link.team and existing_link.team.is_active
-                )
-
-                enriched_results.append({
-                    **result,
-                    'ea_club_id': ea_club_id,
-                    'name': club_name,
-                    'platform': platform,
-                    'already_linked': existing_team_is_active,
-                    'has_legacy_link': bool(existing_link and not existing_team_is_active),
-                    'existing_team': (
-                        {
-                            'id': existing_link.team_id,
-                            'name': existing_link.team.name,
-                            'is_active': existing_link.team.is_active,
-                        }
-                        if existing_link and existing_link.team_id
-                        else None
-                    ),
-                })
+                entry = _enrich(result, source='ea_search')
+                key = (entry['ea_club_id'], entry['platform'])
+                if not entry['ea_club_id'] or key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                enriched_results.append(entry)
 
             return Response({
                 'count': len(enriched_results),
                 'results': enriched_results,
             })
+
         except EAApiError as e:
             logger.error('Erro ao buscar clube na EA: %s', e)
+
+            if enriched_results:
+                # EA fora do ar mas temos cache local — devolve com aviso
+                return Response({
+                    'count': len(enriched_results),
+                    'results': enriched_results,
+                    'warning': 'Não foi possível consultar a API da EA agora. Resultados do cache local.',
+                })
+
             return Response(
                 {'error': 'Erro ao consultar a API da EA. Tente novamente.'},
                 status=status.HTTP_502_BAD_GATEWAY,

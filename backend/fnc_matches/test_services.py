@@ -17,6 +17,8 @@ from fnc_matches.services import (
 from fnc_matches.models import Match, Goal, Assist, Card, MatchReport, Contestation, ContestationAuditLog
 from fnc_matches.contestation_services import ContestationDecisionService, ContestationDecisionError
 from player_stats.models import PlayerStatistics, TeamStatistics, TopScorer
+from player_stats.models import GlobalTeamRanking, GlobalTeamRankingEntry
+from player_stats.global_ranking_service import recompute_global_team_ranking
 from fnc_championships.models import Standings
 from conftest import (
     UserFactory, AdminUserFactory, PlayerProfileFactory, TeamFactory,
@@ -805,3 +807,70 @@ class TestUpdateStandings:
         assert team_stats.goals_scored == 2
         assert player_stats.matches_played == 1
         assert player_stats.matches_won == 1
+
+
+@pytest.mark.django_db
+class TestGlobalTeamRanking:
+    def test_win_draw_loss_points_and_ordering(self):
+        team_a = TeamFactory(name='Alpha')
+        team_b = TeamFactory(name='Bravo')
+        team_c = TeamFactory(name='Charlie')
+
+        FinishedMatchFactory(home_team=team_a, away_team=team_b, home_score=2, away_score=1)
+        FinishedMatchFactory(home_team=team_c, away_team=team_a, home_score=0, away_score=0)
+
+        recompute_global_team_ranking()
+
+        a = GlobalTeamRanking.objects.get(team=team_a)
+        b = GlobalTeamRanking.objects.get(team=team_b)
+        c = GlobalTeamRanking.objects.get(team=team_c)
+
+        assert a.total_points == 150
+        assert a.wins == 1
+        assert a.draws == 1
+        assert a.losses == 0
+
+        assert b.total_points == 10
+        assert b.losses == 1
+
+        assert c.total_points == 50
+        assert c.draws == 1
+
+    def test_recompute_replaces_old_points_when_result_changes(self):
+        team_a = TeamFactory(name='A-Team')
+        team_b = TeamFactory(name='B-Team')
+        match = FinishedMatchFactory(home_team=team_a, away_team=team_b, home_score=1, away_score=0)
+
+        recompute_global_team_ranking()
+        assert GlobalTeamRanking.objects.get(team=team_a).total_points == 100
+        assert GlobalTeamRankingEntry.objects.filter(match=match).count() == 2
+
+        match.home_score = 0
+        match.away_score = 1
+        match.save(update_fields=['home_score', 'away_score', 'updated_at'])
+
+        recompute_global_team_ranking()
+
+        assert GlobalTeamRankingEntry.objects.filter(match=match).count() == 2
+        assert GlobalTeamRanking.objects.get(team=team_a).total_points == 10
+        assert GlobalTeamRanking.objects.get(team=team_b).total_points == 100
+
+    def test_contested_match_not_counted_until_finished(self):
+        team_a = TeamFactory(name='One')
+        team_b = TeamFactory(name='Two')
+        match = FinishedMatchFactory(home_team=team_a, away_team=team_b, home_score=3, away_score=1)
+
+        match.status = Match.Status.CONTESTED
+        match.save(update_fields=['status', 'updated_at'])
+
+        recompute_global_team_ranking()
+
+        assert GlobalTeamRanking.objects.count() == 0
+        assert GlobalTeamRankingEntry.objects.count() == 0
+
+        match.status = Match.Status.FINISHED
+        match.save(update_fields=['status', 'updated_at'])
+        recompute_global_team_ranking()
+
+        assert GlobalTeamRanking.objects.get(team=team_a).total_points == 100
+        assert GlobalTeamRanking.objects.get(team=team_b).total_points == 10

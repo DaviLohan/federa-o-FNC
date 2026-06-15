@@ -10,7 +10,7 @@ class EAClub(models.Model):
     Mapeamento entre um clube no EA FC Pro Clubs e um time interno (Team).
 
     Armazena o ID do clube na EA e a plataforma, permitindo que o sistema
-    saiba qual club_id consultar na API da EA para cada time do IMPERIUM.
+    saiba qual club_id consultar na API da EA para cada time da PRO ELEVEN.
     """
 
     class Platform(models.TextChoices):
@@ -26,7 +26,7 @@ class EAClub(models.Model):
         blank=True,
         related_name='ea_club',
         verbose_name=_('time interno'),
-        help_text=_('Time do IMPERIUM vinculado a este clube EA'),
+        help_text=_('Time da PRO ELEVEN vinculado a este clube EA'),
     )
 
     # Dados da EA
@@ -76,6 +76,57 @@ class EAClub(models.Model):
 
     def __str__(self):
         return f'{self.name} ({self.get_platform_display()})'
+
+
+class EAClubAlias(models.Model):
+    """IDs históricos/alternativos de clube EA aceitos para um time interno."""
+
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name='ea_club_aliases',
+        verbose_name=_('time interno'),
+    )
+    ea_club_id = models.CharField(
+        _('ID alternativo do clube na EA'),
+        max_length=50,
+    )
+    platform = models.CharField(
+        _('plataforma'),
+        max_length=20,
+        choices=EAClub.Platform.choices,
+        default=EAClub.Platform.COMMON_GEN5,
+    )
+    label = models.CharField(
+        _('rótulo'),
+        max_length=200,
+        blank=True,
+        default='',
+        help_text=_('Nome opcional para identificar este alias (ex.: nome antigo do clube).'),
+    )
+    is_active = models.BooleanField(
+        _('ativo'),
+        default=True,
+        help_text=_('Se desativado, o alias não é usado no matching de report.'),
+    )
+    first_seen_at = models.DateTimeField(_('primeira vez visto'), null=True, blank=True)
+    last_seen_at = models.DateTimeField(_('última vez visto'), null=True, blank=True)
+    created_at = models.DateTimeField(_('criado em'), auto_now_add=True)
+    updated_at = models.DateTimeField(_('atualizado em'), auto_now=True)
+
+    class Meta:
+        verbose_name = _('alias de clube EA')
+        verbose_name_plural = _('aliases de clubes EA')
+        ordering = ['team_id', 'platform', 'ea_club_id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['team', 'platform', 'ea_club_id'],
+                name='unique_ea_alias_per_team_platform',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.team.name} -> {self.ea_club_id} ({self.platform})'
 
 
 class EAMatch(models.Model):
@@ -161,7 +212,7 @@ class EAMatch(models.Model):
         related_name='ea_match',
         verbose_name=_('partida interna vinculada'),
         help_text=_(
-            'Match do campeonato IMPERIUM vinculado a esta partida EA. '
+            'Match do campeonato PRO ELEVEN vinculado a esta partida EA. '
             'Preenchido automaticamente quando o sistema detecta correspondência.'
         ),
     )
@@ -394,6 +445,7 @@ class MatchValidationLog(models.Model):
         UNEXPECTED_TEAM = 'unexpected_team', _('Time inesperado (não era o adversário esperado)')
         SCORE_MISMATCH = 'score_mismatch', _('Placar não confere com soma de gols dos jogadores')
         NO_MATCHING_FIXTURE = 'no_matching_fixture', _('Nenhuma partida agendada encontrada')
+        POTENTIAL_DISCONNECT_OVERRIDE = 'potential_disconnect_override', _('Possível vitória automática por quit/desconexão')
 
     class Severity(models.TextChoices):
         INFO = 'info', _('Informativo')

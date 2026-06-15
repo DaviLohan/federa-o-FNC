@@ -1,7 +1,8 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users } from 'lucide-react';
+import { useMemo } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { ShieldCheck, Users } from 'lucide-react';
 import { membershipsAPI } from '@/lib/api';
 import { TEAM_MAX_PLAYERS } from '@/lib/team-constants';
 import { useToast } from '@/components/shared/ui';
@@ -17,10 +18,11 @@ interface MembersTabProps {
 }
 
 // Agrupar por setor de campo
-type Sector = 'OWNER' | 'GK' | 'DEF' | 'MID' | 'ATT';
+type Sector = 'LEADERSHIP' | 'COMMISSION' | 'GK' | 'DEF' | 'MID' | 'ATT';
 
 function getSector(member: TeamMembership): Sector {
-  if (member.role === 'OWNER' || member.role === 'CAPTAIN') return 'OWNER';
+  if (member.role === 'OWNER' || member.role === 'CAPTAIN') return 'LEADERSHIP';
+  if (member.role === 'COMMISSION') return 'COMMISSION';
   const pos = member.player.primary_position;
   if (pos === 'GK') return 'GK';
   if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(pos)) return 'DEF';
@@ -29,18 +31,20 @@ function getSector(member: TeamMembership): Sector {
 }
 
 const sectorLabels: Record<Sector, string> = {
-  OWNER: 'Comissão Técnica',
+  LEADERSHIP: 'Liderança',
+  COMMISSION: 'Comissão Técnica',
   GK: 'Goleiros',
   DEF: 'Defensores',
   MID: 'Meio-Campistas',
   ATT: 'Atacantes',
 };
 
-const sectorOrder: Sector[] = ['OWNER', 'GK', 'DEF', 'MID', 'ATT'];
+const sectorOrder: Sector[] = ['LEADERSHIP', 'COMMISSION', 'GK', 'DEF', 'MID', 'ATT'];
+const MAX_COMMISSION = 2;
 
 export function MembersTab({ teamId, members, isLoading, onMemberRemoved, readOnly = false }: MembersTabProps) {
   const { showToast } = useToast();
-  const queryClient = useQueryClient();
+  const commissionCount = useMemo(() => members.filter((member) => member.role === 'COMMISSION').length, [members]);
 
   const removeMutation = useMutation({
     mutationFn: (membershipId: number) => membershipsAPI.removeMember(membershipId),
@@ -50,6 +54,18 @@ export function MembersTab({ teamId, members, isLoading, onMemberRemoved, readOn
     },
     onError: (error: any) => {
       showToast(error.response?.data?.error || 'Erro ao remover membro', 'error');
+    },
+  });
+
+  const roleMutation = useMutation({
+    mutationFn: ({ membershipId, role }: { membershipId: number; role: 'PLAYER' | 'CAPTAIN' | 'COMMISSION' }) =>
+      membershipsAPI.setRole(teamId, membershipId, role),
+    onSuccess: () => {
+      showToast('Função atualizada com sucesso', 'success');
+      onMemberRemoved();
+    },
+    onError: (error: any) => {
+      showToast(error.response?.data?.error || 'Erro ao atualizar função', 'error');
     },
   });
 
@@ -77,7 +93,7 @@ export function MembersTab({ teamId, members, isLoading, onMemberRemoved, readOn
 
   // Agrupar membros por setor
   const grouped: Record<Sector, TeamMembership[]> = {
-    OWNER: [], GK: [], DEF: [], MID: [], ATT: [],
+    LEADERSHIP: [], COMMISSION: [], GK: [], DEF: [], MID: [], ATT: [],
   };
   members.forEach((m) => grouped[getSector(m)].push(m));
 
@@ -98,6 +114,25 @@ export function MembersTab({ teamId, members, isLoading, onMemberRemoved, readOn
         </div>
       </div>
 
+      {!readOnly && (
+        <div className="rounded-2xl border border-info/20 bg-info/5 p-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-xl border border-info/20 bg-info/10 p-2 text-info">
+              <ShieldCheck className="h-4 w-4" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-text">
+                Comissão Técnica: <span className="text-info">{commissionCount}/{MAX_COMMISSION}</span>
+              </p>
+              <p className="text-xs leading-relaxed text-muted">
+                A comissão pode escalar, reportar e contestar partidas. Apenas o dono do time pode promover membros,
+                remover jogadores e gerenciar convites.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Grupos por setor */}
       {sectorOrder.map((sector) => {
         const group = grouped[sector];
@@ -115,6 +150,22 @@ export function MembersTab({ teamId, members, isLoading, onMemberRemoved, readOn
                   canRemove={!readOnly && member.role !== 'OWNER'}
                   onRemove={readOnly ? undefined : () => removeMutation.mutate(member.id)}
                   isRemoving={removeMutation.isPending && removeMutation.variables === member.id}
+                  canManageRole={!readOnly}
+                  onSetRole={
+                    readOnly
+                      ? undefined
+                      : (role) => {
+                          if (role === 'COMMISSION' && member.role !== 'COMMISSION' && commissionCount >= MAX_COMMISSION) {
+                            showToast(`Cada time pode ter no máximo ${MAX_COMMISSION} membros na comissão técnica.`, 'warning');
+                            return;
+                          }
+                          roleMutation.mutate({ membershipId: member.id, role });
+                        }
+                  }
+                  isUpdatingRole={
+                    roleMutation.isPending && roleMutation.variables?.membershipId === member.id
+                  }
+                  canPromoteToCommission={member.role === 'COMMISSION' || commissionCount < MAX_COMMISSION}
                 />
               ))}
             </div>

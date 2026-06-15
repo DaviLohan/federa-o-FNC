@@ -30,7 +30,7 @@ const reportStatusConfig: Record<
   PENDING: { icon: Clock, label: 'Aguardando partida', className: 'text-muted2' },
   SCHEDULED: { icon: Clock, label: 'Esta partida ainda não chegou no horário de início.', className: 'text-muted2' },
   IN_PROGRESS: { icon: Gamepad2, label: 'Partida em andamento', className: 'text-brand' },
-  FINISHED: { icon: CheckCircle2, label: 'Resultado confirmado', className: 'text-success' },
+  FINISHED: { icon: CheckCircle2, label: 'Partida finalizada', className: 'text-success' },
   CONTESTED: { icon: AlertTriangle, label: 'Resultado contestado', className: 'text-warning' },
   CANCELLED: { icon: XCircle, label: 'Partida cancelada', className: 'text-error' },
 };
@@ -46,7 +46,7 @@ export function ReportStatusBar({
   onContest,
 }: ReportStatusBarProps) {
   const hasReportActions =
-    canReport && (match.status === 'IN_PROGRESS' || match.status === 'FINISHED' || match.status === 'CONTESTED');
+    canReport && (match.status === 'IN_PROGRESS' || match.status === 'CONTESTED' || match.status === 'FINISHED');
   const hasContestActions =
     canContest && (match.status === 'FINISHED' || match.status === 'CONTESTED');
 
@@ -55,6 +55,10 @@ export function ReportStatusBar({
 
   const statusInfo = match.status === 'FINISHED' && match.irregularity_flag && match.match_result_confirmed
     ? { icon: AlertTriangle, label: 'Resultado confirmado com irregularidades aceitas', className: 'text-warning' }
+    : match.status === 'FINISHED'
+    ? ((match.has_report ?? !!match.report)
+      ? { icon: CheckCircle2, label: 'Partida finalizada', className: 'text-success' }
+      : { icon: Clock, label: 'Partida finalizada (aguardando reporte)', className: 'text-warning' })
     : reportStatusConfig[match.status];
   const StatusIcon = statusInfo?.icon || Clock;
 

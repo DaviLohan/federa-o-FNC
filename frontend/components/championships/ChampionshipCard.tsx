@@ -11,11 +11,12 @@ interface ChampionshipCardProps {
 }
 
 const statusConfig = {
-  SCHEDULED: { label: 'Programado', variant: 'default' as const },
+  PENDING: { label: 'Pendente', variant: 'default' as const },
   OPEN: { label: 'Inscrições Abertas', variant: 'pending' as const },
   IN_PROGRESS: { label: 'Em Andamento', variant: 'live' as const },
   FINISHED: { label: 'Finalizado', variant: 'finished' as const },
   CANCELLED: { label: 'Cancelado', variant: 'error' as const },
+  SCHEDULED: { label: 'Programado', variant: 'default' as const },
 };
 
 const typeConfig = {
@@ -27,7 +28,7 @@ const typeConfig = {
 export function ChampionshipCard({ championship }: ChampionshipCardProps) {
   const router = useRouter();
 
-  const status = statusConfig[championship.status];
+  const status = statusConfig[championship.status] || statusConfig.PENDING;
   const type = typeConfig[championship.championship_type];
 
   const handleClick = () => {
@@ -158,7 +159,7 @@ export function ChampionshipCard({ championship }: ChampionshipCardProps) {
             <div className="min-w-0">
               <p className="text-xs text-muted">Início</p>
               <p className="text-sm font-mono font-semibold text-text truncate">
-                {formatDate(championship.start_date)}
+                {championship.start_date ? formatDate(championship.start_date) : 'Aguardando início'}
               </p>
             </div>
           </div>

@@ -12,6 +12,7 @@ from fnc_matches.services import (
     reverse_match_result,
     update_team_performance,
 )
+from fnc_matches.report_utils import ensure_match_report_exists
 
 
 ADMIN_DECISION_HOME_WIN_SCORE = (1, 0)
@@ -142,9 +143,9 @@ class ContestationDecisionService:
         self._purge_match_result_artifacts(match)
 
         if walkover_team_id == match.home_team_id:
-            home_score, away_score = (0, 3)
+            home_score, away_score = (0, 1)
         else:
-            home_score, away_score = (3, 0)
+            home_score, away_score = (1, 0)
 
         match.home_score = home_score
         match.away_score = away_score
@@ -164,6 +165,11 @@ class ContestationDecisionService:
             'is_walkover', 'walkover_team', 'walkover_reason', 'irregularity_flag',
             'match_result_confirmed', 'confirmed_by_team', 'admin_override', 'decision_reason', 'updated_at'
         ])
+        ensure_match_report_exists(
+            match,
+            reported_by=admin_user,
+            notes='Súmula técnica criada após decisão de contestação (W.O.).',
+        )
 
         self._recompute_championship_state(match)
 
@@ -238,6 +244,11 @@ class ContestationDecisionService:
             'is_walkover', 'walkover_team', 'walkover_reason', 'irregularity_flag',
             'match_result_confirmed', 'confirmed_by_team', 'admin_override', 'decision_reason', 'updated_at'
         ])
+        ensure_match_report_exists(
+            match,
+            reported_by=admin_user,
+            notes='Súmula técnica criada após decisão de contestação (alteração de resultado).',
+        )
 
         self._recompute_championship_state(match)
 
@@ -324,6 +335,10 @@ class ContestationDecisionService:
     def _recompute_championship_state(self, match: Match) -> None:
         if match.championship:
             recompute_match_derived_data_for_championship(match.championship)
+            from fnc_championships.services import update_bracket_after_match
+
+            if match.status == Match.Status.FINISHED:
+                update_bracket_after_match(match)
         if match.status == Match.Status.FINISHED:
             update_team_performance(match)
 

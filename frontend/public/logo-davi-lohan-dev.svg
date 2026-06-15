@@ -1,0 +1,11 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="daviGradient" x1="72" y1="52" x2="180" y2="186" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8CC8FF"/>
+      <stop offset="1" stop-color="#2F63FF"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="40" fill="#070B16"/>
+  <path d="M88 70H146C172 70 193 91 193 117C193 140 178 161 158 173L142 156C157 145 167 132 167 116C167 100 154 88 138 88H106V168H143L160 186H88V70Z" fill="url(#daviGradient)"/>
+  <path d="M88 112H106V186H88V112Z" fill="url(#daviGradient)"/>
+</svg>

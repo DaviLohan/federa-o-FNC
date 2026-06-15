@@ -317,6 +317,35 @@ class TestMatchReportAPI:
         assert away_standing.losses == 1
         assert away_standing.goals_for == 2
         assert away_standing.goals_against == 4
+
+
+@pytest.mark.django_db
+class TestCompetitiveRankingAPI:
+    def setup_method(self):
+        self.client = APIClient()
+        self.user = UserFactory(user_type='PLAYER')
+        self.player = PlayerProfileFactory(user=self.user)
+
+    def test_rankings_endpoint_returns_competitive_payload(self):
+        response = self.client.get('/api/v1/statistics/rankings/')
+        assert response.status_code == status.HTTP_200_OK
+        assert 'cycle' in response.data
+        assert 'tiers' in response.data
+        assert 'general' in response.data
+        assert 'total_players' in response.data
+
+    def test_rankings_me_requires_authentication(self):
+        response = self.client.get('/api/v1/statistics/rankings/me/')
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_rankings_me_returns_player_payload_when_authenticated(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get('/api/v1/statistics/rankings/me/')
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['playerId'] == self.player.id
+        assert 'currentTier' in response.data
+        assert 'positionsToPromotion' in response.data
+        assert 'pointsToPromotion' in response.data
     
     def test_approve_report_admin_only(self):
         """Apenas admins podem aprovar súmulas."""
@@ -515,6 +544,36 @@ class TestContestationAPI:
         assert contestation.status == 'ACCEPTED'
         assert contestation.decision_type == 'CHANGE_RESULT'
         assert (self.match.home_score, self.match.away_score) == (0, 1)
+
+
+@pytest.mark.django_db
+class TestGlobalRankingAPI:
+    def setup_method(self):
+        self.client = APIClient()
+
+    def test_global_rankings_endpoint_returns_sorted_data(self):
+        team_a = TeamFactory(name='Ranking A')
+        team_b = TeamFactory(name='Ranking B')
+        FinishedMatchFactory(home_team=team_a, away_team=team_b, home_score=2, away_score=1)
+
+        response = self.client.get('/api/v1/statistics/global_rankings/')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['count'] >= 2
+        assert response.data['results'][0]['team_name'] == 'Ranking A'
+        assert response.data['results'][0]['points'] == 100
+
+    def test_global_rankings_accepts_tier_filter(self):
+        team_a = TeamFactory(name='Tier Filter A')
+        team_b = TeamFactory(name='Tier Filter B')
+        FinishedMatchFactory(home_team=team_a, away_team=team_b, home_score=2, away_score=0)
+
+        response = self.client.get('/api/v1/statistics/global_rankings/?tier=TIER_1')
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_global_rankings_rejects_invalid_tier(self):
+        response = self.client.get('/api/v1/statistics/global_rankings/?tier=foo')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_owner_can_confirm_irregular_result(self, monkeypatch):
         owner = UserFactory(user_type='TEAM_OWNER')

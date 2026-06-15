@@ -8,7 +8,6 @@ import type { Championship } from '@/types';
 import { useAuthStore } from '@/lib/auth-store';
 import { ChampionshipCard } from '@/components/championships/ChampionshipCard';
 import { Search, Trophy, CalendarRange, PlayCircle, Flag } from 'lucide-react';
-import { Z_INDEX } from '@/lib/ui/z-index';
 
 function getApiErrorMessage(error: any, fallback: string) {
   const data = error?.response?.data;
@@ -107,6 +106,17 @@ export default function ChampionshipsPage() {
     },
     onError: (error: any) => {
       showToast(error.response?.data?.error || 'Erro ao iniciar campeonato', 'error');
+    },
+  });
+
+  const openEnrollmentsMutation = useMutation({
+    mutationFn: (id: number) => championshipsAPI.openEnrollments(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['championships'] });
+      showToast('Inscrições abertas com sucesso!', 'success');
+    },
+    onError: (error: any) => {
+      showToast(error.response?.data?.error || 'Erro ao abrir inscrições', 'error');
     },
   });
 
@@ -221,7 +231,7 @@ export default function ChampionshipsPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
             options={[
               { value: 'all', label: 'Todos' },
-              { value: 'SCHEDULED', label: 'Programado' },
+              { value: 'PENDING', label: 'Pendente' },
               { value: 'OPEN', label: 'Aberto' },
               { value: 'IN_PROGRESS', label: 'Em Andamento' },
               { value: 'FINISHED', label: 'Finalizado' },
@@ -255,7 +265,31 @@ export default function ChampionshipsPage() {
       ) : (
         <div className="grid-cards">
           {championships.map((championship) => (
-            <ChampionshipCard key={championship.id} championship={championship} />
+            <div key={championship.id} className="space-y-2">
+              <ChampionshipCard championship={championship} />
+              {canManageChampionships && championship.status === 'OPEN' && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => startMutation.mutate(championship.id)}
+                  disabled={startMutation.isPending}
+                  className="w-full"
+                >
+                  Iniciar Campeonato
+                </Button>
+              )}
+              {canManageChampionships && championship.status === 'PENDING' && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => openEnrollmentsMutation.mutate(championship.id)}
+                  disabled={openEnrollmentsMutation.isPending}
+                  className="w-full"
+                >
+                  Abrir Inscrições
+                </Button>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -312,7 +346,6 @@ function ChampionshipModal({ championship, onClose, onSubmit, isLoading }: Champ
     championship_type: championship?.championship_type || 'LEAGUE',
     enrollment_start: championship?.enrollment_start?.split('T')[0] || new Date().toISOString().split('T')[0],
     enrollment_end: championship?.enrollment_end?.split('T')[0] || '',
-    start_date: championship?.start_date?.split('T')[0] || '',
     enrollment_fee: championship?.enrollment_fee || '0.00',
     prize_pool: championship?.prize_pool || '0.00',
     max_teams: championship?.max_teams?.toString() || '',
@@ -322,6 +355,7 @@ function ChampionshipModal({ championship, onClose, onSubmit, isLoading }: Champ
     num_groups: championship?.num_groups?.toString() || '4',
     teams_per_group: championship?.teams_per_group?.toString() || '4',
     qualified_per_group: championship?.qualified_per_group?.toString() || '2',
+    group_stage_format: championship?.group_stage_format || 'SINGLE_ROUND',
     has_third_place_match: championship?.has_third_place_match || false,
     game_days: championship?.game_days || [] as string[],
     game_start_time: championship?.game_start_time || '',
@@ -344,7 +378,6 @@ function ChampionshipModal({ championship, onClose, onSubmit, isLoading }: Champ
       formDataObj.append('championship_type', formData.championship_type);
       formDataObj.append('enrollment_start', formData.enrollment_start);
       formDataObj.append('enrollment_end', formData.enrollment_end);
-      formDataObj.append('start_date', formData.start_date);
       formDataObj.append('enrollment_fee', formData.enrollment_fee);
       formDataObj.append('prize_pool', formData.prize_pool);
       formDataObj.append('min_teams', formData.min_teams);
@@ -371,6 +404,7 @@ function ChampionshipModal({ championship, onClose, onSubmit, isLoading }: Champ
         formDataObj.append('num_groups', formData.num_groups);
         formDataObj.append('teams_per_group', formData.teams_per_group);
         formDataObj.append('qualified_per_group', formData.qualified_per_group);
+        formDataObj.append('group_stage_format', formData.group_stage_format);
         formDataObj.append('has_third_place_match', formData.has_third_place_match.toString());
       }
       
@@ -401,6 +435,7 @@ function ChampionshipModal({ championship, onClose, onSubmit, isLoading }: Champ
         submitData.num_groups = parseInt(formData.num_groups);
         submitData.teams_per_group = parseInt(formData.teams_per_group);
         submitData.qualified_per_group = parseInt(formData.qualified_per_group);
+        submitData.group_stage_format = formData.group_stage_format;
         submitData.has_third_place_match = formData.has_third_place_match;
       }
       
@@ -415,7 +450,7 @@ function ChampionshipModal({ championship, onClose, onSubmit, isLoading }: Champ
     });
   };
 
-  const handleDateChange = (field: 'enrollment_start' | 'enrollment_end' | 'start_date', value: string) => {
+  const handleDateChange = (field: 'enrollment_start' | 'enrollment_end', value: string) => {
     setFormData((current) => ({
       ...current,
       [field]: value,
@@ -423,7 +458,7 @@ function ChampionshipModal({ championship, onClose, onSubmit, isLoading }: Champ
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 overflow-y-auto py-8" style={{ zIndex: Z_INDEX.modal }}>
+    <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 overflow-y-auto py-8" style={{ zIndex: 80 }}>
       <Card className="max-w-3xl w-full my-8">
         <div className="flex justify-between items-start mb-6">
           <div>
@@ -483,6 +518,7 @@ function ChampionshipModal({ championship, onClose, onSubmit, isLoading }: Champ
               value={formData.championship_type}
               onChange={handleChange}
               options={[
+                { value: 'KNOCKOUT', label: 'Mata-mata' },
                 { value: 'LEAGUE', label: 'Pontos Corridos (Liga)' },
                 { value: 'GROUPS_KNOCKOUT', label: 'Grupos + Mata-mata' },
               ]}
@@ -515,7 +551,19 @@ function ChampionshipModal({ championship, onClose, onSubmit, isLoading }: Champ
                     ]}
                     required
                   />
-                  
+
+                  <Select
+                    label="Formato da fase de grupos"
+                    name="group_stage_format"
+                    value={formData.group_stage_format}
+                    onChange={handleChange}
+                    options={[
+                      { value: 'SINGLE_ROUND', label: 'Fase de grupos' },
+                      { value: 'ROUND_TRIP', label: 'Fase de grupos ida e volta' },
+                    ]}
+                    required
+                  />
+                   
                   <div className="flex items-center gap-3 p-4 bg-surface2 rounded-xl border border-border">
                     <input
                       type="checkbox"
@@ -543,6 +591,9 @@ function ChampionshipModal({ championship, onClose, onSubmit, isLoading }: Champ
                   </p>
                   <p className="text-xs text-muted">
                     Classificam-se: Top {formData.qualified_per_group} de cada grupo ({(parseInt(formData.num_groups || '4') * parseInt(formData.qualified_per_group || '2'))} times para eliminatórias)
+                  </p>
+                  <p className="text-xs text-muted">
+                    Confrontos por grupo: {formData.group_stage_format === 'ROUND_TRIP' ? 'ida e volta' : 'jogo único'}
                   </p>
                 </div>
               </div>
@@ -580,7 +631,7 @@ function ChampionshipModal({ championship, onClose, onSubmit, isLoading }: Champ
               label="Início das Inscrições"
               value={formData.enrollment_start}
               onChange={(value) => handleDateChange('enrollment_start', value)}
-              max={formData.enrollment_end || formData.start_date}
+              max={formData.enrollment_end}
               required
             />
             <DatePickerInput
@@ -588,14 +639,6 @@ function ChampionshipModal({ championship, onClose, onSubmit, isLoading }: Champ
               value={formData.enrollment_end}
               onChange={(value) => handleDateChange('enrollment_end', value)}
               min={formData.enrollment_start}
-              max={formData.start_date}
-              required
-            />
-            <DatePickerInput
-              label="Data de Início"
-              value={formData.start_date}
-              onChange={(value) => handleDateChange('start_date', value)}
-              min={formData.enrollment_end || formData.enrollment_start}
               required
             />
           </div>
@@ -795,7 +838,7 @@ function EnrollmentModal({ championship, onClose, onSubmit, isLoading }: Enrollm
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" style={{ zIndex: Z_INDEX.modal }}>
+    <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" style={{ zIndex: 80 }}>
       <Card className="max-w-lg w-full">
         <div className="flex justify-between items-start mb-6">
           <div>

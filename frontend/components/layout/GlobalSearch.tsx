@@ -6,6 +6,12 @@ import { useGlobalSearch } from '@/hooks/useGlobalSearch';
 import Link from 'next/link';
 import { Z_INDEX } from '@/lib/ui/z-index';
 
+const CHAMPIONSHIP_TYPE_LABELS: Record<string, string> = {
+  KNOCKOUT: 'Mata-mata',
+  LEAGUE: 'Pontos corridos',
+  GROUPS_KNOCKOUT: 'Grupos + mata-mata',
+};
+
 export function GlobalSearch() {
   const [isOpen, setIsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -203,7 +209,9 @@ export function GlobalSearch() {
                             </div>
                             <div className="flex-1">
                               <p className="text-sm font-medium text-text">{championship.name}</p>
-                              <p className="text-xs text-muted">{championship.format}</p>
+                              <p className="text-xs text-muted">
+                                {CHAMPIONSHIP_TYPE_LABELS[championship.championship_type] || championship.format || championship.championship_type || 'Campeonato'}
+                              </p>
                             </div>
                           </Link>
                         ))}

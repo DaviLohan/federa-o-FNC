@@ -7,8 +7,9 @@ from rest_framework.test import APIClient
 
 from conftest import MatchFactory, TeamFactory, TeamMembershipFactory, PlayerProfileFactory, UserFactory
 from ea_integration.date_utils import LOCAL_TIMEZONE
-from ea_integration.models import EAClub, EAMatch
+from ea_integration.models import EAClub, EAClubAlias, EAMatch, EAPlayerMatchStats
 from ea_integration.report_service import MatchReportEAError, MatchReportEAService
+from ea_integration.validation import MatchValidationService
 from ea_integration.services import MatchSyncService
 from fnc_matches.models import Goal, MatchReport
 
@@ -217,6 +218,81 @@ def test_confirm_report_blocks_critical_irregularities_without_explicit_confirma
 
 
 @pytest.mark.django_db
+def test_report_service_accepts_home_alias_id_in_matching():
+    home_team = TeamFactory(name='NVG ES')
+    away_team = TeamFactory(name='OS MERCENARIOSG')
+    home_club = EAClub.objects.create(team=home_team, ea_club_id='1777993', platform='common-gen5', name='Nova GeracaoFC')
+    away_club = EAClub.objects.create(team=away_team, ea_club_id='1452186', platform='common-gen5', name='OS MERCENARIOSG')
+    EAClubAlias.objects.create(team=home_team, ea_club_id='475181', platform='common-gen5', label='NVG ES legado')
+
+    played_at = datetime(2026, 5, 12, 0, 33, tzinfo=dt_timezone.utc)
+    match = MatchFactory(home_team=home_team, away_team=away_team, status='IN_PROGRESS', scheduled_date=played_at)
+    raw_match = build_raw_match('ea-alias-home', '475181', away_club.ea_club_id, played_at=played_at)
+
+    service = MatchReportEAService(
+        client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}),
+        validator=NoOpValidator(),
+        sync_service=MatchSyncService(client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}), validator=NoOpValidator()),
+    )
+
+    preview = service.fetch_ea_report(match, home_team.owner)
+    assert preview['ea_match_id_external'] == 'ea-alias-home'
+
+
+@pytest.mark.django_db
+def test_report_service_accepts_away_alias_id_in_matching():
+    home_team = TeamFactory(name='Gorillas Team')
+    away_team = TeamFactory(name='Bugados Fc 2017')
+    home_club = EAClub.objects.create(team=home_team, ea_club_id='24089', platform='common-gen5', name='Gorillas Team')
+    away_club = EAClub.objects.create(team=away_team, ea_club_id='3594762', platform='common-gen5', name='Bugados Fc 2017')
+    EAClubAlias.objects.create(team=away_team, ea_club_id='1800000', platform='common-gen5', label='Bugados antigo')
+
+    played_at = datetime(2026, 5, 10, 1, 10, tzinfo=dt_timezone.utc)
+    match = MatchFactory(home_team=home_team, away_team=away_team, status='IN_PROGRESS', scheduled_date=played_at)
+    raw_match = build_raw_match('ea-alias-away', home_club.ea_club_id, '1800000', played_at=played_at)
+
+    service = MatchReportEAService(
+        client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}),
+        validator=NoOpValidator(),
+        sync_service=MatchSyncService(client=RecordingEAClient({'leagueMatch': [raw_match], 'friendlyMatch': []}), validator=NoOpValidator()),
+    )
+
+    preview = service.fetch_ea_report(match, away_team.owner)
+    assert preview['ea_match_id_external'] == 'ea-alias-away'
+
+
+@pytest.mark.django_db
+def test_side_mapping_resolves_orphan_platform_row_by_same_ea_club_id():
+    home_team = TeamFactory(name='Estrela Nordest')
+    away_team = TeamFactory(name='MVL ES')
+    EAClub.objects.create(team=home_team, ea_club_id='4958937', platform='common-gen5', name='Estrela Nordest')
+    EAClub.objects.create(team=away_team, ea_club_id='57755', platform='common-gen5', name='MVL ES')
+
+    orphan_home = EAClub.objects.create(team=None, ea_club_id='57755', platform='pc', name='MVL ES')
+    orphan_away = EAClub.objects.create(team=None, ea_club_id='4958937', platform='pc', name='Estrela Nordest')
+
+    match = MatchFactory(home_team=home_team, away_team=away_team, status='IN_PROGRESS')
+    ea_match = EAMatch.objects.create(
+        ea_match_id='ea-orphan-side-map',
+        match_type='leagueMatch',
+        played_at=timezone.now(),
+        home_club=orphan_home,
+        home_club_name=orphan_home.name,
+        home_score=0,
+        away_club=orphan_away,
+        away_club_name=orphan_away.name,
+        away_score=0,
+        raw_data={},
+    )
+
+    side_map = MatchReportEAService()._get_side_mapping(ea_match, match)
+
+    assert side_map['inverted'] is True
+    assert side_map['ea_home_club_name'] == 'Estrela Nordest'
+    assert side_map['ea_away_club_name'] == 'MVL ES'
+
+
+@pytest.mark.django_db
 def test_confirm_irregular_result_preserves_match_data_and_flags_confirmation():
     home_team = TeamFactory()
     away_team = TeamFactory()
@@ -422,3 +498,111 @@ def test_team_captain_membership_can_confirm_irregular_as_winner():
     assert updated_match.status == 'FINISHED'
     assert updated_match.match_result_confirmed is True
     assert updated_match.confirmed_by_team == home_team
+
+
+@pytest.mark.django_db
+def test_validation_contests_suspicious_disconnect_override_and_does_not_apply_result():
+    home_team = TeamFactory(name='Home Draw Team')
+    away_team = TeamFactory(name='Away Draw Team')
+    home_club = EAClub.objects.create(team=home_team, ea_club_id='9001', platform='common-gen5', name='Home Draw Team')
+    away_club = EAClub.objects.create(team=away_team, ea_club_id='9002', platform='common-gen5', name='Away Draw Team')
+    played_at = datetime(2026, 5, 17, 1, 0, tzinfo=dt_timezone.utc)
+    match = MatchFactory(
+        home_team=home_team,
+        away_team=away_team,
+        status='IN_PROGRESS',
+        scheduled_date=played_at,
+    )
+    ea_match = EAMatch.objects.create(
+        ea_match_id='ea-disconnect-override',
+        match_type='friendlyMatch',
+        played_at=played_at,
+        home_club=home_club,
+        home_club_name=home_club.name,
+        home_score=3,
+        away_club=away_club,
+        away_club_name=away_club.name,
+        away_score=0,
+        linked_match=match,
+        raw_data={},
+    )
+    EAPlayerMatchStats.objects.create(
+        ea_match=ea_match,
+        ea_club=home_club,
+        player_name='quit-home',
+        position='MID',
+        rating='3.00',
+        seconds_played=0,
+    )
+    EAPlayerMatchStats.objects.create(
+        ea_match=ea_match,
+        ea_club=away_club,
+        player_name='quit-away',
+        position='MID',
+        rating='3.00',
+        seconds_played=0,
+    )
+
+    result = MatchValidationService().validate(ea_match)
+
+    ea_match.refresh_from_db()
+    match.refresh_from_db()
+    assert result.status == 'contested'
+    assert any(issue.validation_type == 'potential_disconnect_override' for issue in result.issues)
+    assert ea_match.validation_status == EAMatch.ValidationStatus.CONTESTED
+    assert match.status == 'IN_PROGRESS'
+    assert match.home_score == 0
+    assert match.away_score == 0
+
+
+@pytest.mark.django_db
+def test_confirm_report_blocks_suspicious_disconnect_override_without_irregular_confirmation():
+    home_team = TeamFactory(name='Home Quit Team')
+    away_team = TeamFactory(name='Away Quit Team')
+    home_club = EAClub.objects.create(team=home_team, ea_club_id='9101', platform='common-gen5', name='Home Quit Team')
+    away_club = EAClub.objects.create(team=away_team, ea_club_id='9102', platform='common-gen5', name='Away Quit Team')
+    played_at = datetime(2026, 5, 17, 2, 0, tzinfo=dt_timezone.utc)
+    match = MatchFactory(
+        home_team=home_team,
+        away_team=away_team,
+        status='IN_PROGRESS',
+        scheduled_date=played_at,
+    )
+    ea_match = EAMatch.objects.create(
+        ea_match_id='ea-disconnect-confirm',
+        match_type='friendlyMatch',
+        played_at=played_at,
+        home_club=home_club,
+        home_club_name=home_club.name,
+        home_score=3,
+        away_club=away_club,
+        away_club_name=away_club.name,
+        away_score=0,
+        linked_match=match,
+        validation_status=EAMatch.ValidationStatus.CONTESTED,
+        validation_notes=[{
+            'type': 'potential_disconnect_override',
+            'severity': 'critical',
+            'detail': 'Resultado suspeito por quit/desconexão.',
+        }],
+        raw_data={},
+    )
+    EAPlayerMatchStats.objects.create(
+        ea_match=ea_match,
+        ea_club=home_club,
+        player_name='quit-home',
+        position='MID',
+        rating='3.00',
+        seconds_played=0,
+    )
+    EAPlayerMatchStats.objects.create(
+        ea_match=ea_match,
+        ea_club=away_club,
+        player_name='quit-away',
+        position='MID',
+        rating='3.00',
+        seconds_played=0,
+    )
+
+    with pytest.raises(MatchReportEAError, match='irregularidades detectadas'):
+        MatchReportEAService().confirm_report(match, ea_match.pk, home_team.owner)

@@ -8,6 +8,7 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
+from fnc_championships.models import Championship
 
 from .models import (
     Match, MatchReport, Goal, Card, Contestation,
@@ -19,6 +20,12 @@ from users.models import PlayerProfile
 from fnc_notifications.models import Notification
 from .analytics_services import PlayerStats, TeamStats, MatchStats, ChampionshipStats
 from ea_integration.report_service import MatchReportEAService, MatchReportEAError
+try:
+    from player_stats.models import GlobalTeamRanking
+    from player_stats.global_ranking_service import recompute_global_team_ranking
+except Exception:  # pragma: no cover - fallback para ambientes sem módulo de ranking global
+    GlobalTeamRanking = None
+    recompute_global_team_ranking = None
 from ea_integration.serializers import (
     EAReportPreviewSerializer,
     EAReportConfirmSerializer,
@@ -55,7 +62,11 @@ from .serializers import (
 )
 from .contestation_services import ContestationDecisionService, ContestationDecisionError
 from .query_utils import filter_matches_for_user, filter_queryset_by_match_visibility
-from .services import sync_matches_ready_to_start, recompute_standings_for_championship
+from fnc_championships.models import ChampionshipEnrollment
+from .services import sync_matches_ready_to_start, recompute_match_derived_data_for_championship
+from player_stats.ranking_service import CompetitiveRankingService
+from player_stats.serializers import PlayerStatisticsSerializer, TeamStatisticsSerializer
+from player_stats.weekly_selection_service import WeeklySelectionService
 
 
 class MatchViewSet(viewsets.ModelViewSet):
@@ -101,15 +112,41 @@ class MatchViewSet(viewsets.ModelViewSet):
         output = MatchDetailSerializer(match, context=self.get_serializer_context())
         return Response(output.data, status=status.HTTP_201_CREATED)
     
+    def _can_view_full_championship_matches(self, championship_id: int) -> bool:
+        user = self.request.user
+        if user.has_supervisor_access:
+            return True
+
+        from .query_utils import get_visible_team_ids_for_user
+
+        visible_team_ids = get_visible_team_ids_for_user(user)
+        if not visible_team_ids:
+            return False
+
+        return ChampionshipEnrollment.objects.filter(
+            championship_id=championship_id,
+            status=ChampionshipEnrollment.Status.APPROVED,
+            team_id__in=visible_team_ids,
+        ).exists()
+
     def get_queryset(self):
         """Filtra partidas."""
         sync_matches_ready_to_start()
-        queryset = filter_matches_for_user(Match.objects.all(), self.request.user)
-        
+        queryset = Match.objects.all()
+
         # Filtro por campeonato
         championship_id = self.request.query_params.get('championship', None)
+        include_championship_all = str(
+            self.request.query_params.get('include_championship_all', ''),
+        ).lower() in {'1', 'true', 'yes'}
+
         if championship_id:
             queryset = queryset.filter(championship_id=championship_id)
+
+        if championship_id and include_championship_all and self._can_view_full_championship_matches(int(championship_id)):
+            pass
+        else:
+            queryset = filter_matches_for_user(queryset, self.request.user)
         
         # Filtro por time
         team_id = self.request.query_params.get('team', None)
@@ -141,6 +178,44 @@ class MatchViewSet(viewsets.ModelViewSet):
             'home_team__owner',
             'away_team__owner',
         ).prefetch_related('goals', 'cards', 'report')
+
+    def _recompute_after_match_update(self, previous_match: Match, current_match: Match) -> None:
+        status_or_score_changed = (
+            previous_match.status != current_match.status
+            or previous_match.home_score != current_match.home_score
+            or previous_match.away_score != current_match.away_score
+            or previous_match.championship_id != current_match.championship_id
+        )
+        if not status_or_score_changed:
+            return
+
+        touched_championships = set()
+        if previous_match.championship_id:
+            touched_championships.add(previous_match.championship)
+        if current_match.championship_id:
+            touched_championships.add(current_match.championship)
+
+        for championship in touched_championships:
+            recompute_match_derived_data_for_championship(championship)
+
+        if not touched_championships:
+            recompute_global_team_ranking()
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        previous = Match.objects.get(pk=instance.pk)
+        response = super().update(request, *args, **kwargs)
+        instance.refresh_from_db()
+        self._recompute_after_match_update(previous, instance)
+        return response
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        previous = Match.objects.get(pk=instance.pk)
+        response = super().partial_update(request, *args, **kwargs)
+        instance.refresh_from_db()
+        self._recompute_after_match_update(previous, instance)
+        return response
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsMatchParticipantOrAdmin])
     def start(self, request, pk=None):
@@ -221,23 +296,13 @@ class MatchViewSet(viewsets.ModelViewSet):
         match.finished_at = timezone.now()
         match.save(update_fields=['home_score', 'away_score', 'status', 'finished_at', 'updated_at'])
         
-        # Atualizar estatísticas automaticamente
-        from .services import (
-            update_player_statistics,
-            update_team_performance,
-            update_team_statistics,
-            update_standings,
-            update_top_scorers
-        )
-        
-        update_player_statistics(match)
-        update_team_statistics(match)
-        update_team_performance(match)
-        recompute_standings_for_championship(match.championship)
-        update_top_scorers(match)
+        if match.championship:
+            recompute_match_derived_data_for_championship(match.championship)
+        else:
+            recompute_global_team_ranking()
         
         # Se for campeonato de mata-mata, atualiza o bracket
-        if match.championship and match.championship.championship_type == 'KNOCKOUT':
+        if match.championship and match.championship.championship_type in {'KNOCKOUT', 'GROUPS_KNOCKOUT'}:
             from fnc_championships.services import update_bracket_after_match
             update_bracket_after_match(match)
         
@@ -268,10 +333,19 @@ class MatchViewSet(viewsets.ModelViewSet):
         """
         match = self.get_object()
 
-        if not request.user.has_supervisor_access and request.user.id not in [
-            match.home_team.owner_id,
-            match.away_team.owner_id,
-        ]:
+        is_team_representative = TeamMembership.objects.filter(
+            player__user=request.user,
+            team__in=[match.home_team, match.away_team],
+            is_active=True,
+            role__in=[
+                TeamMembership.Role.OWNER,
+                TeamMembership.Role.CAPTAIN,
+                TeamMembership.Role.COMMISSION,
+            ],
+        ).exists()
+        is_owner = request.user.id in [match.home_team.owner_id, match.away_team.owner_id]
+
+        if not request.user.has_supervisor_access and not (is_owner or is_team_representative):
             return Response(
                 {'error': 'Você só pode reportar partidas do seu time.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -283,12 +357,19 @@ class MatchViewSet(viewsets.ModelViewSet):
                 {'error': 'Súmula só pode ser submetida para partidas em andamento ou finalizadas.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        existing_report = MatchReport.objects.filter(match=match).first()
+        if existing_report and not request.user.has_supervisor_access:
+            return Response(
+                {'error': 'Esta partida já foi reportada. Reprocessamento permitido apenas para admin/supervisor.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         
         # Criar súmula
         report_data = request.data.copy()
         report_data['match_id'] = match.id
         
-        serializer = MatchReportSerializer(data=report_data)
+        serializer = MatchReportSerializer(instance=existing_report, data=report_data, partial=bool(existing_report))
         if serializer.is_valid():
             report = serializer.save(reported_by=request.user)
             match.home_score = serializer.validated_data.get('home_score', match.home_score)
@@ -296,9 +377,13 @@ class MatchViewSet(viewsets.ModelViewSet):
             match.save(update_fields=['home_score', 'away_score', 'updated_at'])
 
             if match.status == Match.Status.FINISHED:
-                recompute_standings_for_championship(match.championship)
+                if match.championship:
+                    recompute_match_derived_data_for_championship(match.championship)
+                else:
+                    recompute_global_team_ranking()
 
-            return Response(MatchReportSerializer(report).data, status=status.HTTP_201_CREATED)
+            response_status = status.HTTP_200_OK if existing_report else status.HTTP_201_CREATED
+            return Response(MatchReportSerializer(report).data, status=response_status)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -615,6 +700,58 @@ class MatchViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='resolve-aggregate-tie',
+        permission_classes=[IsAuthenticated, IsMatchParticipantOrAdmin],
+    )
+    def resolve_aggregate_tie(self, request, pk=None):
+        """
+        Resolve manualmente um empate de agregado (ida/volta), definindo o time
+        classificado (pênaltis), e avança o chaveamento. Apenas admin/supervisor.
+
+        POST /api/v1/matches/{id}/resolve-aggregate-tie/
+        Body: { "qualifier_team_id": int, "penalty_home"?: int, "penalty_away"?: int }
+        """
+        match = self.get_object()
+
+        if not getattr(request.user, 'has_supervisor_access', False):
+            return Response(
+                {'error': 'Apenas administradores podem resolver empates de agregado.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        qualifier_team_id = request.data.get('qualifier_team_id')
+        if qualifier_team_id is None:
+            return Response(
+                {'error': 'Informe o time classificado (qualifier_team_id).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from fnc_championships.services import resolve_aggregate_tie as resolve_tie_service
+
+        try:
+            resolve_tie_service(
+                match,
+                qualifier_team_id,
+                penalty_home=request.data.get('penalty_home'),
+                penalty_away=request.data.get('penalty_away'),
+            )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {'error': f'Erro ao resolver empate de agregado: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        match.refresh_from_db()
+        return Response({
+            'message': 'Classificado definido e chaveamento avançado.',
+            'match': MatchDetailSerializer(match, context={'request': request}).data,
+        })
+
 
 class MatchReportViewSet(viewsets.ModelViewSet):
     """
@@ -666,6 +803,12 @@ class MatchReportViewSet(viewsets.ModelViewSet):
         report.approved_by = request.user
         report.approved_at = timezone.now()
         report.save(update_fields=['status', 'approved_by', 'approved_at', 'updated_at'])
+
+        if report.match.status == Match.Status.FINISHED:
+            if report.match.championship:
+                recompute_match_derived_data_for_championship(report.match.championship)
+            else:
+                recompute_global_team_ranking()
         
         return Response({
             'message': 'Súmula aprovada.',
@@ -728,6 +871,32 @@ class GoalViewSet(viewsets.ModelViewSet):
         
         return queryset.select_related('match', 'scorer', 'team').prefetch_related('assist')
 
+    def _recompute_for_goal(self, goal: Goal) -> None:
+        match = goal.match
+        if match.status != Match.Status.FINISHED:
+            return
+        if match.championship:
+            recompute_match_derived_data_for_championship(match.championship)
+        else:
+            recompute_global_team_ranking()
+
+    def perform_create(self, serializer):
+        goal = serializer.save()
+        self._recompute_for_goal(goal)
+
+    def perform_update(self, serializer):
+        goal = serializer.save()
+        self._recompute_for_goal(goal)
+
+    def perform_destroy(self, instance):
+        match = instance.match
+        super().perform_destroy(instance)
+        if match.status == Match.Status.FINISHED:
+            if match.championship:
+                recompute_match_derived_data_for_championship(match.championship)
+            else:
+                recompute_global_team_ranking()
+
 
 class CardViewSet(viewsets.ModelViewSet):
     """
@@ -763,6 +932,32 @@ class CardViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(card_type=card_type)
         
         return queryset.select_related('match', 'player', 'team')
+
+    def _recompute_for_card(self, card: Card) -> None:
+        match = card.match
+        if match.status != Match.Status.FINISHED:
+            return
+        if match.championship:
+            recompute_match_derived_data_for_championship(match.championship)
+        else:
+            recompute_global_team_ranking()
+
+    def perform_create(self, serializer):
+        card = serializer.save()
+        self._recompute_for_card(card)
+
+    def perform_update(self, serializer):
+        card = serializer.save()
+        self._recompute_for_card(card)
+
+    def perform_destroy(self, instance):
+        match = instance.match
+        super().perform_destroy(instance)
+        if match.status == Match.Status.FINISHED:
+            if match.championship:
+                recompute_match_derived_data_for_championship(match.championship)
+            else:
+                recompute_global_team_ranking()
 
 
 class ContestationViewSet(viewsets.ModelViewSet):
@@ -1354,21 +1549,87 @@ class StatisticsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def rankings(self, request):
         """
-        Retorna classificação completa de um campeonato.
+        Retorna classificação completa de um campeonato (legado) ou ranking competitivo mensal.
         
         Query params:
         - championship_id (required): ID do campeonato
         """
         championship_id = request.query_params.get('championship_id')
-        if not championship_id:
+        if championship_id:
+            stats = TeamStats.get_team_rankings(championship_id=championship_id)
+            return Response(stats)
+
+        payload = CompetitiveRankingService.get_cycle_payload(
+            user=request.user if request.user and request.user.is_authenticated else None,
+        )
+        return Response(payload)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='rankings/me')
+    def rankings_me(self, request):
+        payload = CompetitiveRankingService.get_my_ranking_payload(request.user)
+        if payload is None:
             return Response(
-                {'error': 'championship_id é obrigatório'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'Usuário autenticado não possui perfil de jogador.'},
+                status=status.HTTP_404_NOT_FOUND,
             )
-        
-        stats = TeamStats.get_team_rankings(championship_id=championship_id)
-        
-        return Response(stats)
+        return Response(payload)
+
+    @action(detail=False, methods=['get'])
+    def global_rankings(self, request):
+        """Retorna ranking geral dos times com filtros de tier."""
+        if GlobalTeamRanking is None or recompute_global_team_ranking is None:
+            return Response(
+                {'error': 'Ranking global indisponível neste ambiente.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        include_zero_points = request.query_params.get('include_zero_points', 'false').lower() == 'true'
+        tier = request.query_params.get('tier')
+
+        if tier and tier not in [
+            GlobalTeamRanking.Tier.TIER_1,
+            GlobalTeamRanking.Tier.TIER_2,
+            GlobalTeamRanking.Tier.TIER_3,
+        ]:
+            return Response(
+                {'error': 'tier inválido. Use: TIER_1, TIER_2 ou TIER_3.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        recompute_global_team_ranking(include_zero_match_teams=include_zero_points)
+
+        queryset = GlobalTeamRanking.objects.select_related('team').all()
+        if not include_zero_points:
+            queryset = queryset.filter(matches_played__gt=0)
+        if tier:
+            queryset = queryset.filter(tier=tier)
+
+        queryset = queryset.order_by('-total_points', '-wins', '-goal_difference', 'losses', 'team__name')
+
+        results = []
+        for idx, row in enumerate(queryset, start=1):
+            results.append({
+                'position': idx,
+                'team_id': row.team_id,
+                'team_name': row.team.name,
+                'tier': row.tier,
+                'tier_display': row.get_tier_display(),
+                'points': row.total_points,
+                'wins': row.wins,
+                'draws': row.draws,
+                'losses': row.losses,
+                'matches_played': row.matches_played,
+                'goals_for': row.goals_for,
+                'goals_against': row.goals_against,
+                'goal_difference': row.goal_difference,
+                'win_rate': row.win_rate,
+                'updated_at': row.updated_at,
+            })
+
+        return Response({
+            'count': len(results),
+            'results': results,
+        })
     
     @action(detail=False, methods=['get'])
     def match_details(self, request):
@@ -1409,6 +1670,64 @@ class StatisticsViewSet(viewsets.ViewSet):
         )
         
         return Response(stats)
+
+    @action(detail=False, methods=['get'])
+    def championship_dashboard(self, request):
+        championship_id = request.query_params.get('championship_id')
+        if not championship_id:
+            return Response(
+                {'error': 'championship_id é obrigatório'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            payload = ChampionshipStats.get_championship_dashboard(int(championship_id))
+        except Championship.DoesNotExist:
+            return Response(
+                {'error': 'Campeonato não encontrado.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as exc:
+            return Response(
+                {'error': f'Não foi possível carregar o dashboard de estatísticas: {exc}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serialized = {
+            'championship_id': int(championship_id),
+            'overview': payload['overview'],
+            'top_scorers': PlayerStatisticsSerializer(payload['top_scorers'], many=True).data,
+            'top_assisters': PlayerStatisticsSerializer(payload['top_assisters'], many=True).data,
+            'teams': TeamStatisticsSerializer(payload['team_rankings'], many=True).data,
+            'best_attack': TeamStatisticsSerializer(payload['best_attack']).data if payload['best_attack'] else None,
+            'best_defense': TeamStatisticsSerializer(payload['best_defense']).data if payload['best_defense'] else None,
+        }
+
+        return Response(serialized)
+
+    @action(detail=False, methods=['get'])
+    def weekly_selection(self, request):
+        """Retorna a seleção da rodada em formação fixa 3-5-2."""
+        championship_id = request.query_params.get('championship_id')
+        if not championship_id:
+            return Response(
+                {'error': 'championship_id é obrigatório'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        round_number = request.query_params.get('round_number')
+        try:
+            payload = WeeklySelectionService.get_weekly_selection(
+                championship_id=int(championship_id),
+                round_number=int(round_number) if round_number else None,
+            )
+        except Exception as exc:
+            return Response(
+                {'error': f'Não foi possível gerar a seleção da rodada: {exc}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1455,13 +1774,17 @@ class MatchLineupView(APIView):
         membership = TeamMembership.objects.filter(
             player__user=request.user,
             team__in=[match.home_team, match.away_team],
-            role__in=[TeamMembership.Role.OWNER, TeamMembership.Role.CAPTAIN],
+            role__in=[
+                TeamMembership.Role.OWNER,
+                TeamMembership.Role.CAPTAIN,
+                TeamMembership.Role.COMMISSION,
+            ],
             is_active=True,
         ).select_related('team').first()
 
         if not membership:
             raise PermissionDenied(
-                'Apenas o dono ou capitão de um dos times participantes pode '
+                'Apenas dono/capitão/comissão de um dos times participantes pode '
                 'gerenciar a escalação.'
             )
 
