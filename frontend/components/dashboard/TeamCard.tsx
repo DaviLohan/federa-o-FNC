@@ -70,7 +70,7 @@ export function TeamCard({ team, canCreate = false }: TeamCardProps) {
     <div className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-surface1 to-surface2 p-8">
       {/* Background pattern */}
       <div className="absolute inset-0 opacity-5">
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#14CCDD_1px,transparent_1px),linear-gradient(to_bottom,#14CCDD_1px,transparent_1px)] bg-[size:4rem_4rem]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#D6A11E_1px,transparent_1px),linear-gradient(to_bottom,#D6A11E_1px,transparent_1px)] bg-[size:4rem_4rem]" />
       </div>
 
       <div className="relative">

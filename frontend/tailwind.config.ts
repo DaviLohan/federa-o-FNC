@@ -9,7 +9,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Base Pro Eleven (Black/Carbon)
+        // Base FDT ARENA (Black/Carbon)
         bg: "rgb(var(--bg) / <alpha-value>)",
         surface1: "rgb(var(--surface1) / <alpha-value>)",
         surface2: "rgb(var(--surface2) / <alpha-value>)",
@@ -17,12 +17,12 @@ const config: Config = {
         text: "rgb(var(--text) / <alpha-value>)",
         muted: "rgb(var(--muted) / <alpha-value>)",
         
-        // Gold (Pro Eleven Brand)
+        // Gold (FDT ARENA Brand)
         gold: "rgb(var(--gold) / <alpha-value>)",
         gold2: 'var(--gold2)',
         gold3: 'var(--gold3)',
         
-        // Mapped colors (neon -> Pro Eleven for compatibility)
+        // Mapped colors (neon -> FDT ARENA for compatibility)
         cyan: "rgb(var(--cyan) / <alpha-value>)",     // Mapped to gold
         cyan2: "rgb(var(--cyan2) / <alpha-value>)",   // Mapped to gold3
         teal: "rgb(var(--teal) / <alpha-value>)",     // Mapped to gold
@@ -94,6 +94,9 @@ const config: Config = {
           "0%": { backgroundPosition: "-200% center" },
           "100%": { backgroundPosition: "200% center" },
         },
+        shimmer: {
+          "100%": { transform: "translateX(100%)" },
+        },
         pulseGold: {
           "0%,100%": { boxShadow: "0 0 0 0 rgba(214,161,30,0)" },
           "50%": { boxShadow: "0 0 20px 4px rgba(214,161,30,0.35)" },
@@ -110,6 +113,7 @@ const config: Config = {
         reveal: "reveal 0.5s ease-out both",
         gridMove: "gridMove 6s linear infinite",
         shimmerGold: "shimmerGold 3s linear infinite",
+        shimmer: "shimmer 1.8s infinite",
         pulseGold: "pulseGold 2.5s ease-in-out infinite",
         scanline: "scanline 8s linear infinite",
       },

@@ -1,7 +1,7 @@
 """
 config/celery.py
 
-Configuração do Celery para o projeto PRO ELEVEN (FNC).
+Configuração do Celery para o projeto FDT ARENA (FNC).
 Descobre automaticamente tasks em todas as apps INSTALLED_APPS.
 """
 

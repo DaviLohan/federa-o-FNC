@@ -6,34 +6,31 @@ import { useDashboardData } from '@/hooks/useDashboardData';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   WelcomeSection,
-  KpiCard,
   TeamCard,
-  MatchCard,
-  ChampionshipCard,
   QuickActionTile,
   SectionHeader,
-  PlayerStatsSection,
   GettingStartedCard,
+  DashboardKpis,
+  UpcomingMatchesCard,
+  RecentResultsCard,
+  RankingPodiumCard,
+  MyRankCard,
+  TeamStandingsCard,
+  TopStatsCard,
+  RoundHighlightsCard,
+  AnnouncementsCard,
+  MyPerformancePanel,
 } from '@/components/dashboard';
-import {
-  Users,
-  Trophy,
-  Calendar,
-  BarChart3,
-  Plus,
-  Search,
-  Award,
-  Mail,
-  Shield,
-} from 'lucide-react';
-import Link from 'next/link';
+import { Plus, Trophy, Award, Calendar, Shield, UserSquare } from 'lucide-react';
 
 export default function DashboardPage() {
   useRequireAuth();
 
   const user = useAuthStore((state) => state.user);
-  const { myTeam, championships, upcomingMatches, pendingInvitations, stats, isLoading } =
-    useDashboardData();
+  const {
+    myTeam, championships, upcomingMatches, recentResults, stats, isLoading,
+    ranking, myRank, topScorers, topAssisters, teamRanking, weeklySelection, myProfile, platformStats, loading,
+  } = useDashboardData();
   const { canManageChampionships } = usePermissions();
 
   if (!user) {
@@ -47,215 +44,109 @@ export default function DashboardPage() {
     );
   }
 
-  // Verificar se é usuário novo (menos de 7 dias)
+  const isPlayer = user.user_type === 'PLAYER';
   const isNewUser =
     user.date_joined &&
     new Date().getTime() - new Date(user.date_joined).getTime() < 7 * 24 * 60 * 60 * 1000;
 
-  // Getting Started Steps
   const gettingStartedSteps = [
+    { title: 'Complete seu perfil', description: 'Adicione suas informações e escolha sua plataforma', completed: !!user.player_profile?.gamer_tag, href: '/profile' },
     {
-      title: 'Complete seu perfil',
-      description: 'Adicione suas informações e escolha sua plataforma',
-      completed: !!user.player_profile?.gamer_tag,
-      href: '/profile',
-    },
-    {
-      title: user.user_type === 'PLAYER' ? 'Junte-se a um time' : 'Crie seu time',
-      description:
-        user.user_type === 'PLAYER'
-          ? 'Aguarde um convite ou entre em contato com managers'
-          : 'Monte seu elenco e comece a competir',
+      title: isPlayer ? 'Junte-se a um time' : 'Crie seu time',
+      description: isPlayer ? 'Aguarde um convite ou entre em contato com managers' : 'Monte seu elenco e comece a competir',
       completed: !!myTeam,
-      href: user.user_type === 'PLAYER' ? undefined : '/teams/create',
+      href: isPlayer ? undefined : '/teams/create',
     },
-    {
-      title: 'Participe de um campeonato',
-      description: 'Inscreva seu time em campeonatos disponíveis',
-      completed: stats.hasEnrollment,
-      href: '/championships',
-    },
+    { title: 'Participe de um campeonato', description: 'Inscreva seu time em campeonatos disponíveis', completed: stats.hasEnrollment, href: '/championships' },
   ];
 
   return (
-    <div className="space-y-8">
-      {/* 1. Welcome Section */}
+    <div className="mx-auto max-w-[1400px] space-y-6">
+      {/* Boas-vindas */}
       <WelcomeSection user={user} />
 
-      {/* 2. KPI Cards */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <KpiCard
-          title="Times"
-          value={stats.hasTeam ? '1' : '0'}
-          subtitle="Seu time"
-          icon={<Users className="h-5 w-5" />}
-          color="cyan"
-          loading={isLoading}
-          href={stats.hasTeam ? `/teams/${myTeam?.id}` : '/teams'}
-        />
-        <KpiCard
-          title="Campeonatos"
-          value={stats.openChampionships}
-          subtitle="Abertos para inscrição"
-          icon={<Trophy className="h-5 w-5" />}
-          color="lime"
-          loading={isLoading}
-          href="/championships"
-        />
-        <KpiCard
-          title="Próximas Partidas"
-          value={stats.upcomingMatches}
-          subtitle="Agendadas"
-          icon={<Calendar className="h-5 w-5" />}
-          color="teal"
-          loading={isLoading}
-          href="/matches"
-        />
-        <KpiCard
-          title="Convites"
-          value={stats.pendingInvitations}
-          subtitle="Pendentes"
-          icon={<Mail className="h-5 w-5" />}
-          color="green"
-          loading={isLoading}
-          href="/teams"
-        />
-      </div>
+      {/* KPIs premium personalizados por papel */}
+      <DashboardKpis
+        user={user}
+        stats={stats}
+        myRank={myRank}
+        myTeam={myTeam}
+        teamRanking={teamRanking}
+        platformStats={platformStats}
+        isAdmin={canManageChampionships}
+      />
 
-      {/* 3. My Team */}
-      <TeamCard team={myTeam} canCreate={user.user_type === 'TEAM_OWNER' && !myTeam} />
+      {isPlayer ? (
+        <>
+          {/* Bloco pessoal em destaque */}
+          <MyPerformancePanel profile={myProfile} loading={loading.myProfile} playerId={user.player_profile?.id} />
 
-      {/* 4. Grid 2 cols: Próximas Partidas + Campeonatos */}
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        {/* Próximas Partidas */}
-        <div className="space-y-4">
-          <SectionHeader
-            title="Próximas Partidas"
-            subtitle="Suas partidas agendadas"
-            href="/matches"
-          />
-          {isLoading ? (
-            <div className="space-y-4">
-              {[1, 2].map((i) => (
-                <div key={i} className="h-48 animate-pulse rounded-xl bg-surface1" />
-              ))}
-            </div>
-          ) : upcomingMatches.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-surface1 p-12 text-center">
-              <Calendar className="mb-4 h-12 w-12 text-muted" />
-              <p className="text-muted">Nenhuma partida agendada</p>
-              <p className="mt-2 text-sm text-muted/70">
-                Suas próximas partidas aparecerão aqui
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {upcomingMatches.slice(0, 3).map((match: any) => (
-                <MatchCard key={match.id} match={match} />
-              ))}
-            </div>
-          )}
-        </div>
+          {/* Próximos jogos · Sua posição · Comunicados (em destaque) */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <UpcomingMatchesCard matches={upcomingMatches} loading={isLoading} />
+            <MyRankCard myRank={myRank} loading={loading.myRank} />
+            <AnnouncementsCard />
+          </div>
 
-        {/* Campeonatos Abertos */}
-        <div className="space-y-4">
-          <SectionHeader
-            title="Campeonatos Abertos"
-            subtitle="Inscrições disponíveis"
-            href="/championships"
-          />
-          {isLoading ? (
-            <div className="space-y-4">
-              {[1, 2].map((i) => (
-                <div key={i} className="h-64 animate-pulse rounded-xl bg-surface1" />
-              ))}
-            </div>
-          ) : championships.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-surface1 p-12 text-center">
-              <Trophy className="mb-4 h-12 w-12 text-muted" />
-              <p className="text-muted">Nenhum campeonato disponível</p>
-              <p className="mt-2 text-sm text-muted/70">
-                Novos campeonatos serão exibidos aqui
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {championships.slice(0, 2).map((championship: any) => (
-                <ChampionshipCard key={championship.id} championship={championship} />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+          {/* Competição: destaques individuais · destaques da rodada */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <TopStatsCard scorers={topScorers} assisters={topAssisters} loading={loading.scorers || loading.assisters} />
+            <RoundHighlightsCard payload={weeklySelection} loading={loading.weekly} />
+          </div>
 
-      {/* 5. Quick Actions */}
-      <div>
-        <SectionHeader title="Ações Rápidas" subtitle="Acesso rápido às principais funcionalidades" />
-        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {user.user_type === 'TEAM_OWNER' && !myTeam && (
-            <QuickActionTile
-              title="Criar Time"
-              description="Monte seu elenco"
-              icon={<Plus className="h-6 w-6" />}
-              href="/teams/create"
-              color="cyan"
-            />
-          )}
-          <QuickActionTile
-            title="Campeonatos"
-            description="Ver disponíveis"
-            icon={<Trophy className="h-6 w-6" />}
-            href="/championships"
-            color="lime"
-          />
-          <QuickActionTile
-            title="Ranking"
-            description="Ver classificação"
-            icon={<Award className="h-6 w-6" />}
-            href="/statistics"
-            color="teal"
-          />
-          <QuickActionTile
-            title="Partidas"
-            description="Histórico completo"
-            icon={<Calendar className="h-6 w-6" />}
-            href="/matches"
-            color="green"
-          />
-          {canManageChampionships && (
-            <QuickActionTile
-              title="Admin"
-              description="Painel administrativo"
-              icon={<Shield className="h-6 w-6" />}
-              href="/admin"
-              color="purple"
-              prefetch={false}
-            />
-          )}
-        </div>
-      </div>
+          {/* Pódio do ranking (largura total para respirar) */}
+          <RankingPodiumCard ranking={ranking} loading={loading.ranking} />
 
-      {/* 6. Player Stats (se for PLAYER) */}
-      {user.user_type === 'PLAYER' && user.player_profile && (
-        <div className="space-y-4">
-          <SectionHeader
-            title="Suas Estatísticas"
-            subtitle="Seu desempenho em partidas"
-            href="/statistics"
-          />
-          <PlayerStatsSection
-            stats={{
-              goals: user.player_profile.total_goals || 0,
-              assists: user.player_profile.total_assists || 0,
-              matches_played: user.player_profile.total_games || 0,
-              rating: user.player_profile.win_rate || 0,
-            }}
-            loading={isLoading}
-          />
-        </div>
+          {/* Classificação de times · resultados recentes */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <TeamStandingsCard rows={teamRanking} myTeamId={myTeam?.id} loading={loading.teamRanking} />
+            <RecentResultsCard matches={recentResults} loading={loading.results} />
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Visão dono/admin */}
+          {/* Pódio do ranking (largura total) */}
+          <RankingPodiumCard ranking={ranking} loading={loading.ranking} />
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <UpcomingMatchesCard matches={upcomingMatches} loading={isLoading} />
+            <TeamStandingsCard rows={teamRanking} myTeamId={myTeam?.id} loading={loading.teamRanking} />
+            <AnnouncementsCard />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <TopStatsCard scorers={topScorers} assisters={topAssisters} loading={loading.scorers || loading.assisters} />
+            <RoundHighlightsCard payload={weeklySelection} loading={loading.weekly} />
+          </div>
+
+          <RecentResultsCard matches={recentResults} loading={loading.results} />
+        </>
       )}
 
-      {/* 7. Getting Started (se for novo usuário) */}
+      {/* Seu time */}
+      {(myTeam || user.user_type === 'TEAM_OWNER') && (
+        <TeamCard team={myTeam} canCreate={user.user_type === 'TEAM_OWNER' && !myTeam} />
+      )}
+
+      {/* Ações rápidas */}
+      <div>
+        <SectionHeader title="Ações Rápidas" subtitle="Acesso rápido às principais funcionalidades" />
+        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          {user.user_type === 'TEAM_OWNER' && !myTeam && (
+            <QuickActionTile title="Criar Time" description="Monte seu elenco" icon={<Plus className="h-6 w-6" />} href="/teams/create" color="gold" />
+          )}
+          <QuickActionTile title="Jogadores" description="Ranking individual" icon={<UserSquare className="h-6 w-6" />} href="/statistics" color="gold" />
+          <QuickActionTile title="Campeonatos" description="Ver disponíveis" icon={<Trophy className="h-6 w-6" />} href="/championships" color="gold" />
+          <QuickActionTile title="Ranking" description="Ver classificação" icon={<Award className="h-6 w-6" />} href="/statistics" color="gold" />
+          <QuickActionTile title="Partidas" description="Histórico completo" icon={<Calendar className="h-6 w-6" />} href="/matches" color="gold" />
+          {canManageChampionships && (
+            <QuickActionTile title="Admin" description="Painel administrativo" icon={<Shield className="h-6 w-6" />} href="/admin" color="gold" prefetch={false} />
+          )}
+        </div>
+      </div>
+
+      {/* Primeiros passos (novos usuários) */}
       {isNewUser && (
         <div>
           <SectionHeader title="Primeiros Passos" subtitle="Complete seu cadastro" />

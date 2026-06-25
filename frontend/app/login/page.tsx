@@ -1,166 +1,31 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowLeft } from 'lucide-react';
-import { useAuthStore } from '@/lib/auth-store';
-import { authAPI } from '@/lib/api';
-import { extractErrorMessage } from '@/lib/utils/errors';
-import { Button } from '@/components/shared/ui/Button';
-import { Input } from '@/components/shared/ui/Input';
-import { useToast } from '@/components/shared/ui/Toast';
-import { AuthLayout, LoginMarketingPanel } from '@/components/auth';
+import {
+  AuthSplitLayout,
+  AuthBrandingPanel,
+  AuthFieldThemeProvider,
+  LoginForm,
+} from '@/components/auth';
 
 export default function LoginPage() {
-  const router = useRouter();
-  const login = useAuthStore((state) => state.login);
-  const { showToast } = useToast();
-  
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
-
-    try {
-      const response = await authAPI.login(formData);
-      login(response.token, response.user);
-      showToast('Login realizado com sucesso!', 'success');
-      router.push('/dashboard');
-    } catch (err: any) {
-      // Handle 403 — email não verificado
-      if (
-        err.response?.status === 403 &&
-        err.response?.data?.requires_verification
-      ) {
-        const email = err.response.data.email || formData.email;
-        showToast('Email não verificado. Redirecionando...', 'warning');
-        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
-        return;
-      }
-
-      const errorMsg = extractErrorMessage(err);
-      setError(errorMsg);
-      showToast(errorMsg, 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
   return (
-    <AuthLayout marketingPanel={<LoginMarketingPanel />}>
-      <div className="w-full max-w-md mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-text mb-2">
-            Entrar na plataforma
-          </h1>
-          <p className="text-muted">
-            Acesse sua conta para continuar
-          </p>
+    <AuthSplitLayout branding={<AuthBrandingPanel title="Bem-vindo de volta!" />}>
+      <AuthFieldThemeProvider value="dark">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-text">Login</h1>
+          <p className="mt-1 text-sm text-muted">Acesse sua conta para continuar.</p>
         </div>
 
-        {/* Form Card */}
-        <div className={`form-card-premium bg-surface1 border border-border rounded-2xl p-8 ${error ? 'animate-shake' : ''}`}>
-          {error && (
-            <div className="bg-error/10 border border-error/20 text-error px-4 py-3 rounded-xl mb-6 text-sm animate-slide-in-bottom flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
+        <LoginForm />
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <Input
-              label="Email"
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="seu@email.com"
-              required
-              disabled={isLoading}
-              leftIcon={<Mail size={16} />}
-            />
-
-            <div>
-              <Input
-                label="Senha"
-                type={showPassword ? 'text' : 'password'}
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="••••••••"
-                required
-                disabled={isLoading}
-                leftIcon={<Lock size={16} />}
-                rightElement={
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="text-muted2 hover:text-muted transition-colors"
-                    tabIndex={-1}
-                    aria-label={showPassword ? 'Esconder senha' : 'Mostrar senha'}
-                  >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                }
-              />
-              <div className="mt-2 text-right">
-                <Link
-                  href="/forgot-password"
-                  className="text-gold/80 hover:text-gold text-sm font-medium transition-colors"
-                >
-                  Esqueci minha senha
-                </Link>
-              </div>
-            </div>
-
-            <Button
-              type="submit"
-              variant="primary"
-              className="w-full"
-              loading={isLoading}
-            >
-              Entrar
-            </Button>
-          </form>
-
-          {/* Footer Links */}
-          <div className="mt-8 pt-6 border-t border-border/50 space-y-3">
-            <p className="text-center text-muted text-sm">
-              Não tem uma conta?{' '}
-              <Link 
-                href="/register" 
-                className="text-gold hover:text-gold2 font-semibold transition-colors"
-              >
-                Registre-se gratuitamente
-              </Link>
-            </p>
-            <Link 
-              href="/" 
-              className="text-muted2 hover:text-muted text-sm flex items-center justify-center gap-2 transition-colors group"
-            >
-              <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />
-              Voltar para home
-            </Link>
-          </div>
-        </div>
-      </div>
-    </AuthLayout>
+        <p className="mt-6 text-center text-sm text-muted">
+          Não tem uma conta?{' '}
+          <Link href="/register" className="font-semibold text-gold hover:text-gold2 transition-colors">
+            Criar conta
+          </Link>
+        </p>
+      </AuthFieldThemeProvider>
+    </AuthSplitLayout>
   );
 }

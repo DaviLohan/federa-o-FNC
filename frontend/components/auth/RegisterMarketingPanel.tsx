@@ -67,7 +67,7 @@ export function RegisterMarketingPanel() {
             Entre para a nova era do <span className="text-gold">EA SPORTS FC competitivo</span>
           </h1>
           <p className="text-base text-muted leading-relaxed">
-            Crie seu time, dispute campeonatos e suba no ranking nacional. A nova plataforma oficial da Pro Eleven para Pro Clubs competitivo.
+            Crie seu time, dispute campeonatos e suba no ranking nacional. A nova plataforma oficial da FDT ARENA para Pro Clubs competitivo.
           </p>
         </div>
 

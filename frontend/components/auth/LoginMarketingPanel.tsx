@@ -69,7 +69,7 @@ export function LoginMarketingPanel() {
         </h2>
 
         <p className="text-lg text-muted mb-10 leading-relaxed max-w-md">
-          Acesse sua conta e continue dominando nos campeonatos mais competitivos da Pro Eleven.
+          Acesse sua conta e continue dominando nos campeonatos mais competitivos da FDT ARENA.
         </p>
 
         {/* Benefits */}

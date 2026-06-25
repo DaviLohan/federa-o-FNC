@@ -16,7 +16,6 @@ import {
   Trophy,
   Calendar,
   BarChart3,
-  Bell,
   User,
   Shield,
 } from 'lucide-react';
@@ -39,8 +38,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Campeonatos',  href: '/championships',    icon: Trophy },
   { label: 'Partidas',     href: '/matches',          icon: Calendar },
   { label: 'Estatísticas', href: '/statistics',       icon: BarChart3 },
-  { label: 'Notificações', href: '/notifications',    icon: Bell },
-  { label: 'Perfil',       href: '/profile',          icon: User },
   { label: 'Admin',        href: '/admin',            icon: Shield,        adminOnly: true },
 ];
 
@@ -125,7 +122,7 @@ export function Navbar() {
                     group relative flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium
                     transition-all duration-200
                     ${active
-                      ? 'text-gold'
+                      ? 'bg-gold/10 text-gold shadow-sm shadow-gold/5'
                       : 'text-muted hover:bg-white/5 hover:text-text'
                     }
                   `}
@@ -141,11 +138,6 @@ export function Navbar() {
                     <span className="ml-0.5 rounded-full bg-gold/15 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-gold">
                       ADM
                     </span>
-                  )}
-
-                  {/* Active indicator — gold bottom line */}
-                  {active && (
-                    <span className="absolute -bottom-[13px] left-3 right-3 h-[2px] rounded-full bg-gradient-to-r from-gold/30 via-gold to-gold/30" />
                   )}
                 </Link>
               );

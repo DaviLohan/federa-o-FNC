@@ -1,103 +1,100 @@
-import type { ReactElement } from 'react';
+'use client';
+
+import { motion } from 'framer-motion';
 import { Crown, Medal, Trophy } from 'lucide-react';
 import type { CompetitiveRankingPlayerRow } from '@/types';
 import { RankBadge } from './RankBadge';
+import { PlayerAvatar } from './PlayerAvatar';
+import { CompactStats } from './CompactStats';
+import { MovementIndicator } from './MovementIndicator';
 
 interface PodiumCardProps {
   player: CompetitiveRankingPlayerRow;
-  emphasis?: 'lead' | 'second' | 'third';
+  emphasis: 'lead' | 'second' | 'third';
 }
 
-const emphasisStyles: Record<NonNullable<PodiumCardProps['emphasis']>, string> = {
-  lead:
-    'border-gold/50 bg-gradient-to-br from-gold/15 via-panel to-panel shadow-[0_0_40px_rgba(255,214,102,0.15)] md:translate-y-[-12px] md:py-7',
-  second: 'border-stroke bg-gradient-to-br from-panel2/80 via-panel to-panel',
-  third: 'border-warning/30 bg-gradient-to-br from-warning/10 via-panel to-panel',
+const medal = {
+  lead: { color: '#F3D36B', label: '1º', icon: Crown, glow: 'rgba(243,211,107,0.22)' },
+  second: { color: '#CBD5E1', label: '2º', icon: Medal, glow: 'rgba(203,213,225,0.14)' },
+  third: { color: '#C9803E', label: '3º', icon: Trophy, glow: 'rgba(201,128,62,0.16)' },
 };
 
-const positionLabel: Record<NonNullable<PodiumCardProps['emphasis']>, string> = {
-  lead: 'Líder Geral',
-  second: 'Top 2',
-  third: 'Top 3',
-};
+export function PodiumCard({ player, emphasis }: PodiumCardProps) {
+  const m = medal[emphasis];
+  const Icon = m.icon;
+  const isLead = emphasis === 'lead';
 
-const positionIcon: Record<NonNullable<PodiumCardProps['emphasis']>, ReactElement> = {
-  lead: <Crown className="h-4 w-4" />,
-  second: <Medal className="h-4 w-4" />,
-  third: <Trophy className="h-4 w-4" />,
-};
-
-const positionAccent: Record<NonNullable<PodiumCardProps['emphasis']>, string> = {
-  lead: 'text-gold',
-  second: 'text-muted',
-  third: 'text-warning',
-};
-
-function getInitials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('') || '—';
-}
-
-export function PodiumCard({ player, emphasis = 'lead' }: PodiumCardProps) {
   return (
-    <article
-      className={`relative overflow-hidden rounded-3xl border p-5 transition-all hover:-translate-y-0.5 ${emphasisStyles[emphasis]}`}
+    <motion.article
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+      whileHover={{ y: -4 }}
+      className={`group relative overflow-hidden rounded-2xl border bg-panel p-4 text-center sm:p-5 ${isLead ? 'md:pb-6 md:pt-7' : ''}`}
+      style={{
+        borderColor: `${m.color}55`,
+        boxShadow: isLead ? `0 0 50px ${m.glow}` : undefined,
+        // estabelece contexto de container-query para o score se auto-ajustar à largura do card
+        containerType: 'inline-size',
+      }}
     >
-      <div className="absolute -top-12 -right-10 h-32 w-32 rounded-full bg-gold/5 blur-3xl" aria-hidden />
-      <div className="relative flex items-center justify-between">
+      {/* glow superior na cor da medalha */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-32"
+        style={{ background: `radial-gradient(120% 100% at 50% 0%, ${m.glow}, transparent 70%)` }}
+        aria-hidden
+      />
+      {/* faixa de medalha no topo */}
+      <div className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg, transparent, ${m.color}, transparent)` }} />
+
+      {/* posição + movimento */}
+      <div className="relative mb-3 flex items-center justify-between">
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full border border-current/30 bg-current/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${positionAccent[emphasis]}`}
+          className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-xs font-bold"
+          style={{ color: m.color, borderColor: `${m.color}55`, background: `${m.color}1a` }}
         >
-          {positionIcon[emphasis]}
-          {positionLabel[emphasis]}
+          <Icon className="h-3.5 w-3.5" />
+          {m.label}
         </span>
-        <RankBadge tier={player.tier} size="sm" />
+        <MovementIndicator delta={player.positionDelta} size="md" showNew />
       </div>
 
-      <div className="relative mt-5 flex items-center gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-stroke bg-panel2/80 text-base font-mono font-bold text-text">
-          {getInitials(player.playerName)}
-        </div>
-        <div className="min-w-0">
-          <p className="truncate text-base font-bold text-text md:text-lg">{player.playerName}</p>
-          <p className="truncate text-xs text-muted2">{player.teamName}</p>
-        </div>
+      {/* avatar */}
+      <div className="relative flex justify-center">
+        <PlayerAvatar name={player.playerName} avatar={player.avatar} tier={player.tier} size={isLead ? 'xl' : 'lg'} />
       </div>
 
-      <div className="relative mt-5 flex items-end justify-between gap-3">
-        <div>
-          <p className="text-[11px] uppercase tracking-wide text-muted2">Score</p>
-          <p className={`font-mono text-3xl font-bold leading-none ${emphasis === 'lead' ? 'text-gold' : 'text-text'}`}>
-            {player.score.toFixed(2)}
-          </p>
-        </div>
-        <p className="text-right text-[11px] text-muted2">
-          Pos. <span className="font-mono text-text">#{player.generalPosition}</span>
-        </p>
+      {/* nome + time */}
+      <h3 className={`mt-3 truncate font-bold text-text ${isLead ? 'text-lg' : 'text-base'}`}>{player.playerName}</h3>
+      <p className="truncate text-xs text-muted2">{player.teamName}</p>
+
+      {/* score gigante — escala com a largura do card (cqi) e nunca corta */}
+      <div className="mt-3 flex w-full flex-col items-center">
+        <span
+          className={`block w-full truncate font-mono font-extrabold leading-none tabular-nums ${
+            isLead ? 'text-[clamp(1.5rem,18cqi,2.75rem)]' : 'text-[clamp(1.25rem,15cqi,2.25rem)]'
+          }`}
+          style={{ color: m.color }}
+        >
+          {player.score.toFixed(2)}
+        </span>
+        <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted2">Score</span>
       </div>
 
-      <div className="relative mt-4 grid grid-cols-4 gap-1 rounded-xl border border-stroke/60 bg-panel2/40 p-2 text-center text-[11px]">
-        <div>
-          <p className="font-mono font-bold text-text">{player.averageRating.toFixed(2)}</p>
-          <p className="text-[10px] text-muted2">Nota</p>
-        </div>
-        <div>
-          <p className="font-mono font-bold text-text">{player.goals}</p>
-          <p className="text-[10px] text-muted2">Gols</p>
-        </div>
-        <div>
-          <p className="font-mono font-bold text-text">{player.assists}</p>
-          <p className="text-[10px] text-muted2">Assist.</p>
-        </div>
-        <div>
-          <p className="font-mono font-bold text-text">{player.matchesPlayed}</p>
-          <p className="text-[10px] text-muted2">Jogos</p>
-        </div>
+      {/* badge divisão */}
+      <div className="mt-3 flex justify-center">
+        <RankBadge tier={player.tier} size="md" />
       </div>
-    </article>
+
+      {/* stats compactas */}
+      <CompactStats
+        rating={player.averageRating}
+        goals={player.goals}
+        assists={player.assists}
+        matches={player.matchesPlayed}
+        variant="grid"
+        className="mt-4"
+      />
+    </motion.article>
   );
 }

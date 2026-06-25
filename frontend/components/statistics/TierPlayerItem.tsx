@@ -1,61 +1,82 @@
+'use client';
+
 import type { CompetitiveRankingPlayerRow, PlayerTier } from '@/types';
 import { PromotionBadge } from './PromotionBadge';
+import { PlayerAvatar } from './PlayerAvatar';
+import { CompactStats } from './CompactStats';
+import { MovementIndicator } from './MovementIndicator';
+import { getTierStyle, tierRgba } from './tierStyles';
 
 interface TierPlayerItemProps {
   row: CompetitiveRankingPlayerRow;
   tier: PlayerTier;
 }
 
-const positionAccent: Record<number, string> = {
-  1: 'border-gold/50 bg-gold/15 text-gold',
-  2: 'border-stroke bg-panel2/70 text-text',
-  3: 'border-warning/40 bg-warning/15 text-warning',
+const medalColor: Record<number, string> = {
+  1: '#F3D36B',
+  2: '#CBD5E1',
+  3: '#C9803E',
 };
 
-function getInitials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('') || '—';
-}
-
 export function TierPlayerItem({ row, tier }: TierPlayerItemProps) {
-  const positionStyle = positionAccent[row.position] ?? 'border-stroke/60 bg-panel/60 text-muted';
+  const s = getTierStyle(tier);
+  const medal = medalColor[row.position];
+  const accent = row.isPromotionZone ? tierRgba(s.solid, 0.7) : 'transparent';
 
   return (
-    <article className="group rounded-xl border border-stroke/60 bg-panel/80 p-3 transition-all hover:border-brand/30 hover:bg-panel">
-      <div className="flex items-center gap-3">
+    <article
+      className="group relative overflow-hidden rounded-xl border border-stroke/50 bg-panel2/30 px-3 py-2 transition-all hover:border-white/15 hover:bg-panel2/60"
+      style={{ borderLeft: `3px solid ${accent}` }}
+    >
+      <div className="flex items-center gap-2.5">
         <span
-          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border font-mono text-xs font-bold ${positionStyle}`}
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border font-mono text-xs font-bold tabular-nums"
+          style={
+            medal
+              ? { color: medal, borderColor: `${medal}55`, background: `${medal}1a` }
+              : { color: 'var(--muted2)', borderColor: 'rgba(255,255,255,0.08)' }
+          }
         >
-          #{row.position}
+          {row.position}
         </span>
 
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="hidden h-9 w-9 items-center justify-center rounded-lg border border-stroke bg-panel2/80 text-[11px] font-mono font-bold text-text sm:inline-flex">
-            {getInitials(row.playerName)}
-          </span>
-          <div className="min-w-0">
+        <PlayerAvatar name={row.playerName} avatar={row.avatar} tier={tier} size="sm" ring={false} />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
             <p className="truncate text-sm font-semibold text-text">{row.playerName}</p>
-            <p className="truncate text-[11px] text-muted2">{row.teamName}</p>
+            <MovementIndicator delta={row.positionDelta} />
           </div>
+          <p className="truncate text-[11px] text-muted2">{row.teamName}</p>
         </div>
 
-        <div className="text-right">
-          <p className="font-mono text-base font-bold text-gold leading-none">{row.score.toFixed(2)}</p>
-          <p className="text-[10px] text-muted2">score</p>
+        <div className="hidden sm:block">
+          <CompactStats
+            rating={row.averageRating}
+            goals={row.goals}
+            assists={row.assists}
+            matches={row.matchesPlayed}
+            variant="inline"
+          />
+        </div>
+
+        <div className="flex flex-col items-end gap-1">
+          <span className="font-mono text-base font-extrabold leading-none text-gold tabular-nums">
+            {row.score.toFixed(2)}
+          </span>
+          <PromotionBadge tier={tier} isPromotionZone={row.isPromotionZone} />
         </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted2">
-        <p className="font-mono">
-          Nota <span className="text-text">{row.averageRating.toFixed(2)}</span> • G{' '}
-          <span className="text-text">{row.goals}</span> • A <span className="text-text">{row.assists}</span> • J{' '}
-          <span className="text-text">{row.matchesPlayed}</span>
-        </p>
-        <PromotionBadge tier={tier} isPromotionZone={row.isPromotionZone} />
+      {/* stats no mobile */}
+      <div className="mt-2 sm:hidden">
+        <CompactStats
+          rating={row.averageRating}
+          goals={row.goals}
+          assists={row.assists}
+          matches={row.matchesPlayed}
+          variant="inline"
+        />
       </div>
     </article>
   );

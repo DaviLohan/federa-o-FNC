@@ -1,4 +1,4 @@
-import React, { ChangeEvent } from 'react';
+import React, { ChangeEvent, useId } from 'react';
 
 interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
   label: string;
@@ -19,13 +19,17 @@ export function Input({
   className = '',
   leftIcon,
   rightElement,
+  id,
   ...props
 }: InputProps) {
   const hasError = !!error;
-  
+  const reactId = useId();
+  const inputId = id ?? `input-${reactId}`;
+  const errorId = `${inputId}-error`;
+
   return (
     <div className="w-full">
-      <label className="block text-sm font-medium text-text mb-2">
+      <label htmlFor={inputId} className="block text-sm font-medium text-text mb-2">
         {label}
         {required && <span className="text-error ml-1">*</span>}
       </label>
@@ -36,9 +40,12 @@ export function Input({
           </div>
         )}
         <input
+          id={inputId}
           value={value}
           onChange={onChange}
           required={required}
+          aria-invalid={hasError || undefined}
+          aria-describedby={hasError ? errorId : undefined}
           className={`
             w-full h-11 rounded-2xl
             bg-panel2 border border-stroke
@@ -60,7 +67,7 @@ export function Input({
         )}
       </div>
       {error && (
-        <p className="mt-1 text-sm text-error">{error}</p>
+        <p id={errorId} className="mt-1 text-sm text-error">{error}</p>
       )}
     </div>
   );

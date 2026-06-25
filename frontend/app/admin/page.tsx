@@ -12,6 +12,7 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -149,25 +150,20 @@ export default function AdminPage() {
   return (
     <div className="space-y-10 pb-12">
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-gold mb-1">
-            Painel Administrativo
-          </p>
-          <h1 className="text-3xl font-bold text-text">
-            Visão Geral da Plataforma
-          </h1>
-          <p className="mt-1 text-muted">
+      <AdminPageHeader
+        title="Visão Geral da Plataforma"
+        subtitle={
+          <>
             Olá, <span className="font-semibold text-text">{user?.first_name}</span>. Aqui está o resumo do sistema.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 mt-3 md:mt-0">
+          </>
+        }
+        actions={
           <span className="rounded-full border border-green/30 bg-green/10 px-3 py-1 text-xs font-semibold text-green flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-green animate-pulse" />
             Sistema Online
           </span>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Overview: 5 KPIs principais ────────────────────────────────── */}
       <div>

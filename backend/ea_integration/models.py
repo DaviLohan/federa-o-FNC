@@ -10,7 +10,7 @@ class EAClub(models.Model):
     Mapeamento entre um clube no EA FC Pro Clubs e um time interno (Team).
 
     Armazena o ID do clube na EA e a plataforma, permitindo que o sistema
-    saiba qual club_id consultar na API da EA para cada time da PRO ELEVEN.
+    saiba qual club_id consultar na API da EA para cada time da FDT ARENA.
     """
 
     class Platform(models.TextChoices):
@@ -26,7 +26,7 @@ class EAClub(models.Model):
         blank=True,
         related_name='ea_club',
         verbose_name=_('time interno'),
-        help_text=_('Time da PRO ELEVEN vinculado a este clube EA'),
+        help_text=_('Time da FDT ARENA vinculado a este clube EA'),
     )
 
     # Dados da EA
@@ -212,7 +212,7 @@ class EAMatch(models.Model):
         related_name='ea_match',
         verbose_name=_('partida interna vinculada'),
         help_text=_(
-            'Match do campeonato PRO ELEVEN vinculado a esta partida EA. '
+            'Match do campeonato FDT ARENA vinculado a esta partida EA. '
             'Preenchido automaticamente quando o sistema detecta correspondência.'
         ),
     )

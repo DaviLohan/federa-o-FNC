@@ -43,7 +43,7 @@ export function AdminTabs() {
         <div className="mr-2 h-5 w-px bg-border/60" />
 
         {/* Tab links */}
-        <div className="flex items-end gap-0.5 overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-1 overflow-x-auto py-2 scrollbar-none">
           {tabs.map((tab) => {
             const active = isActive(tab);
             const Icon = tab.icon;
@@ -52,11 +52,11 @@ export function AdminTabs() {
                 key={tab.href}
                 href={tab.href}
                 className={`
-                  group relative flex shrink-0 items-center gap-2 px-3 py-2.5 text-sm font-medium
+                  group relative flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium
                   transition-all duration-200
                   ${active
-                    ? 'text-gold'
-                    : 'text-muted hover:text-text'
+                    ? 'bg-gold/10 text-gold shadow-sm shadow-gold/5'
+                    : 'text-muted hover:bg-white/5 hover:text-text'
                   }
                 `}
               >
@@ -66,11 +66,6 @@ export function AdminTabs() {
                   }`}
                 />
                 <span>{tab.label}</span>
-
-                {/* Active bottom indicator */}
-                {active && (
-                  <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-gradient-to-r from-gold/30 via-gold to-gold/30" />
-                )}
               </Link>
             );
           })}

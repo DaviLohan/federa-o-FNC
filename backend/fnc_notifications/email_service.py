@@ -6,7 +6,7 @@ Isso evita o bloqueio de porta SMTP (587) em ambientes como Railway.
 
 Configuração no settings.py / variáveis de ambiente:
     BREVO_API_KEY = 'xkeysib-...'
-    DEFAULT_FROM_EMAIL = 'PRO ELEVEN <noreply@example.com>'
+    DEFAULT_FROM_EMAIL = 'FDT ARENA <noreply@example.com>'
 
 Em desenvolvimento (sem BREVO_API_KEY), usa o backend SMTP/console configurado
 via EMAIL_BACKEND normal do Django.

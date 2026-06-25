@@ -2,7 +2,7 @@
 ea_integration/validation.py
 
 MatchValidationService — responsável por validar partidas EA sincronizadas
-contra os dados internos da PRO ELEVEN (times, elencos, gamertags, stats).
+contra os dados internos da FDT ARENA (times, elencos, gamertags, stats).
 
 Fluxo:
 1. Verifica se ambos os clubes EA estão vinculados a Teams internos
@@ -86,7 +86,7 @@ class ValidationResult:
 
 class MatchValidationService:
     """
-    Valida partidas EA contra dados internos da PRO ELEVEN.
+    Valida partidas EA contra dados internos da FDT ARENA.
 
     Uso:
         service = MatchValidationService()
@@ -248,7 +248,7 @@ class MatchValidationService:
                     severity='error',
                     details=(
                         f'Clube EA "{club_name}" (ID: {ea_club.ea_club_id}) '
-                        f'não está vinculado a nenhum time interno da PRO ELEVEN.'
+                        f'não está vinculado a nenhum time interno da FDT ARENA.'
                     ),
                     raw_comparison={
                         'ea_club_id': ea_club.ea_club_id,
@@ -821,7 +821,7 @@ class MatchValidationService:
                     EmailService.send_notification_email(
                         to_email=email,
                         subject=(
-                            f'[PRO ELEVEN] Contestação automática — '
+                            f'[FDT ARENA] Contestação automática — '
                             f'{ea_match.home_club_name} vs {ea_match.away_club_name}'
                         ),
                         template_name='match_contested',

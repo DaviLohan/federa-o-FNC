@@ -43,8 +43,13 @@ import type {
   GlobalTeamRankingRow,
   CompetitiveRankingPayload,
   CompetitiveMyRankingPayload,
+  RankingCycleOption,
   WeeklySelectionPayload,
   ChampionshipStatsDashboard,
+  PlayerProfilePayload,
+  PlayerLeaderboardPayload,
+  PlayerLeaderboardSort,
+  PlayerPositionGroup,
 } from '@/types';
 
 // Auth API
@@ -163,8 +168,10 @@ export const teamsAPI = {
 };
 
 export const eaAPI = {
-  searchClubs: (data: { club_name: string; platform: 'common-gen5' | 'common-gen4' | 'pc' }) =>
-    apiClient.post<{ count: number; results: EAClubSearchResult[] }>('/api/v1/ea/clubs/search/', data),
+  // A plataforma não é mais enviada: o backend varre todas as plataformas e
+  // cada resultado retorna a plataforma onde o clube foi encontrado.
+  searchClubs: (data: { club_name: string }) =>
+    apiClient.post<{ count: number; results: EAClubSearchResult[]; warning?: string }>('/api/v1/ea/clubs/search/', data),
 };
 
 // Championships API
@@ -294,6 +301,7 @@ export const statisticsAPI = {
   getTopScorers: (params?: any) =>
     apiClient.get('/api/v1/top-scorers/', params),
   
+  /** @deprecated Endpoint quebrado no backend (games_played/average_rating). Use getPlayerLeaderboard. */
   getLeaderboard: () =>
     apiClient.get('/api/v1/leaderboard/'),
 
@@ -333,11 +341,14 @@ export const statisticsAPI = {
       championship_id: championshipId 
     }),
 
-  getCompetitiveRankings: () =>
-    apiClient.get<CompetitiveRankingPayload>('/api/v1/statistics/rankings/'),
+  getCompetitiveRankings: (cycle?: string) =>
+    apiClient.get<CompetitiveRankingPayload>('/api/v1/statistics/rankings/', cycle ? { cycle } : undefined),
 
-  getCompetitiveRankingMe: () =>
-    apiClient.get<CompetitiveMyRankingPayload>('/api/v1/statistics/rankings/me/'),
+  getCompetitiveRankingMe: (cycle?: string) =>
+    apiClient.get<CompetitiveMyRankingPayload>('/api/v1/statistics/rankings/me/', cycle ? { cycle } : undefined),
+
+  getCompetitiveCycles: () =>
+    apiClient.get<{ results: RankingCycleOption[] }>('/api/v1/statistics/cycles/'),
 
   getMatchDetails: (matchId: number) =>
     apiClient.get('/api/v1/statistics/match_details/', {
@@ -362,6 +373,23 @@ export const statisticsAPI = {
       championship_id: championshipId,
       round_number: roundNumber,
     }),
+
+  // Perfil individual de jogador (agrega TeamPlayerPerformance).
+  getPlayerProfile: (playerId: number, championshipId?: number) =>
+    apiClient.get<PlayerProfilePayload>('/api/v1/statistics/player_profile/', {
+      player_id: playerId,
+      championship_id: championshipId,
+    }),
+
+  // Ranking de jogadores por estatísticas cruas, com filtros e grupos de posição.
+  getPlayerLeaderboard: (params?: {
+    sort?: PlayerLeaderboardSort;
+    championship_id?: number;
+    team_id?: number;
+    position_group?: PlayerPositionGroup;
+    limit?: number;
+  }) =>
+    apiClient.get<PlayerLeaderboardPayload>('/api/v1/statistics/player_leaderboard/', params),
 };
 
 // Invitations API

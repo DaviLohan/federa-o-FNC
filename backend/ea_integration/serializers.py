@@ -169,10 +169,12 @@ class EAClubSearchSerializer(serializers.Serializer):
         max_length=100,
         help_text='Nome do clube para buscar na API da EA',
     )
+    # Plataforma é opcional/ignorada: a busca varre todas as plataformas
+    # automaticamente e cada resultado carrega a plataforma onde foi encontrado.
     platform = serializers.ChoiceField(
         choices=EAClub.Platform.choices,
-        default='common-gen5',
-        help_text='Plataforma (common-gen5, common-gen4, pc)',
+        required=False,
+        help_text='(Obsoleto) Ignorado — a busca varre todas as plataformas.',
     )
 
 

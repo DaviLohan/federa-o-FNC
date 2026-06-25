@@ -23,7 +23,7 @@ export function WelcomeSection({ user }: WelcomeSectionProps) {
     <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-surface1 via-surface2 to-surface1 p-8">
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-5">
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#14CCDD_1px,transparent_1px),linear-gradient(to_bottom,#14CCDD_1px,transparent_1px)] bg-[size:4rem_4rem]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#D6A11E_1px,transparent_1px),linear-gradient(to_bottom,#D6A11E_1px,transparent_1px)] bg-[size:4rem_4rem]" />
       </div>
 
       {/* Glow effect */}

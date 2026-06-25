@@ -3,20 +3,36 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Mail, Lock, Eye, EyeOff, AlertCircle, ArrowLeft, ArrowRight,
+  Mail, AlertCircle, ArrowLeft, ArrowRight,
   Gamepad2, User as UserIcon, AtSign, Phone, Globe,
 } from 'lucide-react';
 import { authAPI } from '@/lib/api';
 import { Button } from '@/components/shared/ui/Button';
-import { DatePickerInput } from '@/components/shared/ui/DatePickerInput';
-import { Input } from '@/components/shared/ui/Input';
-import { Select } from '@/components/shared/ui/Select';
 import { useToast } from '@/components/shared/ui/Toast';
-import { StepIndicator } from '@/components/auth/StepIndicator';
+import { useAuthFieldTheme } from '@/components/auth/fieldTheme';
+import { AuthTextField } from '@/components/auth/fields/AuthTextField';
+import { AuthPasswordField } from '@/components/auth/fields/AuthPasswordField';
+import { AuthSelectField } from '@/components/auth/fields/AuthSelectField';
+import { AuthDateField } from '@/components/auth/fields/AuthDateField';
+import {
+  validateRegisterStep1,
+  validateRegisterStep2,
+  FIELD_LABELS,
+  STEP1_FIELDS,
+} from '@/lib/validations/auth';
 
 export function RegisterForm() {
   const router = useRouter();
   const { showToast } = useToast();
+  const isLight = useAuthFieldTheme() === 'light';
+
+  const mutedText = isLight ? 'text-slate-500' : 'text-muted';
+  const headingText = isLight ? 'text-slate-900' : 'text-text';
+  const trackBg = isLight ? 'bg-slate-200' : 'bg-surface2';
+  const errorBox = isLight
+    ? 'border-red-200 bg-red-50 text-red-700'
+    : 'border-error/20 bg-error/10 text-error';
+  const errorTextSm = isLight ? 'text-red-600' : 'text-error';
 
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -41,31 +57,29 @@ export function RegisterForm() {
     language: 'pt-br' as string,
   });
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+
+  const clearFieldError = (name: string) =>
+    setFieldErrors((prev) => (prev[name] ? { ...prev, [name]: '' } : prev));
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    clearFieldError(name);
   };
 
   const handleStep1Submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (formData.password !== formData.password_confirm) {
-      setError('As senhas não coincidem');
+    const errors = validateRegisterStep1(formData);
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
 
-    if (formData.password.length < 8) {
-      setError('A senha deve ter pelo menos 8 caracteres');
-      return;
-    }
-
+    setFieldErrors({});
     setStep(2);
   };
 
@@ -73,22 +87,13 @@ export function RegisterForm() {
     e.preventDefault();
     setError('');
 
-    if (!formData.player_name || !formData.gamer_tag) {
-      setError('Nome do jogador e Gamer Tag são obrigatórios');
+    const errors = validateRegisterStep2(formData);
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
 
-    const shirtNum = parseInt(formData.shirt_number);
-    if (!shirtNum || shirtNum < 1 || shirtNum > 99) {
-      setError('Número da camisa deve estar entre 1 e 99');
-      return;
-    }
-
-    if (!formData.birth_date || !formData.whatsapp) {
-      setError('Data de nascimento e WhatsApp são obrigatórios');
-      return;
-    }
-
+    setFieldErrors({});
     handleFinalSubmit();
   };
 
@@ -128,27 +133,37 @@ export function RegisterForm() {
       const errorData = err.response?.data;
 
       if (typeof errorData === 'object' && errorData !== null) {
-        const errorMessages: string[] = [];
+        const nextFieldErrors: Record<string, string> = {};
+        const general: string[] = [];
 
         Object.entries(errorData).forEach(([field, messages]) => {
-          if (Array.isArray(messages)) {
-            messages.forEach(msg => errorMessages.push(`${field}: ${msg}`));
-          } else if (typeof messages === 'string') {
-            errorMessages.push(`${field}: ${messages}`);
+          const text = Array.isArray(messages) ? messages.join(' ') : String(messages);
+          if (field in FIELD_LABELS) {
+            nextFieldErrors[field] = text;
+          } else {
+            general.push(text);
           }
         });
 
-        const errorText = errorMessages.join('\n') || 'Erro ao criar conta. Verifique os dados.';
-        setError(errorText);
-        showToast(errorMessages[0] || 'Erro ao criar conta', 'error');
+        setFieldErrors(nextFieldErrors);
+
+        if (general.length > 0) {
+          setError(general.join('\n'));
+        } else if (Object.keys(nextFieldErrors).length === 0) {
+          setError('Erro ao criar conta. Verifique os dados.');
+        }
+
+        const firstMsg =
+          general[0] || Object.values(nextFieldErrors)[0] || 'Erro ao criar conta';
+        showToast(firstMsg, 'error');
+
+        // Se algum campo da etapa 1 tem erro, voltar para a etapa 1
+        if (Object.keys(nextFieldErrors).some((f) => STEP1_FIELDS.includes(f))) {
+          setStep(1);
+        }
       } else {
         setError('Erro ao criar conta. Tente novamente.');
         showToast('Erro ao criar conta. Tente novamente.', 'error');
-      }
-
-      // Se erro na validação do email/senha, voltar para etapa 1
-      if (err.response?.data?.email || err.response?.data?.password || err.response?.data?.password_confirm) {
-        setStep(1);
       }
     } finally {
       setIsLoading(false);
@@ -182,104 +197,104 @@ export function RegisterForm() {
 
   const maxBirthDate = new Date().toISOString().split('T')[0];
 
-  const steps = [
-    {
-      label: 'Dados da Conta',
-      description: 'Crie seu acesso à plataforma',
-    },
-    {
-      label: 'Perfil de Jogador',
-      description: 'Configure seu perfil Pro Clubs',
-    },
-  ];
-
-  const passwordToggle = (show: boolean, setShow: (v: boolean) => void) => (
-    <button
-      type="button"
-      onClick={() => setShow(!show)}
-      className="text-muted2 hover:text-muted transition-colors"
-      tabIndex={-1}
-      aria-label={show ? 'Esconder senha' : 'Mostrar senha'}
-    >
-      {show ? <EyeOff size={16} /> : <Eye size={16} />}
-    </button>
-  );
+  const stepLabel = step === 1 ? 'Dados da conta' : 'Perfil de jogador';
 
   return (
     <>
-      <StepIndicator currentStep={step} totalSteps={2} steps={steps} />
+      {/* Indicador de passo discreto */}
+      <div className="mb-6">
+        <div className={`mb-2 flex items-center justify-between text-xs ${mutedText}`}>
+          <span>{stepLabel}</span>
+          <span>Passo {step} de 2</span>
+        </div>
+        <div className={`h-1 w-full overflow-hidden rounded-full ${trackBg}`}>
+          <div
+            className="h-full rounded-full bg-gold transition-all duration-300"
+            style={{ width: step === 1 ? '50%' : '100%' }}
+          />
+        </div>
+      </div>
 
       {error && (
-        <div className="bg-error/10 border border-error/20 text-error px-4 py-3 rounded-xl mb-6 text-sm whitespace-pre-line animate-slide-in-bottom flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+        <div
+          role="alert"
+          className={`mb-5 flex items-start gap-2 whitespace-pre-line rounded-lg border px-3 py-2 text-sm ${errorBox}`}
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {/* ETAPA 1: Dados Basicos */}
       {step === 1 && (
-        <form onSubmit={handleStep1Submit} className="space-y-5">
+        <form onSubmit={handleStep1Submit} className="space-y-4" noValidate>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
+            <AuthTextField
               label="Nome"
               type="text"
               name="first_name"
               value={formData.first_name}
               onChange={handleChange}
+              placeholder="Seu nome"
+              autoComplete="given-name"
               required
               autoFocus
+              error={fieldErrors.first_name}
               leftIcon={<UserIcon size={16} />}
             />
-            <Input
+            <AuthTextField
               label="Sobrenome"
               type="text"
               name="last_name"
               value={formData.last_name}
               onChange={handleChange}
+              placeholder="Seu sobrenome"
+              autoComplete="family-name"
               required
+              error={fieldErrors.last_name}
               leftIcon={<UserIcon size={16} />}
             />
           </div>
 
-          <Input
-            label="Email"
+          <AuthTextField
+            label="E-mail"
             type="email"
             name="email"
             value={formData.email}
             onChange={handleChange}
             placeholder="seu@email.com"
+            autoComplete="email"
             required
+            error={fieldErrors.email}
             leftIcon={<Mail size={16} />}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
+            <AuthPasswordField
               label="Senha"
-              type={showPassword ? 'text' : 'password'}
               name="password"
               value={formData.password}
               onChange={handleChange}
               placeholder="Mínimo 8 caracteres"
+              autoComplete="new-password"
               required
               minLength={8}
-              leftIcon={<Lock size={16} />}
-              rightElement={passwordToggle(showPassword, setShowPassword)}
+              error={fieldErrors.password}
             />
-            <Input
+            <AuthPasswordField
               label="Confirmar Senha"
-              type={showPasswordConfirm ? 'text' : 'password'}
               name="password_confirm"
               value={formData.password_confirm}
               onChange={handleChange}
               placeholder="Digite novamente"
+              autoComplete="new-password"
               required
               minLength={8}
-              leftIcon={<Lock size={16} />}
-              rightElement={passwordToggle(showPasswordConfirm, setShowPasswordConfirm)}
+              error={fieldErrors.password_confirm}
             />
           </div>
 
-          <Select
+          <AuthSelectField
             label="Plataforma"
             name="platform"
             value={formData.platform}
@@ -292,12 +307,7 @@ export function RegisterForm() {
             required
           />
 
-          <Button
-            type="submit"
-            variant="primary"
-            className="w-full mt-6"
-            loading={isLoading}
-          >
+          <Button type="submit" variant="solid" className="w-full mt-2">
             Continuar
             <ArrowRight size={16} />
           </Button>
@@ -306,16 +316,16 @@ export function RegisterForm() {
 
       {/* ETAPA 2: Perfil de Jogador */}
       {step === 2 && (
-        <form onSubmit={handleStep2Submit} className="space-y-6">
+        <form onSubmit={handleStep2Submit} className="space-y-6" noValidate>
           {/* Pro Club Info */}
           <div>
-            <h3 className="text-base font-semibold text-text mb-4 flex items-center gap-2">
+            <h3 className={`text-base font-semibold ${headingText} mb-4 flex items-center gap-2`}>
               <Gamepad2 className="w-5 h-5 text-gold" />
               Informações do Pro Club
             </h3>
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input
+                <AuthTextField
                   label="Nome do Jogador"
                   type="text"
                   name="player_name"
@@ -324,9 +334,10 @@ export function RegisterForm() {
                   placeholder="Nome no jogo"
                   required
                   autoFocus
+                  error={fieldErrors.player_name}
                   leftIcon={<UserIcon size={16} />}
                 />
-                <Input
+                <AuthTextField
                   label="Gamer Tag"
                   type="text"
                   name="gamer_tag"
@@ -334,12 +345,13 @@ export function RegisterForm() {
                   onChange={handleChange}
                   placeholder="@gamertag"
                   required
+                  error={fieldErrors.gamer_tag}
                   leftIcon={<AtSign size={16} />}
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Input
+                <AuthTextField
                   label="Camisa"
                   type="number"
                   name="shirt_number"
@@ -349,8 +361,9 @@ export function RegisterForm() {
                   required
                   min="1"
                   max="99"
+                  error={fieldErrors.shirt_number}
                 />
-                <Select
+                <AuthSelectField
                   label="Posição Principal"
                   name="primary_position"
                   value={formData.primary_position}
@@ -358,7 +371,7 @@ export function RegisterForm() {
                   options={positionOptions}
                   required
                 />
-                <Select
+                <AuthSelectField
                   label="Posição Secundária"
                   name="secondary_position"
                   value={formData.secondary_position}
@@ -371,42 +384,54 @@ export function RegisterForm() {
 
           {/* Informacoes Pessoais */}
           <div>
-            <h3 className="text-base font-semibold text-text mb-4 flex items-center gap-2">
+            <h3 className={`text-base font-semibold ${headingText} mb-4 flex items-center gap-2`}>
               <UserIcon className="w-5 h-5 text-gold" />
               Informações Pessoais
             </h3>
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <DatePickerInput
-                  label="Data de Nascimento"
-                  value={formData.birth_date}
-                  onChange={(value) => setFormData({ ...formData, birth_date: value })}
-                  max={maxBirthDate}
-                  required
-                />
-                <Input
+                <div>
+                  <AuthDateField
+                    label="Data de Nascimento"
+                    value={formData.birth_date}
+                    onChange={(value) => {
+                      setFormData((prev) => ({ ...prev, birth_date: value }));
+                      clearFieldError('birth_date');
+                    }}
+                    max={maxBirthDate}
+                    required
+                  />
+                  {fieldErrors.birth_date && (
+                    <p className={`mt-1 text-xs ${errorTextSm}`}>{fieldErrors.birth_date}</p>
+                  )}
+                </div>
+                <AuthTextField
                   label="WhatsApp"
                   type="tel"
                   name="whatsapp"
                   value={formData.whatsapp}
                   onChange={handleChange}
                   placeholder="+55 11 99999-9999"
+                  autoComplete="tel"
                   required
+                  error={fieldErrors.whatsapp}
                   leftIcon={<Phone size={16} />}
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input
+                <AuthTextField
                   label="País"
                   type="text"
                   name="country"
                   value={formData.country}
                   onChange={handleChange}
+                  autoComplete="country-name"
                   required
+                  error={fieldErrors.country}
                   leftIcon={<Globe size={16} />}
                 />
-                <Select
+                <AuthSelectField
                   label="Idioma"
                   name="language"
                   value={formData.language}
@@ -425,17 +450,13 @@ export function RegisterForm() {
               variant="ghost"
               onClick={() => setStep(1)}
               className="flex-1"
+              disabled={isLoading}
             >
               <ArrowLeft size={16} />
               Voltar
             </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              className="flex-1"
-              loading={isLoading}
-            >
-              Criar Conta
+            <Button type="submit" variant="solid" className="flex-1" loading={isLoading}>
+              {isLoading ? 'Criando conta...' : 'Criar conta'}
             </Button>
           </div>
         </form>

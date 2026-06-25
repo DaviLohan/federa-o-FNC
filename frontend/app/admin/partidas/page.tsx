@@ -13,6 +13,8 @@ import { Drawer } from '@/components/shared/ui/Drawer';
 import { EmptyState } from '@/components/shared/ui';
 import { formatDateShort, formatDateTimeShort } from '@/lib/utils/date';
 import { useToast } from '@/components/shared/ui/Toast';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
+import { AdminFilters } from '@/components/admin/AdminFilters';
 import { usePermissions } from '@/lib/hooks';
 
 const MATCH_STATUS_VARIANTS: Record<string, any> = {
@@ -315,12 +317,11 @@ export default function AdminPartidasPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text">Partidas Contestadas e Reportadas</h1>
-          <p className="text-muted mt-1">{totalCount} partidas encontradas</p>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Partidas Contestadas e Reportadas"
+        count={totalCount}
+        countLabel="partidas encontradas"
+      />
 
       {contestedCount > 0 && (
         <div className="flex flex-wrap items-center gap-3 bg-error/10 border border-error/30 rounded-2xl p-4">
@@ -336,22 +337,24 @@ export default function AdminPartidasPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-3">
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2.5 bg-surface2 border border-border rounded-xl text-text focus:outline-none focus:border-gold/50 transition-colors"
-        >
-          <option value="">Todos os status</option>
-          <option value="PENDING">Pendente</option>
-          <option value="SCHEDULED">Agendada</option>
-          <option value="IN_PROGRESS">Ao Vivo</option>
-          <option value="FINISHED">Finalizada</option>
-          <option value="CONTESTED">Contestada</option>
-          <option value="CANCELLED">Cancelada</option>
-        </select>
-        {statusFilter && <Button variant="ghost" onClick={() => setStatusFilter('')}>Limpar filtro</Button>}
-      </div>
+      <AdminFilters>
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2.5 bg-surface2 border border-border rounded-xl text-text focus:outline-none focus:border-gold/50 transition-colors"
+          >
+            <option value="">Todos os status</option>
+            <option value="PENDING">Pendente</option>
+            <option value="SCHEDULED">Agendada</option>
+            <option value="IN_PROGRESS">Ao Vivo</option>
+            <option value="FINISHED">Finalizada</option>
+            <option value="CONTESTED">Contestada</option>
+            <option value="CANCELLED">Cancelada</option>
+          </select>
+          {statusFilter && <Button variant="ghost" onClick={() => setStatusFilter('')}>Limpar filtro</Button>}
+        </div>
+      </AdminFilters>
 
       <DataTable
         columns={columns}

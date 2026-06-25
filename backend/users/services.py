@@ -42,7 +42,7 @@ class VerificationService:
 
         send_email_task.delay(
             to_emails=[user.email],
-            subject='Verifique seu email - PRO ELEVEN',
+            subject='Verifique seu email - FDT ARENA',
             template_name='verification_code',
             context={
                 'user_name': user.first_name,
@@ -73,7 +73,7 @@ class VerificationService:
 
         send_email_task.delay(
             to_emails=[user.email],
-            subject='Redefinição de senha - PRO ELEVEN',
+            subject='Redefinição de senha - FDT ARENA',
             template_name='password_reset',
             context={
                 'user_name': user.first_name,

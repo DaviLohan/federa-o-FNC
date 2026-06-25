@@ -7,9 +7,13 @@ import { useAuthStore } from '@/lib/auth-store';
 import { usersAPI } from '@/lib/api';
 import { Navbar } from './Navbar';
 import { AppFooter } from './AppFooter';
+import { AmbientBackground } from './AmbientBackground';
 
 // Public pages that should NOT have navbar
 const PUBLIC_PAGES = ['/', '/home', '/login', '/register'];
+
+// Auth pages (login/cadastro) — sem footer
+const AUTH_PAGES = ['/login', '/register'];
 
 /**
  * Subscreve ao evento de hidratação do Zustand persist.
@@ -32,6 +36,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const setUser = useAuthStore((state) => state.setUser);
 
   const isPublicPage = PUBLIC_PAGES.includes(pathname);
+  const isAuthPage = AUTH_PAGES.includes(pathname);
 
   const currentUserQuery = useQuery({
     queryKey: ['current-user'],
@@ -67,7 +72,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen bg-bg1">
         {children}
-        <AppFooter />
+        {!isAuthPage && <AppFooter />}
       </div>
     );
   }
@@ -80,9 +85,10 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
 
   // Usuário autenticado + hidratado → layout completo com navbar horizontal
   return (
-    <div className="min-h-screen bg-bg1">
+    <div className="relative min-h-screen">
+      <AmbientBackground />
       <Navbar />
-      <main className="min-h-[calc(100vh-64px)] bg-bg1 pt-16">
+      <main className="min-h-[calc(100vh-64px)] pt-16">
         <div className="max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8">
           {children}
         </div>

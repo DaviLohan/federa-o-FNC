@@ -11,6 +11,8 @@ import { Drawer } from '@/components/shared/ui/Drawer';
 import { formatDateShort } from '@/lib/utils/date';
 import { Modal } from '@/components/shared/ui/Modal';
 import { useToast } from '@/components/shared/ui/Toast';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
+import { AdminFilters } from '@/components/admin/AdminFilters';
 import Link from 'next/link';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -177,44 +179,47 @@ export default function AdminCampeonatosPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-text">Campeonatos</h1>
-          <p className="text-muted mt-1">{totalCount} campeonatos cadastrados</p>
-        </div>
-        <Link href="/championships">
-          <Button variant="primary">
-            <Plus className="w-4 h-4 mr-2" />
-            Novo Campeonato
-          </Button>
-        </Link>
-      </div>
+      <AdminPageHeader
+        title="Campeonatos"
+        count={totalCount}
+        countLabel="campeonatos cadastrados"
+        actions={
+          <Link href="/championships">
+            <Button variant="primary">
+              <Plus className="w-4 h-4 mr-2" />
+              Novo Campeonato
+            </Button>
+          </Link>
+        }
+      />
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-          <input
-            type="text"
-            placeholder="Buscar por nome..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-surface2 border border-border rounded-xl text-text placeholder:text-muted focus:outline-none focus:border-gold/50 transition-colors"
-          />
+      <AdminFilters>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+            <input
+              type="text"
+              placeholder="Buscar por nome..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 bg-surface2 border border-border rounded-xl text-text placeholder:text-muted focus:outline-none focus:border-gold/50 transition-colors"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2.5 bg-surface2 border border-border rounded-xl text-text focus:outline-none focus:border-gold/50 transition-colors"
+          >
+            <option value="">Todos os status</option>
+            <option value="PENDING">Pendente</option>
+            <option value="OPEN">Aberto</option>
+            <option value="IN_PROGRESS">Em andamento</option>
+            <option value="FINISHED">Finalizado</option>
+            <option value="CANCELLED">Cancelado</option>
+          </select>
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2.5 bg-surface2 border border-border rounded-xl text-text focus:outline-none focus:border-gold/50 transition-colors"
-        >
-          <option value="">Todos os status</option>
-          <option value="PENDING">Pendente</option>
-          <option value="OPEN">Aberto</option>
-          <option value="IN_PROGRESS">Em andamento</option>
-          <option value="FINISHED">Finalizado</option>
-          <option value="CANCELLED">Cancelado</option>
-        </select>
-      </div>
+      </AdminFilters>
 
       {/* Table */}
       <DataTable
@@ -341,7 +346,7 @@ export default function AdminCampeonatosPage() {
         footer={
           <>
             <Button variant="ghost" onClick={() => setDeleteModalOpen(false)}>Cancelar</Button>
-            <Button variant="ghost" onClick={handleDelete} disabled={isDeleting} className="text-error hover:text-error border border-error/30 hover:bg-error/10">
+            <Button variant="danger" onClick={handleDelete} disabled={isDeleting}>
               {isDeleting ? 'Excluindo...' : 'Excluir'}
             </Button>
           </>

@@ -370,15 +370,13 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
     foundation_date: team?.foundation_date || new Date().toISOString().split('T')[0],
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [platform, setPlatform] = useState<'common-gen5' | 'common-gen4' | 'pc'>(
-    team?.ea_club?.platform || 'common-gen5'
-  );
   const [searchResults, setSearchResults] = useState<EAClubSearchResult[]>([]);
   const [selectedClub, setSelectedClub] = useState<EAClubSearchResult | null>(
     team?.ea_club
       ? {
           ea_club_id: team.ea_club.ea_club_id,
           name: team.ea_club.name,
+          platform: team.ea_club.platform,
         }
       : null
   );
@@ -390,14 +388,13 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
   const getClubDisplayName = (club: EAClubSearchResult | null) =>
     club ? String(club.name || club.clubName || '').trim() : '';
 
-  const getPlatformLabel = (value: 'common-gen5' | 'common-gen4' | 'pc') =>
-    PLATFORM_LABELS[value] || value;
+  const getClubPlatformLabel = (club: EAClubSearchResult | null) =>
+    club ? club.platform_display || (club.platform ? PLATFORM_LABELS[club.platform] : '') || '' : '';
 
   const validateClubMutation = useMutation({
     mutationFn: () =>
       eaAPI.searchClubs({
         club_name: formData.name.trim(),
-        platform,
       }),
     onSuccess: (response) => {
       const availableResults = response.results || [];
@@ -457,7 +454,7 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
           ? {}
           : {
               ea_club_id: getClubIdentifier(selectedClub),
-              ea_platform: platform,
+              ea_platform: selectedClub?.platform,
             }),
       },
       logoFile
@@ -557,37 +554,25 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
-              <Select
-                label="Plataforma"
-                value={platform}
-                onChange={(e) => {
-                  setPlatform(e.target.value as 'common-gen5' | 'common-gen4' | 'pc');
-                  resetValidation();
-                }}
-                options={[
-                  { value: 'common-gen5', label: 'PS5 / Xbox Series / Cross-play' },
-                  { value: 'common-gen4', label: 'PS4 / Xbox One' },
-                  { value: 'pc', label: 'PC' },
-                ]}
-              />
-
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  if (formData.name.trim().length < 2) {
-                    showToast('Informe o nome do time antes de validar na API.', 'error');
-                    return;
-                  }
-                  validateClubMutation.mutate();
-                }}
-                loading={validateClubMutation.isPending}
-                className="sm:min-w-[170px]"
-              >
-                Validar na API
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                if (formData.name.trim().length < 2) {
+                  showToast('Informe o nome do time antes de validar na API.', 'error');
+                  return;
+                }
+                validateClubMutation.mutate();
+              }}
+              loading={validateClubMutation.isPending}
+              className="w-full"
+            >
+              <Search className="w-4 h-4" />
+              Buscar "{formData.name.trim() || '...'}" na EA
+            </Button>
+            <p className="text-xs text-muted">
+              A busca varre todas as plataformas (PS5/Xbox Series, PS4/Xbox One e PC) automaticamente — você só confirma o clube.
+            </p>
 
             {validationMessage && (
               <div className={`rounded-xl border px-3 py-2.5 text-sm ${selectedClub
@@ -611,9 +596,11 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-border bg-surface2">
                         ID oficial: {getClubIdentifier(selectedClub)}
                       </span>
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-border bg-surface2">
-                        Plataforma: {getPlatformLabel(platform)}
-                      </span>
+                      {getClubPlatformLabel(selectedClub) && (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-border bg-surface2">
+                          Plataforma: {getClubPlatformLabel(selectedClub)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -655,6 +642,11 @@ function TeamModal({ team, onClose, onSubmit, isLoading }: TeamModalProps) {
                               <span className="inline-flex items-center px-2 py-1 rounded-full border border-border bg-surface1">
                                 ID: {resultId}
                               </span>
+                              {getClubPlatformLabel(result) && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full border border-gold/30 bg-gold/10 text-gold">
+                                  {getClubPlatformLabel(result)}
+                                </span>
+                              )}
                               {result.overallRank && (
                                 <span className="inline-flex items-center px-2 py-1 rounded-full border border-border bg-surface1">
                                   Rank: {result.overallRank}

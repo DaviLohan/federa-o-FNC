@@ -67,6 +67,7 @@ from .services import sync_matches_ready_to_start, recompute_match_derived_data_
 from player_stats.ranking_service import CompetitiveRankingService
 from player_stats.serializers import PlayerStatisticsSerializer, TeamStatisticsSerializer
 from player_stats.weekly_selection_service import WeeklySelectionService
+from player_stats.player_performance_service import PlayerPerformanceService
 
 
 class MatchViewSet(viewsets.ModelViewSet):
@@ -1559,19 +1560,74 @@ class StatisticsViewSet(viewsets.ViewSet):
             stats = TeamStats.get_team_rankings(championship_id=championship_id)
             return Response(stats)
 
-        payload = CompetitiveRankingService.get_cycle_payload(
-            user=request.user if request.user and request.user.is_authenticated else None,
-        )
+        user = request.user if request.user and request.user.is_authenticated else None
+        cycle_slug = request.query_params.get('cycle')
+
+        if cycle_slug:
+            # Ciclo histórico específico — leitura pura, sem recalcular.
+            cycle = CompetitiveRankingService.get_cycle_by_slug(cycle_slug)
+            if cycle is None:
+                return Response(
+                    {'error': 'Ciclo não encontrado.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            payload = CompetitiveRankingService.get_cycle_payload_readonly(cycle, user=user)
+        else:
+            # Ciclo atual — mantém comportamento existente (recalcula o ciclo aberto).
+            payload = CompetitiveRankingService.get_cycle_payload(user=user)
+
+        # Campo aditivo: comparação de KPIs com o ciclo anterior (somente leitura).
+        cycle_obj = CompetitiveRankingService.get_cycle_by_slug(payload['cycle']['slug'])
+        if cycle_obj is not None:
+            payload['comparison'] = CompetitiveRankingService.get_cycle_comparison(cycle_obj)
+
         return Response(payload)
+
+    @action(detail=False, methods=['get'])
+    def cycles(self, request):
+        """Lista os ciclos de ranking com dados (para filtro de período)."""
+        return Response({'results': CompetitiveRankingService.list_cycles()})
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='rankings/me')
     def rankings_me(self, request):
-        payload = CompetitiveRankingService.get_my_ranking_payload(request.user)
-        if payload is None:
+        if not hasattr(request.user, 'player_profile'):
             return Response(
                 {'error': 'Usuário autenticado não possui perfil de jogador.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        cycle_slug = request.query_params.get('cycle')
+        if cycle_slug:
+            cycle = CompetitiveRankingService.get_cycle_by_slug(cycle_slug)
+            if cycle is None:
+                return Response(
+                    {'error': 'Ciclo não encontrado.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            payload = CompetitiveRankingService._read_my_state(request.user, cycle)
+            if payload is None:
+                payload = {
+                    'playerId': request.user.player_profile.id,
+                    'playerName': request.user.player_profile.player_name or request.user.full_name,
+                    'teamName': None,
+                    'currentTier': 'BRONZE',
+                    'nextTier': 'SILVER',
+                    'generalPosition': None,
+                    'tierPosition': None,
+                    'score': 0,
+                    'averageRating': 0,
+                    'goals': 0,
+                    'assists': 0,
+                    'matchesPlayed': 0,
+                    'isPromotionZone': False,
+                    'positionsToPromotion': None,
+                    'pointsToPromotion': None,
+                }
+        else:
+            payload = CompetitiveRankingService.get_my_ranking_payload(request.user)
+
+        # Campo aditivo: série histórica para o gráfico de evolução.
+        payload['history'] = CompetitiveRankingService.get_my_history(request.user)
         return Response(payload)
 
     @action(detail=False, methods=['get'])
@@ -1727,6 +1783,53 @@ class StatisticsViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        return Response(payload)
+
+    @action(detail=False, methods=['get'], url_path='player_profile')
+    def player_profile(self, request):
+        """Perfil completo de um jogador agregando TeamPlayerPerformance.
+
+        GET /statistics/player_profile/?player_id=X[&championship_id=Y]
+        """
+        player_id = request.query_params.get('player_id')
+        if not player_id:
+            return Response(
+                {'error': 'player_id é obrigatório'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        player = PlayerProfile.objects.filter(pk=player_id).first()
+        if not player:
+            return Response(
+                {'error': 'Jogador não encontrado'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        payload = PlayerPerformanceService.get_player_profile(
+            player,
+            championship_id=request.query_params.get('championship_id'),
+        )
+        return Response(payload)
+
+    @action(detail=False, methods=['get'], url_path='player_leaderboard')
+    def player_leaderboard(self, request):
+        """Ranking de jogadores por estatísticas cruas (degradação elegante).
+
+        GET /statistics/player_leaderboard/?sort=&championship_id=&team_id=&position_group=&limit=
+        """
+        try:
+            limit = int(request.query_params.get('limit', 100))
+        except (TypeError, ValueError):
+            limit = 100
+        limit = max(1, min(limit, 200))
+
+        payload = PlayerPerformanceService.get_player_leaderboard(
+            championship_id=request.query_params.get('championship_id'),
+            team_id=request.query_params.get('team_id'),
+            position_group=request.query_params.get('position_group'),
+            sort=request.query_params.get('sort', 'rating'),
+            limit=limit,
+        )
         return Response(payload)
 
 

@@ -121,6 +121,8 @@ class CompetitiveRankingService:
             .order_by('general_position', '-score', '-average_rating', '-goals', '-assists', '-matches_played')
         )
 
+        prev = cls._previous_positions(cycle)
+
         payload = {
             'cycle': {
                 'slug': cycle.slug,
@@ -131,12 +133,12 @@ class CompetitiveRankingService:
                 'promotion_slots': PROMOTION_SLOTS,
                 'is_fallback_cycle': is_fallback,
             },
-            'general': [cls._serialize_state(item) for item in all_rows[:50]],
+            'general': [cls._serialize_state(item, prev) for item in all_rows[:50]],
             'tiers': {
-                'bronze': [cls._serialize_state(item) for item in tier_rows[PlayerTierState.Tier.BRONZE][:TOP_PER_TIER_PUBLIC]],
-                'prata': [cls._serialize_state(item) for item in tier_rows[PlayerTierState.Tier.SILVER][:TOP_PER_TIER_PUBLIC]],
-                'ouro': [cls._serialize_state(item) for item in tier_rows[PlayerTierState.Tier.GOLD][:TOP_PER_TIER_PUBLIC]],
-                'platina': [cls._serialize_state(item) for item in tier_rows[PlayerTierState.Tier.PLATINUM][:TOP_PER_TIER_PUBLIC]],
+                'bronze': [cls._serialize_state(item, prev) for item in tier_rows[PlayerTierState.Tier.BRONZE][:TOP_PER_TIER_PUBLIC]],
+                'prata': [cls._serialize_state(item, prev) for item in tier_rows[PlayerTierState.Tier.SILVER][:TOP_PER_TIER_PUBLIC]],
+                'ouro': [cls._serialize_state(item, prev) for item in tier_rows[PlayerTierState.Tier.GOLD][:TOP_PER_TIER_PUBLIC]],
+                'platina': [cls._serialize_state(item, prev) for item in tier_rows[PlayerTierState.Tier.PLATINUM][:TOP_PER_TIER_PUBLIC]],
             },
             'total_players': len(all_rows),
         }
@@ -408,9 +410,217 @@ class CompetitiveRankingService:
             **result,
         }
 
+    # ──────────────────────────────────────────────────────────────────────
+    # Leitura de histórico (somente-leitura — NÃO recalcula nem altera nada).
+    # Usado por filtros de período, comparação e evolução individual.
+    # ──────────────────────────────────────────────────────────────────────
+
     @classmethod
-    def _serialize_state(cls, state: PlayerTierState) -> dict[str, Any]:
+    def list_cycles(cls, limit: int = 24) -> list[dict[str, Any]]:
+        """Lista os ciclos que possuem ranking calculado, do mais recente ao mais antigo."""
+        cycles = (
+            RankingCycle.objects.filter(player_states__isnull=False)
+            .distinct()
+            .order_by('-starts_at')[:limit]
+        )
+        result = []
+        for cycle in cycles:
+            result.append({
+                'slug': cycle.slug,
+                'starts_at': cycle.starts_at,
+                'ends_at': cycle.ends_at,
+                'status': cycle.status,
+                'total_players': PlayerTierState.objects.filter(cycle=cycle).count(),
+            })
+        return result
+
+    @classmethod
+    def get_cycle_by_slug(cls, slug: str) -> RankingCycle | None:
+        return RankingCycle.objects.filter(slug=slug).first()
+
+    @classmethod
+    def get_cycle_payload_readonly(cls, cycle: RankingCycle, user=None) -> dict[str, Any]:
+        """
+        Mesmo shape de get_cycle_payload, porém SEM chamar calculate_player_ranking.
+        Lê apenas os PlayerTierState já persistidos (ideal para ciclos históricos/fechados).
+        """
+        tier_rows = {
+            tier: list(
+                PlayerTierState.objects.filter(cycle=cycle, tier=tier)
+                .select_related('player__user', 'team')
+                .order_by('tier_position', '-score', '-average_rating', '-goals', '-assists', '-matches_played')
+            )
+            for tier in TIER_ORDER
+        }
+        all_rows = list(
+            PlayerTierState.objects.filter(cycle=cycle)
+            .select_related('player__user', 'team')
+            .order_by('general_position', '-score', '-average_rating', '-goals', '-assists', '-matches_played')
+        )
+        prev = cls._previous_positions(cycle)
+
+        payload = {
+            'cycle': {
+                'slug': cycle.slug,
+                'starts_at': cycle.starts_at,
+                'ends_at': cycle.ends_at,
+                'status': cycle.status,
+                'min_matches_for_promotion': MIN_MATCHES_FOR_PROMOTION,
+                'promotion_slots': PROMOTION_SLOTS,
+                'is_fallback_cycle': False,
+            },
+            'general': [cls._serialize_state(item, prev) for item in all_rows[:50]],
+            'tiers': {
+                'bronze': [cls._serialize_state(item, prev) for item in tier_rows[PlayerTierState.Tier.BRONZE][:TOP_PER_TIER_PUBLIC]],
+                'prata': [cls._serialize_state(item, prev) for item in tier_rows[PlayerTierState.Tier.SILVER][:TOP_PER_TIER_PUBLIC]],
+                'ouro': [cls._serialize_state(item, prev) for item in tier_rows[PlayerTierState.Tier.GOLD][:TOP_PER_TIER_PUBLIC]],
+                'platina': [cls._serialize_state(item, prev) for item in tier_rows[PlayerTierState.Tier.PLATINUM][:TOP_PER_TIER_PUBLIC]],
+            },
+            'total_players': len(all_rows),
+        }
+        if user and hasattr(user, 'player_profile'):
+            payload['me'] = cls._read_my_state(user, cycle)
+        return payload
+
+    @classmethod
+    def _aggregate_cycle_kpis(cls, cycle: RankingCycle) -> dict[str, Any]:
+        """KPIs agregados de um ciclo (somente leitura)."""
+        rows = list(
+            PlayerTierState.objects.filter(cycle=cycle)
+            .select_related('team')
+            .only('score', 'matches_played', 'team_id', 'team__name', 'promotion_eligible')
+        )
+        total_players = len(rows)
+        total_matches = sum(r.matches_played for r in rows)
+        scores = [float(r.score) for r in rows]
+        avg_score = round(sum(scores) / total_players, 2) if total_players else 0.0
+        top_score = round(max(scores), 2) if scores else 0.0
+        teams = len({r.team.name for r in rows if r.team})
+        eligible = sum(1 for r in rows if r.promotion_eligible)
+        return {
+            'total_players': total_players,
+            'total_matches': total_matches,
+            'avg_score': avg_score,
+            'top_score': top_score,
+            'teams': teams,
+            'eligible': eligible,
+        }
+
+    @classmethod
+    def _previous_cycle_with_data(cls, cycle: RankingCycle) -> RankingCycle | None:
+        return (
+            RankingCycle.objects.filter(player_states__isnull=False, starts_at__lt=cycle.starts_at)
+            .distinct()
+            .order_by('-starts_at')
+            .first()
+        )
+
+    @classmethod
+    def _previous_positions(cls, cycle: RankingCycle) -> dict[int, int]:
+        """Mapa {player_id: general_position} do ciclo anterior-com-dados (somente leitura)."""
+        previous_cycle = cls._previous_cycle_with_data(cycle)
+        if not previous_cycle:
+            return {}
+        return {
+            player_id: position
+            for player_id, position in PlayerTierState.objects.filter(cycle=previous_cycle)
+            .values_list('player_id', 'general_position')
+        }
+
+    @classmethod
+    def get_cycle_comparison(cls, cycle: RankingCycle) -> dict[str, Any]:
+        """
+        Compara KPIs agregados do ciclo com o ciclo anterior-com-dados.
+        Apenas leitura/subtração para apresentação — não é regra de negócio.
+        """
+        current = cls._aggregate_cycle_kpis(cycle)
+        previous_cycle = cls._previous_cycle_with_data(cycle)
+        if not previous_cycle:
+            return {'current': current, 'previous': None, 'deltas': None, 'previous_slug': None}
+        previous = cls._aggregate_cycle_kpis(previous_cycle)
+        deltas = {key: round(current[key] - previous[key], 2) for key in current}
+        return {
+            'current': current,
+            'previous': previous,
+            'deltas': deltas,
+            'previous_slug': previous_cycle.slug,
+        }
+
+    @classmethod
+    def _read_my_state(cls, user, cycle: RankingCycle) -> dict[str, Any] | None:
+        """Lê o PlayerTierState do usuário num ciclo (sem recalcular)."""
+        if not hasattr(user, 'player_profile'):
+            return None
+        state = (
+            PlayerTierState.objects.filter(cycle=cycle, player=user.player_profile)
+            .select_related('player__user', 'team')
+            .first()
+        )
+        if not state:
+            return None
+        tier_rows = list(
+            PlayerTierState.objects.filter(cycle=cycle, tier=state.tier)
+            .order_by('tier_position', '-score', '-average_rating', '-goals', '-assists', '-matches_played')
+        )
+        promotion_cut = next((item for item in tier_rows if item.tier_position == PROMOTION_SLOTS), None)
+        positions_to = max(state.tier_position - PROMOTION_SLOTS, 0) if state.tier_position else 0
+        points_to = Decimal('0')
+        if promotion_cut and state.tier_position and state.tier_position > PROMOTION_SLOTS:
+            points_to = max((promotion_cut.score - state.score), Decimal('0'))
+        return {
+            'playerId': state.player_id,
+            'playerName': state.player.player_name or state.player.user.full_name,
+            'teamName': state.team.name if state.team else None,
+            'currentTier': state.tier,
+            'nextTier': NEXT_TIER[state.tier],
+            'generalPosition': state.general_position,
+            'tierPosition': state.tier_position,
+            'score': float(state.score),
+            'averageRating': float(state.average_rating),
+            'goals': state.goals,
+            'assists': state.assists,
+            'matchesPlayed': state.matches_played,
+            'isPromotionZone': state.is_promotion_zone,
+            'positionsToPromotion': positions_to,
+            'pointsToPromotion': float(_quantize(points_to)),
+        }
+
+    @classmethod
+    def get_my_history(cls, user, limit: int = 12) -> list[dict[str, Any]]:
+        """Série temporal dos meus PlayerTierState por ciclo (do mais antigo ao mais recente)."""
+        if not hasattr(user, 'player_profile'):
+            return []
+        states = list(
+            PlayerTierState.objects.filter(player=user.player_profile)
+            .select_related('cycle')
+            .order_by('-cycle__starts_at')[:limit]
+        )
+        states.reverse()
+        return [
+            {
+                'cycle': s.cycle.slug,
+                'score': float(s.score),
+                'averageRating': float(s.average_rating),
+                'generalPosition': s.general_position,
+                'tierPosition': s.tier_position,
+                'tier': s.tier,
+                'goals': s.goals,
+                'assists': s.assists,
+                'matchesPlayed': s.matches_played,
+            }
+            for s in states
+        ]
+
+    @classmethod
+    def _serialize_state(cls, state: PlayerTierState, prev_positions: dict[int, int] | None = None) -> dict[str, Any]:
         name = state.player.player_name or state.player.user.full_name
+        previous_position = (prev_positions or {}).get(state.player_id)
+        # positionDelta = posição anterior − atual: >0 subiu, <0 caiu, 0 igual, None se novo.
+        position_delta = (
+            previous_position - state.general_position
+            if previous_position is not None and state.general_position is not None
+            else None
+        )
         return {
             'position': state.tier_position,
             'generalPosition': state.general_position,
@@ -428,4 +638,6 @@ class CompetitiveRankingService:
             'isPromotionZone': state.is_promotion_zone,
             'nextTier': NEXT_TIER[state.tier],
             'isPromotionEligible': state.promotion_eligible,
+            'previousPosition': previous_position,
+            'positionDelta': position_delta,
         }

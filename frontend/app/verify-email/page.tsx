@@ -70,7 +70,7 @@ function VerifyEmailContent() {
     try {
       const response = await authAPI.verifyEmail({ email, code });
       setIsVerified(true);
-      showToast('Email verificado com sucesso! Bem-vindo à Pro Eleven!', 'success');
+      showToast('Email verificado com sucesso! Bem-vindo à FDT ARENA!', 'success');
 
       // Auto-login
       loginStore(response.token, response.user);

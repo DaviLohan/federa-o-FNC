@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { matchesAPI, statisticsAPI } from '@/lib/api';
@@ -74,7 +75,16 @@ function MatchPlayerStatsTable({ team }: { team: MatchDetailedStats['home_team']
               <tr key={`${player.player_id ?? player.player_name}`} className="hover:bg-surface2/60 transition-colors">
                 <td className="px-4 py-3">
                   <div className="min-w-[180px]">
-                    <p className="font-medium text-text">{player.player_name}</p>
+                    {player.player_id ? (
+                      <Link
+                        href={`/players/${player.player_id}`}
+                        className="font-medium text-text transition-colors hover:text-gold"
+                      >
+                        {player.player_name}
+                      </Link>
+                    ) : (
+                      <p className="font-medium text-text">{player.player_name}</p>
+                    )}
                     <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted">
                       {player.has_advanced_data ? (
                         <span className="rounded-full border border-gold/20 bg-gold/10 px-2 py-0.5 text-gold">EA</span>

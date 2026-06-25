@@ -10,6 +10,8 @@ import { Button } from '@/components/shared/ui/Button';
 import { Drawer } from '@/components/shared/ui/Drawer';
 import { formatDateShort } from '@/lib/utils/date';
 import { useToast } from '@/components/shared/ui/Toast';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
+import { AdminFilters } from '@/components/admin/AdminFilters';
 
 const PLATFORM_LABELS: Record<string, string> = {
   PS: 'PlayStation',
@@ -139,37 +141,38 @@ export default function AdminJogadoresPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text">Usuários</h1>
-          <p className="text-muted mt-1">{totalCount} usuários cadastrados</p>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Usuários"
+        count={totalCount}
+        countLabel="usuários cadastrados"
+      />
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-          <input
-            type="text"
-            placeholder="Buscar por nome ou email..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-surface2 border border-border rounded-xl text-text placeholder:text-muted focus:outline-none focus:border-gold/50 transition-colors"
-          />
+      <AdminFilters>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+            <input
+              type="text"
+              placeholder="Buscar por nome ou email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 bg-surface2 border border-border rounded-xl text-text placeholder:text-muted focus:outline-none focus:border-gold/50 transition-colors"
+            />
+          </div>
+          <select
+            value={userTypeFilter}
+            onChange={(e) => setUserTypeFilter(e.target.value)}
+            className="px-4 py-2.5 bg-surface2 border border-border rounded-xl text-text focus:outline-none focus:border-gold/50 transition-colors"
+          >
+            <option value="">Todos os tipos</option>
+            <option value="PLAYER">Jogador</option>
+            <option value="TEAM_OWNER">Dono de Time</option>
+            <option value="SUPERVISOR">Supervisor</option>
+            <option value="ADMIN">Admin</option>
+          </select>
         </div>
-        <select
-          value={userTypeFilter}
-          onChange={(e) => setUserTypeFilter(e.target.value)}
-          className="px-4 py-2.5 bg-surface2 border border-border rounded-xl text-text focus:outline-none focus:border-gold/50 transition-colors"
-        >
-          <option value="">Todos os tipos</option>
-          <option value="PLAYER">Jogador</option>
-          <option value="TEAM_OWNER">Dono de Time</option>
-          <option value="SUPERVISOR">Supervisor</option>
-          <option value="ADMIN">Admin</option>
-        </select>
-      </div>
+      </AdminFilters>
 
       {/* Table */}
       <DataTable

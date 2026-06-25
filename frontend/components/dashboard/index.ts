@@ -7,3 +7,15 @@ export { SectionHeader } from './SectionHeader';
 export { WelcomeSection } from './WelcomeSection';
 export { PlayerStatsSection } from './PlayerStatsSection';
 export { GettingStartedCard } from './GettingStartedCard';
+// Dashboard inteligente (bento)
+export { DashboardCard } from './DashboardCard';
+export { DashboardKpis } from './DashboardKpis';
+export { UpcomingMatchesCard } from './UpcomingMatchesCard';
+export { RecentResultsCard } from './RecentResultsCard';
+export { RankingPodiumCard } from './RankingPodiumCard';
+export { MyRankCard } from './MyRankCard';
+export { TeamStandingsCard } from './TeamStandingsCard';
+export { TopStatsCard } from './TopStatsCard';
+export { RoundHighlightsCard } from './RoundHighlightsCard';
+export { AnnouncementsCard } from './AnnouncementsCard';
+export { MyPerformancePanel } from './MyPerformancePanel';

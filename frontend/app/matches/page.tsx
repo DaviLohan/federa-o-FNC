@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { matchesAPI, teamsAPI, championshipsAPI } from '@/lib/api';
@@ -16,12 +16,25 @@ import {
   EmptyState,
   Modal,
   Skeleton,
+  TabsPremium,
+  TabPremium,
 } from '@/components/shared/ui';
 import { MatchCard } from '@/components/matches/MatchCard';
+import { MatchGroup } from '@/components/matches/MatchGroup';
 import { EAReportModal } from '@/components/championships/modals/EAReportModal';
 import type { Match } from '@/types';
-import { Swords, Search, Clock3, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Swords, Search, Radio, CalendarClock, CheckCircle2, AlertTriangle, List } from 'lucide-react';
 import { usePermissions } from '@/lib/hooks';
+
+type MatchTab = 'live' | 'scheduled' | 'finished' | 'contested' | 'all';
+
+const STATUS_TABS: { key: MatchTab; label: string; icon: typeof Radio; statuses: string[] | null }[] = [
+  { key: 'live', label: 'Ao vivo', icon: Radio, statuses: ['IN_PROGRESS'] },
+  { key: 'scheduled', label: 'Agendadas', icon: CalendarClock, statuses: ['SCHEDULED', 'PENDING'] },
+  { key: 'finished', label: 'Finalizadas', icon: CheckCircle2, statuses: ['FINISHED'] },
+  { key: 'contested', label: 'Contestadas', icon: AlertTriangle, statuses: ['CONTESTED'] },
+  { key: 'all', label: 'Todas', icon: List, statuses: null },
+];
 
 export default function MatchesPage() {
   const router = useRouter();
@@ -33,16 +46,15 @@ export default function MatchesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showResultDrawer, setShowResultDrawer] = useState<Match | null>(null);
   const [eaReportMatch, setEaReportMatch] = useState<Match | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [tab, setTab] = useState<MatchTab>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [championshipFilter, setChampionshipFilter] = useState<string>('all');
 
   // ── Queries ──────────────────────────────────────────────────────────────
-
+  // Busca tudo de uma vez; segmentação/filtro/agrupamento são client-side.
   const { data: matchesData, isLoading } = useQuery({
-    queryKey: ['matches', statusFilter],
-    queryFn: () =>
-      matchesAPI.getAll(statusFilter !== 'all' ? { status: statusFilter } : {}),
+    queryKey: ['matches', 'all'],
+    queryFn: () => matchesAPI.getAll({ page_size: 200, ordering: '-scheduled_date' }),
   });
 
   const { data: teamsData } = useQuery({
@@ -102,34 +114,82 @@ export default function MatchesPage() {
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
-  const matches = matchesData?.results ?? [];
+  const matches: Match[] = matchesData?.results ?? [];
   const teams = teamsData?.results ?? [];
   const championships = championshipsData?.results ?? [];
-  const scheduledCount = matches.filter((match) => match.status === 'SCHEDULED').length;
-  const inProgressCount = matches.filter((match) => match.status === 'IN_PROGRESS').length;
-  const finishedCount = matches.filter((match) => match.status === 'FINISHED').length;
-  const contestedCount = matches.filter((match) => match.status === 'CONTESTED').length;
 
-  const hasActiveFilters =
-    !!searchQuery ||
-    statusFilter !== 'all' ||
-    championshipFilter !== 'all';
+  // Contagens por aba
+  const counts = useMemo(() => ({
+    live: matches.filter((m) => m.status === 'IN_PROGRESS').length,
+    scheduled: matches.filter((m) => m.status === 'SCHEDULED' || m.status === 'PENDING').length,
+    finished: matches.filter((m) => m.status === 'FINISHED').length,
+    contested: matches.filter((m) => m.status === 'CONTESTED').length,
+    all: matches.length,
+  }), [matches]);
 
-  const filteredMatches = matches.filter((match) => {
-    const matchesSearch =
+  // Aba default inteligente (ao vivo > agendadas > todas), só na 1ª carga
+  const defaultedRef = useRef(false);
+  useEffect(() => {
+    if (defaultedRef.current || matches.length === 0) return;
+    defaultedRef.current = true;
+    setTab(counts.live > 0 ? 'live' : counts.scheduled > 0 ? 'scheduled' : 'all');
+  }, [matches.length, counts.live, counts.scheduled]);
+
+  const hasActiveFilters = !!searchQuery || championshipFilter !== 'all';
+
+  // Aplica aba + busca + filtro de campeonato
+  const tabStatuses = STATUS_TABS.find((t) => t.key === tab)?.statuses ?? null;
+  const visibleMatches = matches.filter((match) => {
+    const inTab = !tabStatuses || tabStatuses.includes(match.status);
+    const inSearch =
       !searchQuery ||
       match.home_team.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       match.away_team.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      match.championship?.name
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase());
-
-    const matchesChampionship =
-      championshipFilter === 'all' ||
-      match.championship?.id.toString() === championshipFilter;
-
-    return matchesSearch && matchesChampionship;
+      match.championship?.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const inChampionship =
+      championshipFilter === 'all' || match.championship?.id.toString() === championshipFilter;
+    return inTab && inSearch && inChampionship;
   });
+
+  // Agrupa por campeonato (Amistosos por último)
+  const groupedMatches = useMemo(() => {
+    const ascending = tab === 'live' || tab === 'scheduled';
+    const map = new Map<string, { championship: { id: number; name: string; logo?: string } | null; matches: Match[] }>();
+    for (const m of visibleMatches) {
+      const key = m.championship ? `c${m.championship.id}` : 'friendly';
+      if (!map.has(key)) {
+        map.set(key, {
+          championship: m.championship ? { id: m.championship.id, name: m.championship.name, logo: m.championship.logo } : null,
+          matches: [],
+        });
+      }
+      map.get(key)!.matches.push(m);
+    }
+    const groups = Array.from(map.values());
+    groups.forEach((g) =>
+      g.matches.sort((a, b) => {
+        const diff = new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime();
+        return ascending ? diff : -diff;
+      }),
+    );
+    // Campeonatos primeiro (mais recente no topo), Amistosos por último
+    groups.sort((a, b) => {
+      if (!a.championship) return 1;
+      if (!b.championship) return -1;
+      const aDate = Math.max(...a.matches.map((m) => new Date(m.scheduled_date).getTime()));
+      const bDate = Math.max(...b.matches.map((m) => new Date(m.scheduled_date).getTime()));
+      return bDate - aDate;
+    });
+    return groups;
+  }, [visibleMatches, tab]);
+
+  const emptyTitle: Record<MatchTab, string> = {
+    live: 'Nenhuma partida ao vivo agora',
+    scheduled: 'Sem partidas agendadas',
+    finished: 'Nenhuma partida finalizada',
+    contested: 'Nenhuma contestação',
+    all: isRestrictedViewer ? 'Nenhuma partida do seu time encontrada' : 'Nenhuma partida agendada',
+  };
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -154,7 +214,7 @@ export default function MatchesPage() {
         subtitle={
           isLoading
             ? 'Carregando calendário competitivo...'
-            : `${filteredMatches.length} partida${filteredMatches.length !== 1 ? 's' : ''} encontrada${filteredMatches.length !== 1 ? 's' : ''} no painel central de confrontos`
+            : `${visibleMatches.length} partida${visibleMatches.length !== 1 ? 's' : ''} no painel central de confrontos`
         }
         icon={<Swords className="w-8 h-8" />}
         actions={
@@ -164,65 +224,23 @@ export default function MatchesPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="!p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-mono uppercase tracking-widest text-muted">Agendadas</p>
-              <p className="mt-2 text-3xl font-black font-heading text-text">{scheduledCount}</p>
-              <p className="mt-1 text-sm text-muted">Confrontos prontos para lineup e kickoff.</p>
-            </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold/20 bg-gold/10 text-gold">
-              <Clock3 className="h-5 w-5" />
-            </div>
-          </div>
-        </Card>
+      {/* Abas por status */}
+      <TabsPremium value={tab} onChange={(v) => setTab(v as MatchTab)}>
+        {STATUS_TABS.map((t) => (
+          <TabPremium
+            key={t.key}
+            value={t.key}
+            label={t.label}
+            icon={<t.icon className="w-4 h-4" />}
+            badge={counts[t.key]}
+          />
+        ))}
+      </TabsPremium>
 
-        <Card className="!p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-mono uppercase tracking-widest text-muted">Em andamento</p>
-              <p className="mt-2 text-3xl font-black font-heading text-text">{inProgressCount}</p>
-              <p className="mt-1 text-sm text-muted">Partidas correndo ou aguardando fechamento.</p>
-            </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold/20 bg-gold/10 text-gold">
-              <Swords className="h-5 w-5" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="!p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-mono uppercase tracking-widest text-muted">Finalizadas</p>
-              <p className="mt-2 text-3xl font-black font-heading text-text">{finishedCount}</p>
-              <p className="mt-1 text-sm text-muted">Resultados já consolidados no histórico.</p>
-            </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold/20 bg-gold/10 text-gold">
-              <CheckCircle2 className="h-5 w-5" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="!p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-mono uppercase tracking-widest text-muted">Contestadas</p>
-              <p className="mt-2 text-3xl font-black font-heading text-text">{contestedCount}</p>
-              <p className="mt-1 text-sm text-muted">Casos que pedem revisão e atenção extra.</p>
-            </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold/20 bg-gold/10 text-gold">
-              <AlertTriangle className="h-5 w-5" />
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Filters */}
+      {/* Filtros (busca + campeonato) */}
       <FilterBar
         onReset={() => {
           setSearchQuery('');
-          setStatusFilter('all');
           setChampionshipFilter('all');
         }}
       >
@@ -239,81 +257,54 @@ export default function MatchesPage() {
           </div>
         </div>
 
-        <div className="w-full sm:w-48">
+        <div className="w-full sm:w-56">
           <Select
             label=""
             value={championshipFilter}
             onChange={(e) => setChampionshipFilter(e.target.value)}
             options={[
               { value: 'all', label: 'Todos Campeonatos' },
-              ...championships.map((c) => ({
-                value: c.id.toString(),
-                label: c.name,
-              })),
-            ]}
-          />
-        </div>
-
-        <div className="w-full sm:w-48">
-          <Select
-            label=""
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            options={[
-              { value: 'all', label: 'Todos Status' },
-              { value: 'SCHEDULED', label: 'Agendadas' },
-              { value: 'IN_PROGRESS', label: 'Em Andamento' },
-              { value: 'FINISHED', label: 'Finalizadas' },
-              { value: 'CONTESTED', label: 'Contestadas' },
-              { value: 'CANCELLED', label: 'Canceladas' },
+              ...championships.map((c) => ({ value: c.id.toString(), label: c.name })),
             ]}
           />
         </div>
       </FilterBar>
 
-      {/* Matches List */}
+      {/* Lista agrupada por campeonato */}
       {isLoading ? (
         <div className="space-y-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} variant="card" className="h-40" />
+            <Skeleton key={i} variant="card" className="h-32" />
           ))}
         </div>
-      ) : filteredMatches.length === 0 ? (
+      ) : visibleMatches.length === 0 ? (
         <Card>
           <EmptyState
             icon={<Swords className="mx-auto h-14 w-14 text-gold/40" />}
-              title={
-                hasActiveFilters
-                  ? 'Nenhuma partida encontrada'
-                  : isRestrictedViewer
-                  ? 'Nenhuma partida do seu time encontrada'
-                  : 'Nenhuma partida agendada'
-              }
-              description={
-                hasActiveFilters
-                  ? 'Tente ajustar os filtros de busca.'
-                  : isRestrictedViewer
-                  ? 'Somente partidas relacionadas ao seu time aparecem nesta área.'
-                  : 'Comece agendando a primeira partida!'
-              }
+            title={hasActiveFilters ? 'Nenhuma partida encontrada' : emptyTitle[tab]}
+            description={
+              hasActiveFilters
+                ? 'Tente ajustar a busca ou o campeonato.'
+                : isRestrictedViewer
+                ? 'Somente partidas relacionadas ao seu time aparecem nesta área.'
+                : 'Comece agendando a primeira partida!'
+            }
             action={
-              !hasActiveFilters ? (
-                <Button
-                  variant="primary"
-                  onClick={() => setShowCreateModal(true)}
-                >
-                  + Agendar Primeira Partida
+              !hasActiveFilters && tab !== 'finished' ? (
+                <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+                  + Agendar Partida
                 </Button>
               ) : undefined
             }
           />
         </Card>
       ) : (
-        <div className="space-y-4">
-          {filteredMatches.map((match) => (
-            <MatchCard
-              key={match.id}
-              match={match}
+        <div className="space-y-6">
+          {groupedMatches.map((group) => (
+            <MatchGroup
+              key={group.championship ? `c${group.championship.id}` : 'friendly'}
+              championship={group.championship}
+              matches={group.matches}
               onDetails={(m) => router.push(`/matches/${m.id}`)}
               onStart={handleStart}
               onReportEA={(m) => setEaReportMatch(m)}

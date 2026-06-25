@@ -88,7 +88,61 @@ function useVariants() {
 
 // ─── Aba: Estatísticas ────────────────────────────────────────────────────────
 
-function StatsTab({ teamStats }: { teamStats: TeamOverallStats | null }) {
+const FORM_PILL: Record<'W' | 'D' | 'L', { cls: string; label: string }> = {
+  W: { cls: 'bg-green/20 text-green border-green/30', label: 'V' },
+  D: { cls: 'bg-warning/20 text-warning border-warning/30', label: 'E' },
+  L: { cls: 'bg-error/20 text-error border-error/30', label: 'D' },
+};
+
+function FormPills({ form }: { form: ('W' | 'D' | 'L')[] }) {
+  if (!form || form.length === 0) return null;
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs uppercase tracking-widest text-muted font-mono">Forma recente</span>
+      <div className="flex gap-1">
+        {form.slice(0, 5).map((r, i) => (
+          <span
+            key={i}
+            className={`flex h-6 w-6 items-center justify-center rounded-md border font-mono text-xs font-bold ${FORM_PILL[r].cls}`}
+            title={r === 'W' ? 'Vitória' : r === 'D' ? 'Empate' : 'Derrota'}
+          >
+            {FORM_PILL[r].label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TeamRankingPositionCard({ teamId }: { teamId: number }) {
+  const { data } = useQuery({
+    queryKey: ['global-rankings-team', teamId],
+    queryFn: () => statisticsAPI.getGlobalRankings({ include_zero_points: true }),
+    enabled: !isNaN(teamId),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const row = data?.results?.find((r) => r.team_id === teamId);
+  if (!row) return null;
+
+  return (
+    <div className="flex items-center justify-between rounded-2xl border border-gold/20 bg-gradient-to-br from-gold/8 to-transparent p-5">
+      <div>
+        <p className="text-xs uppercase tracking-widest text-muted font-mono">Ranking geral</p>
+        <p className="mt-1 text-sm text-text">
+          <span className="font-bold text-gold">{row.tier_display}</span>
+          <span className="ml-2 text-muted">{row.points} pts</span>
+        </p>
+      </div>
+      <div className="text-right">
+        <div className="font-mono text-4xl font-black leading-none text-gold">#{row.position}</div>
+        <div className="text-[10px] uppercase tracking-widest text-muted font-mono">posição</div>
+      </div>
+    </div>
+  );
+}
+
+function StatsTab({ teamStats, teamId }: { teamStats: TeamOverallStats | null; teamId: number }) {
   const { item } = useVariants();
 
   if (!teamStats) {
@@ -116,6 +170,19 @@ function StatsTab({ teamStats }: { teamStats: TeamOverallStats | null }) {
 
   return (
     <div className="space-y-6">
+      {/* Ranking + forma recente */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <TeamRankingPositionCard teamId={teamId} />
+        {teamStats.current_form.length > 0 && (
+          <motion.div
+            variants={item}
+            className="flex items-center rounded-2xl border border-border bg-surface1 p-5"
+          >
+            <FormPills form={teamStats.current_form} />
+          </motion.div>
+        )}
+      </div>
+
       {/* Taxa de vitória */}
       {matches.total > 0 && (
         <motion.div
@@ -1012,7 +1079,7 @@ export default function TeamDetailPage() {
                 )}
 
                 {/* Estatísticas */}
-                {activeTab === 'stats' && <StatsTab teamStats={teamStats} />}
+                {activeTab === 'stats' && <StatsTab teamStats={teamStats} teamId={teamId} />}
 
                 {/* Desempenho */}
                 {activeTab === 'performance' && <TeamPerformanceTab teamId={teamId} />}

@@ -180,6 +180,155 @@ export interface WeeklySelectionPayload {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Player performance — perfil individual e leaderboard de stats cruas.
+// Campos avançados (rating, passes, finalizações, desarmes, defesas) só têm
+// dados para partidas reportadas via EA — tipados como `number | null` para
+// a degradação elegante na UI.
+// ---------------------------------------------------------------------------
+
+export interface PlayerTeamRef {
+  id: number;
+  name: string;
+  abbreviation: string;
+  logo: string | null;
+}
+
+export interface PlayerCareerStats {
+  matches: number;
+  advanced_matches: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  win_rate: number;
+  goals: number;
+  assists: number;
+  goal_contributions: number;
+  cards: number;
+  clean_sheets: number;
+  mvps: number | null;
+  average_rating: number | null;
+  pass_accuracy: number | null;
+  shots: number | null;
+  tackle_accuracy: number | null;
+  saves: number | null;
+  has_advanced_data: boolean;
+}
+
+export interface PlayerChampionshipStat {
+  championship: { id: number; name: string | null };
+  team: PlayerTeamRef | null;
+  matches: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  win_rate: number;
+  goals: number;
+  assists: number;
+  average_rating: number | null;
+}
+
+export interface PlayerHistoryMatch {
+  match_id: number;
+  played_at: string | null;
+  championship: { id: number; name: string } | null;
+  opponent: { id: number | null; name: string; abbreviation: string; logo: string | null } | null;
+  result: 'W' | 'D' | 'L' | null;
+  goals_scored: number | null;
+  goals_conceded: number | null;
+  goals: number;
+  assists: number;
+  cards: number;
+  rating: number | null;
+  has_advanced_data: boolean;
+}
+
+export interface PlayerAchievement {
+  type: 'golden_boot' | 'best_player' | 'champion' | 'runner_up';
+  label: string;
+  season: number;
+  count?: number;
+}
+
+export interface PlayerProfilePayload {
+  player: {
+    id: number;
+    player_name: string;
+    gamer_tag: string | null;
+    shirt_number: number | null;
+    avatar: string | null;
+    primary_position: string | null;
+    primary_position_label: string | null;
+    secondary_position: string | null;
+    secondary_position_label: string | null;
+    country: string | null;
+    is_goalkeeper: boolean;
+    team: PlayerTeamRef | null;
+  };
+  career: PlayerCareerStats;
+  by_championship: PlayerChampionshipStat[];
+  history: PlayerHistoryMatch[];
+  achievements: PlayerAchievement[];
+  meta: {
+    has_advanced_data: boolean;
+    mvp_supported: boolean;
+    season_filter_supported: boolean;
+  };
+}
+
+export type PlayerLeaderboardSort =
+  | 'rating'
+  | 'goals'
+  | 'assists'
+  | 'wins'
+  | 'losses'
+  | 'win_rate'
+  | 'cards'
+  | 'clean_sheets'
+  | 'games';
+
+export type PlayerPositionGroup = 'GK' | 'DEF' | 'MID' | 'ATT';
+
+export interface PlayerLeaderboardRow {
+  rank: number;
+  player_id: number;
+  player_name: string;
+  avatar: string | null;
+  team: PlayerTeamRef | null;
+  position: string | null;
+  position_label: string | null;
+  is_goalkeeper: boolean;
+  matches: number;
+  advanced_matches: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  win_rate: number;
+  goals: number;
+  assists: number;
+  goal_contributions: number;
+  cards: number;
+  clean_sheets: number;
+  mvps: number | null;
+  average_rating: number | null;
+  pass_accuracy: number | null;
+  shots: number | null;
+  tackle_accuracy: number | null;
+  saves: number | null;
+  has_advanced_data: boolean;
+}
+
+export interface PlayerLeaderboardPayload {
+  results: PlayerLeaderboardRow[];
+  filters: {
+    championships: { id: number; name: string | null }[];
+    teams: PlayerTeamRef[];
+  };
+  sort: PlayerLeaderboardSort;
+  position_group: PlayerPositionGroup | null;
+  meta: { total: number };
+}
+
 // Auth Types
 export interface LoginRequest {
   email: string;
@@ -287,6 +436,8 @@ export interface TeamLineupStyle {
 export interface EAClubSearchResult {
   ea_club_id: string;
   name: string;
+  platform?: 'common-gen5' | 'common-gen4' | 'pc';
+  platform_display?: string;
   clubId?: string | number;
   clubName?: string;
   members?: number | string;
@@ -769,6 +920,9 @@ export interface CompetitiveRankingPlayerRow {
   isPromotionZone: boolean;
   nextTier: PlayerTier | null;
   isPromotionEligible: boolean;
+  // Movimento vs. ciclo anterior (read-only, aditivo). positionDelta = anterior − atual.
+  previousPosition?: number | null;
+  positionDelta?: number | null;
 }
 
 export interface CompetitiveRankingPayload {
@@ -790,6 +944,44 @@ export interface CompetitiveRankingPayload {
   };
   total_players: number;
   me?: CompetitiveMyRankingPayload | null;
+  comparison?: RankingComparison | null;
+}
+
+// KPIs agregados de um ciclo + comparação com o ciclo anterior (campos aditivos read-only).
+export interface RankingCycleKpis {
+  total_players: number;
+  total_matches: number;
+  avg_score: number;
+  top_score: number;
+  teams: number;
+  eligible: number;
+}
+
+export interface RankingComparison {
+  current: RankingCycleKpis;
+  previous: RankingCycleKpis | null;
+  deltas: RankingCycleKpis | null;
+  previous_slug: string | null;
+}
+
+export interface RankingCycleOption {
+  slug: string;
+  starts_at: string;
+  ends_at: string;
+  status: 'OPEN' | 'CLOSED';
+  total_players: number;
+}
+
+export interface MyRankingHistoryPoint {
+  cycle: string;
+  score: number;
+  averageRating: number;
+  generalPosition: number | null;
+  tierPosition: number | null;
+  tier: PlayerTier;
+  goals: number;
+  assists: number;
+  matchesPlayed: number;
 }
 
 export interface CompetitiveMyRankingPayload {
@@ -808,6 +1000,7 @@ export interface CompetitiveMyRankingPayload {
   isPromotionZone: boolean;
   positionsToPromotion: number | null;
   pointsToPromotion: number | null;
+  history?: MyRankingHistoryPoint[];
 }
 
 // API Response Types

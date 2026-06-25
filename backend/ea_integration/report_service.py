@@ -1481,7 +1481,7 @@ class MatchReportEAService:
                     EmailService.send_notification_email(
                         to_email=email,
                         subject=(
-                            f'[PRO ELEVEN] Contestação de partida — '
+                            f'[FDT ARENA] Contestação de partida — '
                             f'{match.home_team.name} vs {match.away_team.name}'
                         ),
                         template_name='match_contested',

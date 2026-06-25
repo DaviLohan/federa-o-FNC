@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { UserX, Crown, Shield, Sword, Goal, UserCog } from 'lucide-react';
 import type { TeamMembership } from '@/types';
 
@@ -132,9 +133,12 @@ export function MemberCard({
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-bold text-text text-sm leading-tight truncate">
+          <Link
+            href={`/players/${member.player.id}`}
+            className="font-bold text-text text-sm leading-tight truncate transition-colors hover:text-gold"
+          >
             {member.player.player_name}
-          </span>
+          </Link>
           {isOwner && (
             <span className="text-[10px] font-bold text-gold bg-gold/10 px-1.5 py-0.5 rounded-full border border-gold/20 leading-none">
               DONO

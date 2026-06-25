@@ -121,7 +121,7 @@ export function MobileMenu({ items }: MobileMenuProps) {
         {/* Footer */}
         <div className="border-t border-border/50 px-4 py-3">
           <p className="text-[11px] text-muted/60">
-            PRO ELEVEN Federation &middot; EA SPORTS FC Pro Clubs &middot; v1.0.0
+            FDT ARENA &middot; EA SPORTS FC Pro Clubs &middot; v1.0.0
           </p>
         </div>
       </div>

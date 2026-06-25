@@ -8,16 +8,14 @@ interface QuickActionTileProps {
   description: string;
   icon: ReactNode;
   href: string;
-  color: 'cyan' | 'lime' | 'teal' | 'green' | 'purple';
+  color?: 'gold' | 'green' | 'neutral';
   prefetch?: boolean;
 }
 
 const colorClasses = {
-  cyan: 'from-gold/20 to-gold/5 text-gold hover:shadow-gold/20',
-  lime: 'from-gold2/20 to-gold2/5 text-warning hover:shadow-lime/20',
-  teal: 'from-gold3/20 to-gold3/5 text-gold hover:shadow-teal/20',
-  green: 'from-green/20 to-green/5 text-green hover:shadow-green/20',
-  purple: 'from-purple-500/20 to-purple-500/5 text-purple-400 hover:shadow-purple-500/20',
+  gold: 'from-gold/15 to-transparent text-gold hover:shadow-gold/20',
+  green: 'from-green/15 to-transparent text-green hover:shadow-green/20',
+  neutral: 'from-white/[0.06] to-transparent text-text hover:shadow-black/20',
 };
 
 export function QuickActionTile({
@@ -25,7 +23,7 @@ export function QuickActionTile({
   description,
   icon,
   href,
-  color,
+  color = 'gold',
   prefetch = true,
 }: QuickActionTileProps) {
   return (

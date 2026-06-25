@@ -142,9 +142,13 @@ class TopScorerViewSet(viewsets.ReadOnlyModelViewSet):
 class LeaderboardAPIView(views.APIView):
     """
     API View para rankings combinados (artilheiros, assistentes, melhores jogadores).
-    
+
     Endpoint:
     - GET /leaderboard/?championship={id}&type={scorers|assisters|players}
+
+    DEPRECATED: usa ``stat.games_played`` (campo inexistente em PlayerStatistics — é
+    ``matches_played``) e lê ``average_rating``, que nunca é gravado. Quebra em runtime.
+    Substituído por ``StatisticsViewSet.player_leaderboard`` (sobre TeamPlayerPerformance).
     """
     permission_classes = [IsAuthenticated]
     

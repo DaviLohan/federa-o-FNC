@@ -10,6 +10,8 @@ import { Button } from '@/components/shared/ui/Button';
 import { Drawer } from '@/components/shared/ui/Drawer';
 import { formatDateShort, formatDateTimeShort } from '@/lib/utils/date';
 import { useToast } from '@/components/shared/ui/Toast';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
+import { AdminFilters } from '@/components/admin/AdminFilters';
 
 const ENROLLMENT_STATUS_VARIANTS: Record<string, any> = {
   PENDING_PAYMENT: 'warning',
@@ -216,12 +218,11 @@ export default function AdminInscricoesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text">Inscrições</h1>
-          <p className="text-muted mt-1">{totalCount} inscrições encontradas</p>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Inscrições"
+        count={totalCount}
+        countLabel="inscrições encontradas"
+      />
 
       {/* Pending alert */}
       {pendingCount > 0 && (
@@ -243,48 +244,50 @@ export default function AdminInscricoesPage() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <select
-          value={championshipFilter}
-          onChange={(e) => setChampionshipFilter(e.target.value)}
-          className="flex-1 px-4 py-2.5 bg-surface2 border border-border rounded-xl text-text focus:outline-none focus:border-gold/50 transition-colors"
-        >
-          <option value="">Todos os campeonatos</option>
-          {championships.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2.5 bg-surface2 border border-border rounded-xl text-text focus:outline-none focus:border-gold/50 transition-colors"
-        >
-          <option value="">Status inscrição</option>
-          <option value="PENDING_PAYMENT">Aguard. Pagamento</option>
-          <option value="APPROVED">Aprovada</option>
-          <option value="REJECTED">Rejeitada</option>
-          <option value="CANCELLED">Cancelada</option>
-        </select>
-        <select
-          value={paymentFilter}
-          onChange={(e) => setPaymentFilter(e.target.value)}
-          className="px-4 py-2.5 bg-surface2 border border-border rounded-xl text-text focus:outline-none focus:border-gold/50 transition-colors"
-        >
-          <option value="">Status pagamento</option>
-          <option value="PENDING">Pendente</option>
-          <option value="PAID">Pago</option>
-          <option value="FAILED">Falhou</option>
-          <option value="EXPIRED">Expirado</option>
-        </select>
-        {(statusFilter || paymentFilter || championshipFilter) && (
-          <Button
-            variant="ghost"
-            onClick={() => { setStatusFilter(''); setPaymentFilter(''); setChampionshipFilter(''); }}
+      <AdminFilters>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <select
+            value={championshipFilter}
+            onChange={(e) => setChampionshipFilter(e.target.value)}
+            className="flex-1 px-4 py-2.5 bg-surface2 border border-border rounded-xl text-text focus:outline-none focus:border-gold/50 transition-colors"
           >
-            Limpar
-          </Button>
-        )}
-      </div>
+            <option value="">Todos os campeonatos</option>
+            {championships.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2.5 bg-surface2 border border-border rounded-xl text-text focus:outline-none focus:border-gold/50 transition-colors"
+          >
+            <option value="">Status inscrição</option>
+            <option value="PENDING_PAYMENT">Aguard. Pagamento</option>
+            <option value="APPROVED">Aprovada</option>
+            <option value="REJECTED">Rejeitada</option>
+            <option value="CANCELLED">Cancelada</option>
+          </select>
+          <select
+            value={paymentFilter}
+            onChange={(e) => setPaymentFilter(e.target.value)}
+            className="px-4 py-2.5 bg-surface2 border border-border rounded-xl text-text focus:outline-none focus:border-gold/50 transition-colors"
+          >
+            <option value="">Status pagamento</option>
+            <option value="PENDING">Pendente</option>
+            <option value="PAID">Pago</option>
+            <option value="FAILED">Falhou</option>
+            <option value="EXPIRED">Expirado</option>
+          </select>
+          {(statusFilter || paymentFilter || championshipFilter) && (
+            <Button
+              variant="ghost"
+              onClick={() => { setStatusFilter(''); setPaymentFilter(''); setChampionshipFilter(''); }}
+            >
+              Limpar
+            </Button>
+          )}
+        </div>
+      </AdminFilters>
 
       {/* Table */}
       <DataTable

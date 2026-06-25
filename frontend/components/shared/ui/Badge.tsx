@@ -15,12 +15,12 @@ export function Badge({ variant = 'default', children, className = '' }: BadgePr
     info: 'bg-info/10 text-info border-info/20',
     default: 'bg-white/5 text-muted border-stroke',
     
-    // Pro Eleven premium variants
+    // FDT ARENA premium variants
     gold: 'bg-gold/20 text-gold border border-gold/40',
     silver: 'bg-silver/10 text-silver border border-silver/20',
     premium: 'bg-gold/20 text-gold border border-gold/40 animate-glow',
     
-    // Match status variants (mapped to Pro Eleven colors)
+    // Match status variants (mapped to FDT ARENA colors)
     live: 'bg-gold/20 text-gold border border-gold/40 animate-glow',
     finished: 'bg-success/20 text-success border border-success/40',
     pending: 'bg-warning/20 text-warning border border-warning/40',

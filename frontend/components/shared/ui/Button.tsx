@@ -2,7 +2,7 @@ import React from 'react';
 import { Loader2 } from 'lucide-react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'solid';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   children: React.ReactNode;
@@ -23,7 +23,10 @@ export function Button({
   const variantStyles = {
     primary: 'relative overflow-hidden bg-gold hover:bg-gold2 active:bg-gold3 shadow-lg shadow-gold/25 text-black before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:translate-x-[-100%] hover:before:translate-x-[100%] before:transition-transform before:duration-700',
     secondary: 'border-2 border-gold text-gold hover:bg-gold/10 hover:shadow-lg hover:shadow-gold/30',
-    ghost: 'relative text-gold hover:text-gold2 group'
+    ghost: 'relative text-gold hover:text-gold2 group',
+    danger: 'bg-error text-white hover:bg-error/90 active:bg-error shadow-lg shadow-error/20',
+    success: 'bg-success text-black hover:bg-success/90 active:bg-success shadow-lg shadow-success/20',
+    solid: 'bg-gold text-black hover:bg-gold2 active:bg-gold3 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/40'
   };
   
   const sizeStyles = {

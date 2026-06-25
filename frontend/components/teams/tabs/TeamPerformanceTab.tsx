@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { teamsAPI } from '@/lib/api';
 import { Card, Button, EmptyState } from '@/components/shared/ui';
@@ -72,7 +73,16 @@ function LeaderCard({ title, player, accent }: { title: string; player?: TeamPer
       <p className="text-[11px] uppercase tracking-widest text-muted font-mono">{title}</p>
       {player ? (
         <>
-          <p className="mt-3 text-lg font-semibold text-text truncate">{player.player_name}</p>
+          {player.player_id ? (
+            <Link
+              href={`/players/${player.player_id}`}
+              className="mt-3 block text-lg font-semibold text-text truncate transition-colors hover:text-gold"
+            >
+              {player.player_name}
+            </Link>
+          ) : (
+            <p className="mt-3 text-lg font-semibold text-text truncate">{player.player_name}</p>
+          )}
           <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted">
             <span className="inline-flex items-center rounded-full border border-border bg-surface1 px-2.5 py-1">
               {player.position}
@@ -285,7 +295,16 @@ export function TeamPerformanceTab({ teamId }: TeamPerformanceTabProps) {
                 <tr key={`${player.player_id ?? player.player_name}`} className="hover:bg-surface2/60 transition-colors">
                   <td className="px-4 py-3">
                     <div className="min-w-[180px]">
-                      <p className="font-medium text-text">{player.player_name}</p>
+                      {player.player_id ? (
+                        <Link
+                          href={`/players/${player.player_id}`}
+                          className="font-medium text-text transition-colors hover:text-gold"
+                        >
+                          {player.player_name}
+                        </Link>
+                      ) : (
+                        <p className="font-medium text-text">{player.player_name}</p>
+                      )}
                       <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted">
                         {player.has_advanced_data ? (
                           <span className="rounded-full border border-gold/20 bg-gold/10 px-2 py-0.5 text-gold">EA</span>

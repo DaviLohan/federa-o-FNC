@@ -10,6 +10,8 @@ import { Button } from '@/components/shared/ui/Button';
 import { Drawer } from '@/components/shared/ui/Drawer';
 import { formatDateShort } from '@/lib/utils/date';
 import { useToast } from '@/components/shared/ui/Toast';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
+import { AdminFilters } from '@/components/admin/AdminFilters';
 import Link from 'next/link';
 
 export default function AdminTimesPage() {
@@ -156,24 +158,25 @@ export default function AdminTimesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text">Times</h1>
-          <p className="text-muted mt-1">{totalCount} times cadastrados</p>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Times"
+        count={totalCount}
+        countLabel="times cadastrados"
+      />
 
       {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-        <input
-          type="text"
-          placeholder="Buscar por nome..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 bg-surface2 border border-border rounded-xl text-text placeholder:text-muted focus:outline-none focus:border-gold/50 transition-colors"
-        />
-      </div>
+      <AdminFilters>
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+          <input
+            type="text"
+            placeholder="Buscar por nome..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 bg-surface2 border border-border rounded-xl text-text placeholder:text-muted focus:outline-none focus:border-gold/50 transition-colors"
+          />
+        </div>
+      </AdminFilters>
 
       {/* Table */}
       <DataTable

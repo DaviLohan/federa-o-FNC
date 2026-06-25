@@ -1,20 +1,32 @@
+function Shimmer({ className = '' }: { className?: string }) {
+  return (
+    <div className={`relative overflow-hidden rounded-2xl border border-stroke bg-panel2/40 ${className}`}>
+      <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/[0.06] to-transparent animate-shimmer" />
+    </div>
+  );
+}
+
 export function RankingSkeleton() {
   return (
-    <div className="space-y-4">
-      <div className="h-32 rounded-3xl bg-panel2/50 animate-pulse" />
+    <div className="space-y-5">
+      {/* hero */}
+      <Shimmer className="h-28 rounded-3xl" />
+      {/* KPIs */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-20 rounded-2xl bg-panel2/40 animate-pulse" />
+          <Shimmer key={i} className="h-24" />
         ))}
       </div>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-48 rounded-2xl bg-panel2/40 animate-pulse" />
+      {/* charts */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <Shimmer key={i} className="h-64" />
         ))}
       </div>
+      {/* table */}
       <div className="space-y-2">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-16 rounded-xl bg-panel2/40 animate-pulse" />
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Shimmer key={i} className="h-16 rounded-xl" />
         ))}
       </div>
     </div>

@@ -109,15 +109,21 @@ class EAClubViewSet(viewsets.ModelViewSet):
         retorna o clube esperado).
 
         POST /api/v1/ea/clubs/search/
-        Body: {"club_name": "Pro Eleven", "platform": "common-gen5"}
+        Body: {"club_name": "Pro Eleven"}
+
+        A plataforma NÃO é mais escolhida pelo usuário: a busca varre todas as
+        plataformas conhecidas (common-gen5, common-gen4, pc) e cada resultado
+        carrega a plataforma onde o clube foi encontrado. O usuário só confirma
+        o clube; a plataforma é resolvida e persistida automaticamente.
         """
         serializer = EAClubSearchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        platform = serializer.validated_data.get('platform', 'common-gen5')
         searched_name = serializer.validated_data['club_name']
+        platforms = list(EAClub.Platform.values)
+        platform_labels = dict(EAClub.Platform.choices)
 
-        def _enrich(result: dict, source: str) -> dict:
+        def _enrich(result: dict, source: str, platform: str) -> dict:
             ea_club_id = str(
                 result.get('ea_club_id')
                 or result.get('clubId')
@@ -147,6 +153,7 @@ class EAClubViewSet(viewsets.ModelViewSet):
                 'ea_club_id': ea_club_id,
                 'name': club_name,
                 'platform': platform,
+                'platform_display': platform_labels.get(platform, platform),
                 'source': source,
                 'already_linked': existing_team_is_active,
                 'has_legacy_link': bool(existing_link and not existing_team_is_active),
@@ -164,13 +171,15 @@ class EAClubViewSet(viewsets.ModelViewSet):
         enriched_results: list[dict] = []
         seen_keys: set[tuple[str, str]] = set()
 
-        # 1) Fallback local: clubes EA já cadastrados com nome exato
-        local_matches = EAClub.objects.select_related('team').filter(
-            name__iexact=searched_name,
-            platform=platform,
-        )
-        for ea_club in local_matches:
-            entry = _enrich(
+        def _add(entry: dict) -> None:
+            key = (entry['ea_club_id'], entry['platform'])
+            if entry['ea_club_id'] and key not in seen_keys:
+                seen_keys.add(key)
+                enriched_results.append(entry)
+
+        # 1) Fallback local: clubes EA já cadastrados com nome exato (qualquer plataforma)
+        for ea_club in EAClub.objects.select_related('team').filter(name__iexact=searched_name):
+            _add(_enrich(
                 {
                     'ea_club_id': ea_club.ea_club_id,
                     'clubId': ea_club.ea_club_id,
@@ -178,48 +187,37 @@ class EAClubViewSet(viewsets.ModelViewSet):
                     'clubName': ea_club.name,
                 },
                 source='local_cache',
-            )
-            key = (entry['ea_club_id'], entry['platform'])
-            if entry['ea_club_id'] and key not in seen_keys:
-                seen_keys.add(key)
-                enriched_results.append(entry)
+                platform=ea_club.platform,
+            ))
 
-        # 2) Busca textual oficial na EA
+        # 2) Busca textual oficial na EA — uma chamada por plataforma, tolerante a falhas
         client = EAProClubsClient()
-        try:
-            results = client.search_club(
-                club_name=searched_name,
-                platform=platform,
-            )
+        platform_errors = 0
+        for platform in platforms:
+            try:
+                results = client.search_club(club_name=searched_name, platform=platform)
+            except EAApiError as e:
+                platform_errors += 1
+                logger.warning('Busca EA falhou para plataforma %s: %s', platform, e)
+                continue
 
             for result in results:
-                entry = _enrich(result, source='ea_search')
-                key = (entry['ea_club_id'], entry['platform'])
-                if not entry['ea_club_id'] or key in seen_keys:
-                    continue
-                seen_keys.add(key)
-                enriched_results.append(entry)
+                _add(_enrich(result, source='ea_search', platform=platform))
 
-            return Response({
-                'count': len(enriched_results),
-                'results': enriched_results,
-            })
-
-        except EAApiError as e:
-            logger.error('Erro ao buscar clube na EA: %s', e)
-
-            if enriched_results:
-                # EA fora do ar mas temos cache local — devolve com aviso
-                return Response({
-                    'count': len(enriched_results),
-                    'results': enriched_results,
-                    'warning': 'Não foi possível consultar a API da EA agora. Resultados do cache local.',
-                })
-
+        # Todas as plataformas falharam e não há cache local → erro
+        if platform_errors == len(platforms) and not enriched_results:
             return Response(
                 {'error': 'Erro ao consultar a API da EA. Tente novamente.'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+
+        response_data = {'count': len(enriched_results), 'results': enriched_results}
+        if platform_errors and enriched_results:
+            response_data['warning'] = (
+                'Algumas plataformas não puderam ser consultadas agora; '
+                'os resultados podem estar incompletos.'
+            )
+        return Response(response_data)
 
     @action(detail=True, methods=['post'], url_path='sync')
     def sync(self, request, pk=None):
