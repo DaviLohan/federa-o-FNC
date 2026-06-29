@@ -180,6 +180,7 @@ export default function AdminInscricoesPage() {
     },
     {
       header: 'Ações',
+      isAction: true,
       accessor: (row: Enrollment) => {
         const isLoading = actionLoading === row.id;
         const canApprove = row.status === 'PENDING_PAYMENT';

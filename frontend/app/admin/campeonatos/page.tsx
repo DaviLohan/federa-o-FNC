@@ -148,6 +148,7 @@ export default function AdminCampeonatosPage() {
     },
     {
       header: 'Ações',
+      isAction: true,
       accessor: (row: Championship) => (
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <button

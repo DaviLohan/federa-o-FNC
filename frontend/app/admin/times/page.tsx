@@ -134,6 +134,7 @@ export default function AdminTimesPage() {
     },
     {
       header: 'Ações',
+      isAction: true,
       accessor: (row: Team) => (
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <button

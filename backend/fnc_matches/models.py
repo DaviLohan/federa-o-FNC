@@ -332,10 +332,19 @@ class Goal(models.Model):
         choices=GoalType.choices,
         default=GoalType.REGULAR
     )
-    
+
+    # Origem do registro: distingue eventos importados da EA dos lançados manualmente,
+    # para o reprocesso da EA não apagar eventos manuais.
+    source = models.CharField(
+        'origem',
+        max_length=10,
+        choices=[('EA', 'EA API'), ('MANUAL', 'Manual')],
+        default='MANUAL',
+    )
+
     # Timestamps
     created_at = models.DateTimeField('criado em', auto_now_add=True)
-    
+
     class Meta:
         verbose_name = 'gol'
         verbose_name_plural = 'gols'
@@ -425,10 +434,19 @@ class Card(models.Model):
     
     # Motivo
     reason = models.TextField('motivo', blank=True)
-    
+
+    # Origem do registro: distingue eventos importados da EA dos lançados manualmente,
+    # para o reprocesso da EA não apagar eventos manuais.
+    source = models.CharField(
+        'origem',
+        max_length=10,
+        choices=[('EA', 'EA API'), ('MANUAL', 'Manual')],
+        default='MANUAL',
+    )
+
     # Timestamps
     created_at = models.DateTimeField('criado em', auto_now_add=True)
-    
+
     class Meta:
         verbose_name = 'cartão'
         verbose_name_plural = 'cartões'

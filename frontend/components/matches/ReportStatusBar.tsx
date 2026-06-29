@@ -2,13 +2,8 @@
 
 import { Button } from '@/components/shared/ui';
 import type { Match } from '@/types';
-import {
-  Gamepad2,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
-  XCircle,
-} from 'lucide-react';
+import { getReportState, REPORT_TONE_TEXT } from '@/lib/utils/matchReport';
+import { Gamepad2, AlertTriangle } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,20 +15,6 @@ interface ReportStatusBarProps {
   onReportManual: () => void;
   onContest: () => void;
 }
-
-// ─── Status Config ────────────────────────────────────────────────────────────
-
-const reportStatusConfig: Record<
-  string,
-  { icon: typeof CheckCircle2; label: string; className: string } | null
-> = {
-  PENDING: { icon: Clock, label: 'Aguardando partida', className: 'text-muted2' },
-  SCHEDULED: { icon: Clock, label: 'Esta partida ainda não chegou no horário de início.', className: 'text-muted2' },
-  IN_PROGRESS: { icon: Gamepad2, label: 'Partida em andamento', className: 'text-brand' },
-  FINISHED: { icon: CheckCircle2, label: 'Partida finalizada', className: 'text-success' },
-  CONTESTED: { icon: AlertTriangle, label: 'Resultado contestado', className: 'text-warning' },
-  CANCELLED: { icon: XCircle, label: 'Partida cancelada', className: 'text-error' },
-};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -53,23 +34,16 @@ export function ReportStatusBar({
   // Only render if there are actions or a meaningful status to show
   if (!hasReportActions && !hasContestActions && match.status !== 'SCHEDULED') return null;
 
-  const statusInfo = match.status === 'FINISHED' && match.irregularity_flag && match.match_result_confirmed
-    ? { icon: AlertTriangle, label: 'Resultado confirmado com irregularidades aceitas', className: 'text-warning' }
-    : match.status === 'FINISHED'
-    ? ((match.has_report ?? !!match.report)
-      ? { icon: CheckCircle2, label: 'Partida finalizada', className: 'text-success' }
-      : { icon: Clock, label: 'Partida finalizada (aguardando reporte)', className: 'text-warning' })
-    : reportStatusConfig[match.status];
-  const StatusIcon = statusInfo?.icon || Clock;
+  const state = getReportState(match);
+  const StatusIcon = state.icon;
+  const toneText = REPORT_TONE_TEXT[state.tone];
 
   return (
     <div className="px-4 md:px-6 py-3 border-t border-stroke bg-panel2/50 flex items-center justify-between gap-3 flex-wrap">
       {/* Status indicator */}
       <div className="flex items-center gap-2">
-        <StatusIcon className={`w-4 h-4 shrink-0 ${statusInfo?.className || 'text-muted2'}`} />
-        <span className={`text-xs font-medium ${statusInfo?.className || 'text-muted2'}`}>
-          {statusInfo?.label || match.status}
-        </span>
+        <StatusIcon className={`w-4 h-4 shrink-0 ${toneText}`} />
+        <span className={`text-xs font-medium ${toneText}`}>{state.label}</span>
       </div>
 
       {/* Actions */}

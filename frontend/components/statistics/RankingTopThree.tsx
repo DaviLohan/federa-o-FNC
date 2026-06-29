@@ -33,7 +33,7 @@ export function RankingTopThree({ rows }: RankingTopThreeProps) {
           <p className="text-xs text-muted2">{player.teamName}</p>
           <div className="mt-4 flex items-end justify-between">
             <div>
-              <p className="text-xs text-muted2">Score</p>
+              <p className="text-xs text-muted2">Rank Score</p>
               <p className="text-xl font-mono font-bold text-gold">{player.score.toFixed(2)}</p>
             </div>
             <p className="text-xs text-muted2">Nota {player.averageRating.toFixed(2)} • G {player.goals} • A {player.assists}</p>

@@ -283,6 +283,7 @@ export default function AdminPartidasPage() {
     },
     {
       header: 'Ações',
+      isAction: true,
       accessor: (row: Match) => (
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <button

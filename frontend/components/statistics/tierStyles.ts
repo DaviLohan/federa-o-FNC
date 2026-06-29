@@ -59,12 +59,26 @@ export const TIER_STYLES: Record<PlayerTier, TierStyle> = {
     bg: 'bg-cyan-400/10',
     headerGradient: 'from-cyan-400/20 via-cyan-600/5 to-transparent',
   },
-};
-
-// Preparado para futuras divisões (não usadas hoje — backend tem só 4 tiers).
-export const FUTURE_TIER_STYLES = {
-  DIAMOND: { label: 'Diamante', solid: '#93C5FD', solid2: '#1D4ED8', icon: Diamond },
-  ELITE: { label: 'Elite', solid: '#C4B5FD', solid2: '#6D28D9', icon: Sparkles },
+  DIAMOND: {
+    label: 'Diamante',
+    solid: '#93C5FD',
+    solid2: '#1D4ED8',
+    icon: Diamond,
+    text: 'text-blue-200',
+    border: 'border-blue-300/40',
+    bg: 'bg-blue-400/10',
+    headerGradient: 'from-blue-400/20 via-blue-600/5 to-transparent',
+  },
+  ELITE: {
+    label: 'Elite',
+    solid: '#C4B5FD',
+    solid2: '#6D28D9',
+    icon: Sparkles,
+    text: 'text-violet-200',
+    border: 'border-violet-300/40',
+    bg: 'bg-violet-400/10',
+    headerGradient: 'from-violet-400/20 via-violet-600/5 to-transparent',
+  },
 };
 
 export function getTierStyle(tier: PlayerTier): TierStyle {

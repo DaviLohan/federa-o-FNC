@@ -9,6 +9,12 @@ interface Column<T> {
   sortable?: boolean;
   className?: string;
   width?: string;
+  /** No layout mobile (cards), vira o título do card. */
+  primary?: boolean;
+  /** No layout mobile (cards), vai para o rodapé de ações (sem rótulo). */
+  isAction?: boolean;
+  /** Oculta esta coluna no layout mobile (cards). */
+  hideOnMobile?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -24,6 +30,8 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
   zebra?: boolean;
   className?: string;
+  /** Em telas < md, renderiza cada linha como card empilhado (default true). */
+  mobileCards?: boolean;
 }
 
 export function DataTable<T extends { id?: number | string }>({
@@ -34,6 +42,7 @@ export function DataTable<T extends { id?: number | string }>({
   onRowClick,
   zebra = true,
   className = '',
+  mobileCards = true,
 }: DataTableProps<T>) {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -126,10 +135,54 @@ export function DataTable<T extends { id?: number | string }>({
     );
   }
 
+  const primaryColumn = columns.find((c) => c.primary) ?? columns[0];
+  const actionColumns = columns.filter((c) => c.isAction);
+  const detailColumns = columns.filter(
+    (c) => c !== primaryColumn && !c.isAction && !c.hideOnMobile,
+  );
+
   return (
-    <div className={`table-premium ${zebra ? '' : ''} ${className}`}>
-      <div className="overflow-x-auto">
-        <table className="w-full">
+    <>
+      {/* Mobile: cada linha vira um card empilhado */}
+      {mobileCards && (
+        <div className="space-y-3 md:hidden">
+          {sortedData.map((row, rowIndex) => (
+            <div
+              key={row.id ?? rowIndex}
+              onClick={() => onRowClick && onRowClick(row)}
+              className={`rounded-2xl border border-border bg-surface1 p-4 ${onRowClick ? 'cursor-pointer active:bg-surface2/60' : ''}`}
+            >
+              <div className="mb-2 min-w-0 text-sm font-semibold text-text">
+                {getCellValue(row, primaryColumn)}
+              </div>
+              {detailColumns.length > 0 && (
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                  {detailColumns.map((column, colIndex) => (
+                    <div key={colIndex} className="min-w-0">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted2">{column.header}</div>
+                      <div className="truncate text-sm text-text">{getCellValue(row, column)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {actionColumns.length > 0 && (
+                <div
+                  className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/50 pt-3"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {actionColumns.map((column, colIndex) => (
+                    <div key={colIndex}>{getCellValue(row, column)}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className={`table-premium ${zebra ? '' : ''} ${mobileCards ? 'hidden md:block' : ''} ${className}`}>
+        <div className="overflow-x-auto">
+          <table className="w-full">
           <thead>
             <tr>
               {columns.map((column, index) => (
@@ -184,7 +237,8 @@ export function DataTable<T extends { id?: number | string }>({
             ))}
           </tbody>
         </table>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

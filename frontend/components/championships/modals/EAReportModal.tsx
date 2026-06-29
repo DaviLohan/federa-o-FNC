@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Modal, Button, Badge, Select, useToast } from '@/components/shared/ui';
+import { MatchSummaryHeader } from '@/components/matches/MatchSummaryHeader';
 import { matchesAPI } from '@/lib/api';
 import type { Match, EAReportPreview, EAReportPlayer, EAReportWarning } from '@/types';
 import { formatDateTime } from '@/lib/utils/date';
@@ -669,8 +670,14 @@ function PreviewContent({
 
   return (
     <div className="space-y-5">
-      {/* Score Header */}
+      {/* Contexto da partida (campeonato · rodada · data) */}
+      <MatchSummaryHeader match={match} showStatus={false} />
+
+      {/* Resultado importado da EA */}
       <div className="bg-panel2 rounded-xl p-4">
+        <p className="mb-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted2">
+          Resultado importado da EA
+        </p>
         <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center mb-3">
           {/* Home Team */}
           <div className="flex items-center justify-end gap-3">

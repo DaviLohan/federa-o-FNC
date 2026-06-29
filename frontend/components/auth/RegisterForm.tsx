@@ -21,7 +21,7 @@ import {
   STEP1_FIELDS,
 } from '@/lib/validations/auth';
 
-export function RegisterForm() {
+export function RegisterForm({ autoFocus = true }: { autoFocus?: boolean } = {}) {
   const router = useRouter();
   const { showToast } = useToast();
   const isLight = useAuthFieldTheme() === 'light';
@@ -238,7 +238,7 @@ export function RegisterForm() {
               placeholder="Seu nome"
               autoComplete="given-name"
               required
-              autoFocus
+              autoFocus={autoFocus}
               error={fieldErrors.first_name}
               leftIcon={<UserIcon size={16} />}
             />

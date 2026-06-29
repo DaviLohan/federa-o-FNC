@@ -860,11 +860,18 @@ async function renderLineupArtwork({
   };
 
   const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
-  bgGrad.addColorStop(0, '#0B1220');
-  bgGrad.addColorStop(0.42, '#123040');
-  bgGrad.addColorStop(1, '#0A141F');
+  bgGrad.addColorStop(0, '#0B0F16');
+  bgGrad.addColorStop(0.42, '#0A0D14');
+  bgGrad.addColorStop(1, '#050608');
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
+
+  // Brilho dourado superior (identidade FDT carbono + dourado)
+  const topGoldGlow = ctx.createRadialGradient(W / 2, 90, 30, W / 2, 90, 520);
+  topGoldGlow.addColorStop(0, 'rgba(214,161,30,0.10)');
+  topGoldGlow.addColorStop(1, 'rgba(214,161,30,0)');
+  ctx.fillStyle = topGoldGlow;
+  ctx.fillRect(0, 0, W, 360);
 
   const sideVignette = ctx.createLinearGradient(0, 0, W, 0);
   sideVignette.addColorStop(0, 'rgba(0,0,0,0.24)');
@@ -956,6 +963,17 @@ async function renderLineupArtwork({
     [658, 28, 10, 0.74], [844, 54, 9, 0.58], [1006, 76, 8, 0.68], [978, 306, 7, 0.64],
     [748, 258, 10, 0.78], [22, 260, 7, 0.5], [678, 150, 7, 0.3], [823, 117, 7, 0.42],
   ].forEach(([x, y, size, alpha]) => drawStar(x as number, y as number, size as number, alpha as number));
+
+  // Marca FDT ARENA (plataforma) — topo-esquerdo
+  const fdtLogo = await loadImage('/branding/fdt-arena-brand.png');
+  if (fdtLogo) {
+    const fdtW = 132;
+    const fdtH = fdtW * (fdtLogo.height / fdtLogo.width || 0.48);
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.drawImage(fdtLogo, 56, 48, fdtW, fdtH);
+    ctx.restore();
+  }
 
   const horizonY = 338;
   const fieldTopY = 404;
@@ -1099,9 +1117,9 @@ async function renderLineupArtwork({
   ctx.fill();
 
   const fieldGrad = ctx.createLinearGradient(centerX, fieldTopY, centerX, fieldBottomY);
-  fieldGrad.addColorStop(0, 'rgba(40,84,90,0.74)');
-  fieldGrad.addColorStop(0.4, 'rgba(28,60,70,0.9)');
-  fieldGrad.addColorStop(1, 'rgba(15,33,46,0.98)');
+  fieldGrad.addColorStop(0, 'rgba(30,58,46,0.62)');
+  fieldGrad.addColorStop(0.4, 'rgba(18,40,34,0.86)');
+  fieldGrad.addColorStop(1, 'rgba(7,11,16,0.98)');
   ctx.fillStyle = fieldGrad;
   ctx.beginPath();
   ctx.moveTo(topLeftX, fieldTopY);
@@ -1180,7 +1198,7 @@ async function renderLineupArtwork({
   for (let i = 0; i < 5; i++) {
     const t = i / 4;
     const y = yAt(t);
-    ctx.strokeStyle = `rgba(255,255,255,${0.034 - i * 0.004})`;
+    ctx.strokeStyle = `rgba(214,161,30,${0.05 - i * 0.006})`;
     ctx.lineWidth = 1.6;
     ctx.beginPath();
     ctx.moveTo(leftEdge(t), y);
@@ -1189,7 +1207,7 @@ async function renderLineupArtwork({
   }
 
   const midT = 0.56;
-  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.strokeStyle = 'rgba(214,161,30,0.14)';
   ctx.lineWidth = 1.8;
   ctx.beginPath();
   ctx.moveTo(leftEdge(midT), yAt(midT));
@@ -1278,11 +1296,21 @@ async function renderLineupArtwork({
   // footer
   ctx.fillStyle = 'rgba(255,255,255,0.06)';
   ctx.fillRect(58, H - 76, W - 116, 1);
-  ctx.fillStyle = 'rgba(255,255,255,0.28)';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
+  let footerX = 58;
+  if (fdtLogo) {
+    const fh = 22;
+    const fw = fh * (fdtLogo.width / fdtLogo.height || 2.07);
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    ctx.drawImage(fdtLogo, footerX, H - 42 - fh / 2, fw, fh);
+    ctx.restore();
+    footerX += fw + 10;
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.32)';
   ctx.font = '600 13px system-ui, -apple-system, sans-serif';
-  ctx.fillText('FNC · Federação Nacional de Clubs', 58, H - 42);
+  ctx.fillText('FDT ARENA · Federação de Clubes', footerX, H - 42);
   ctx.textAlign = 'right';
   ctx.font = '600 12px system-ui, -apple-system, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.5)';
@@ -2240,9 +2268,9 @@ export function TacticalBoard({ team, members, readOnly = false }: TacticalBoard
         </div>
       )}
 
-      {/* Campo tático */}
-      <div className="relative max-w-3xl mx-auto overflow-x-auto">
-        <div className="min-w-[600px]">
+      {/* Campo tático (fluido — escala de 375px ao desktop) */}
+      <div className="relative max-w-3xl mx-auto">
+        <div className="relative w-full">
         {isLoadingLineup && (
           <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/50 rounded-2xl">
             <Loader2 className="w-6 h-6 text-[#D6A11E] animate-spin" />

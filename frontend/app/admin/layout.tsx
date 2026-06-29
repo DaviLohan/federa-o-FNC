@@ -35,10 +35,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="-m-4 lg:-m-8">
+    <div className="-m-4 md:-m-6 lg:-m-8">
       {/* Admin sub-navigation — sits right below the main navbar */}
       <AdminTabs />
-      <div className="p-4 lg:p-8">
+      <div className="p-4 md:p-6 lg:p-8">
         {children}
       </div>
     </div>

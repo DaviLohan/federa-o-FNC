@@ -6,9 +6,20 @@ from typing import Any
 from django.db.models import Q
 
 from player_stats.models import (
+    PlayerTierState,
     SeasonSummary,
     TeamPlayerPerformance,
 )
+from player_stats.ranking_service import compute_rank_score, tier_for_score, overall_from_score
+
+# Abreviações curtas (PT) das posições para os cards.
+POSITION_ABBR: dict[str, str] = {
+    'GK': 'GOL', 'CB': 'ZAG', 'LB': 'LE', 'RB': 'LD', 'LWB': 'ALE', 'RWB': 'ALD',
+    'CDM': 'VOL', 'CM': 'MC', 'CAM': 'MEI', 'LM': 'ME', 'RM': 'MD',
+    'LW': 'PE', 'RW': 'PD', 'ST': 'ATA', 'CF': 'CA',
+    # grupos genéricos (dados EA normalizados)
+    'DEF': 'ZAG', 'MID': 'MC', 'ATT': 'ATA', 'FWD': 'ATA',
+}
 
 # Agrupamento de posições (espelha weekly_selection_service.POSITION_GROUPS).
 POSITION_GROUPS: dict[str, set[str]] = {
@@ -284,6 +295,38 @@ class PlayerPerformanceService:
         matches = acc['matches']
         position = acc['positions'].most_common(1)[0][0] if acc['positions'] else None
         average_rating = round(acc['rating_total'] / acc['rating_count'], 2) if acc['rating_count'] else None
+
+        # Overall (1–99) + tier do card, reaproveitando o Rank Score por posição (all-time).
+        position_group = _position_group(position) or 'MID'
+        score_agg = {
+            'matches': matches,
+            'advanced_matches': acc['advanced_matches'],
+            'goals': acc['goals'],
+            'assists': acc['assists'],
+            'rating_total': acc['rating_total'],
+            'rating_count': acc['rating_count'],
+            'passes_made': acc['passes_made'],
+            'pass_attempts': acc['pass_attempts'],
+            'tackles_made': acc['tackles_made'],
+            'tackle_attempts': acc['tackle_attempts'],
+            'saves': acc['saves'],
+            'red_cards': acc['cards'],
+            'wins': acc['wins'],
+            'draws': acc['draws'],
+            'losses': acc['losses'],
+            'clean_sheets': acc['clean_sheets'],
+            'position_group': position_group,
+        }
+        if matches > 0:
+            score, _breakdown, _grp = compute_rank_score(score_agg)
+            overall = overall_from_score(score)
+            tier = tier_for_score(score, is_provisional=(matches < 2))
+            tier_label = PlayerTierState.Tier(tier).label
+        else:
+            overall = None
+            tier = None
+            tier_label = None
+
         return {
             'player_id': acc['player_id'],
             'player_name': acc['player_name'],
@@ -291,7 +334,12 @@ class PlayerPerformanceService:
             'team': acc['team'],
             'position': position,
             'position_label': POSITION_LABELS.get(position or ''),
+            'position_abbr': POSITION_ABBR.get((position or '').upper()),
+            'position_group': position_group,
             'is_goalkeeper': _is_goalkeeper(position),
+            'overall': overall,
+            'tier': tier,
+            'tier_label': tier_label,
             'matches': matches,
             'advanced_matches': acc['advanced_matches'],
             'wins': acc['wins'],

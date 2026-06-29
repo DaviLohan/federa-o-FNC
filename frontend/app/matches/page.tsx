@@ -12,7 +12,6 @@ import {
   useToast,
   PageHeader,
   FilterBar,
-  Drawer,
   EmptyState,
   Modal,
   Skeleton,
@@ -22,13 +21,15 @@ import {
 import { MatchCard } from '@/components/matches/MatchCard';
 import { MatchGroup } from '@/components/matches/MatchGroup';
 import { EAReportModal } from '@/components/championships/modals/EAReportModal';
+import { MatchReportModal } from '@/components/championships/modals/MatchReportModal';
 import type { Match } from '@/types';
-import { Swords, Search, Radio, CalendarClock, CheckCircle2, AlertTriangle, List } from 'lucide-react';
+import { Swords, Search, Radio, CalendarClock, CheckCircle2, AlertTriangle, List, ClipboardList } from 'lucide-react';
 import { usePermissions } from '@/lib/hooks';
 
-type MatchTab = 'live' | 'scheduled' | 'finished' | 'contested' | 'all';
+type MatchTab = 'reportable' | 'live' | 'scheduled' | 'finished' | 'contested' | 'all';
 
 const STATUS_TABS: { key: MatchTab; label: string; icon: typeof Radio; statuses: string[] | null }[] = [
+  { key: 'reportable', label: 'Para Reportar', icon: ClipboardList, statuses: null },
   { key: 'live', label: 'Ao vivo', icon: Radio, statuses: ['IN_PROGRESS'] },
   { key: 'scheduled', label: 'Agendadas', icon: CalendarClock, statuses: ['SCHEDULED', 'PENDING'] },
   { key: 'finished', label: 'Finalizadas', icon: CheckCircle2, statuses: ['FINISHED'] },
@@ -40,11 +41,12 @@ export default function MatchesPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const { user } = usePermissions();
+  const { user, canReportMatch } = usePermissions();
   const isRestrictedViewer = user?.user_type === 'TEAM_OWNER' || user?.user_type === 'PLAYER';
+  const isSupervisor = user?.user_type === 'ADMIN' || user?.user_type === 'SUPERVISOR' || !!user?.is_supervisor;
 
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showResultDrawer, setShowResultDrawer] = useState<Match | null>(null);
+  const [reportingManualMatch, setReportingManualMatch] = useState<Match | null>(null);
   const [eaReportMatch, setEaReportMatch] = useState<Match | null>(null);
   const [tab, setTab] = useState<MatchTab>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -52,7 +54,7 @@ export default function MatchesPage() {
 
   // ── Queries ──────────────────────────────────────────────────────────────
   // Busca tudo de uma vez; segmentação/filtro/agrupamento são client-side.
-  const { data: matchesData, isLoading } = useQuery({
+  const { data: matchesData, isLoading, isError, refetch } = useQuery({
     queryKey: ['matches', 'all'],
     queryFn: () => matchesAPI.getAll({ page_size: 200, ordering: '-scheduled_date' }),
   });
@@ -96,51 +98,51 @@ export default function MatchesPage() {
     },
   });
 
-  const finishMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) =>
-      matchesAPI.submitReport(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['matches'] });
-      setShowResultDrawer(null);
-      showToast('Resultado registrado com sucesso!', 'success');
-    },
-    onError: (error: any) => {
-      showToast(
-        error.response?.data?.error || 'Erro ao registrar resultado',
-        'error',
-      );
-    },
-  });
-
   // ── Derived data ──────────────────────────────────────────────────────────
 
   const matches: Match[] = matchesData?.results ?? [];
   const teams = teamsData?.results ?? [];
   const championships = championshipsData?.results ?? [];
 
+  // Partidas que o usuário logado pode reportar (gateadas pelo can_report do backend).
+  const reportableMatches = useMemo(
+    () => matches.filter((m) => canReportMatch(m)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [matches, user],
+  );
+
   // Contagens por aba
   const counts = useMemo(() => ({
+    reportable: reportableMatches.length,
     live: matches.filter((m) => m.status === 'IN_PROGRESS').length,
     scheduled: matches.filter((m) => m.status === 'SCHEDULED' || m.status === 'PENDING').length,
     finished: matches.filter((m) => m.status === 'FINISHED').length,
     contested: matches.filter((m) => m.status === 'CONTESTED').length,
     all: matches.length,
-  }), [matches]);
+  }), [matches, reportableMatches.length]);
 
-  // Aba default inteligente (ao vivo > agendadas > todas), só na 1ª carga
+  // Aba default inteligente: para reportar (não-supervisor) > ao vivo > agendadas > todas.
   const defaultedRef = useRef(false);
   useEffect(() => {
     if (defaultedRef.current || matches.length === 0) return;
     defaultedRef.current = true;
-    setTab(counts.live > 0 ? 'live' : counts.scheduled > 0 ? 'scheduled' : 'all');
-  }, [matches.length, counts.live, counts.scheduled]);
+    setTab(
+      counts.reportable > 0 && !isSupervisor
+        ? 'reportable'
+        : counts.live > 0
+        ? 'live'
+        : counts.scheduled > 0
+        ? 'scheduled'
+        : 'all',
+    );
+  }, [matches.length, counts.reportable, counts.live, counts.scheduled, isSupervisor]);
 
   const hasActiveFilters = !!searchQuery || championshipFilter !== 'all';
 
   // Aplica aba + busca + filtro de campeonato
   const tabStatuses = STATUS_TABS.find((t) => t.key === tab)?.statuses ?? null;
   const visibleMatches = matches.filter((match) => {
-    const inTab = !tabStatuses || tabStatuses.includes(match.status);
+    const inTab = tab === 'reportable' ? canReportMatch(match) : !tabStatuses || tabStatuses.includes(match.status);
     const inSearch =
       !searchQuery ||
       match.home_team.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -184,6 +186,7 @@ export default function MatchesPage() {
   }, [visibleMatches, tab]);
 
   const emptyTitle: Record<MatchTab, string> = {
+    reportable: 'Nenhuma partida disponível para report no momento.',
     live: 'Nenhuma partida ao vivo agora',
     scheduled: 'Sem partidas agendadas',
     finished: 'Nenhuma partida finalizada',
@@ -277,6 +280,19 @@ export default function MatchesPage() {
             <Skeleton key={i} variant="card" className="h-32" />
           ))}
         </div>
+      ) : isError ? (
+        <Card>
+          <EmptyState
+            icon={<AlertTriangle className="mx-auto h-14 w-14 text-error/50" />}
+            title="Não foi possível carregar as partidas. Tente novamente."
+            description="Ocorreu um erro de comunicação com o servidor."
+            action={
+              <Button variant="primary" onClick={() => refetch()}>
+                Tentar novamente
+              </Button>
+            }
+          />
+        </Card>
       ) : visibleMatches.length === 0 ? (
         <Card>
           <EmptyState
@@ -285,12 +301,14 @@ export default function MatchesPage() {
             description={
               hasActiveFilters
                 ? 'Tente ajustar a busca ou o campeonato.'
+                : tab === 'reportable'
+                ? 'Quando uma partida sua entrar em andamento ou for finalizada, ela aparece aqui para report.'
                 : isRestrictedViewer
                 ? 'Somente partidas relacionadas ao seu time aparecem nesta área.'
                 : 'Comece agendando a primeira partida!'
             }
             action={
-              !hasActiveFilters && tab !== 'finished' ? (
+              !hasActiveFilters && tab !== 'finished' && tab !== 'reportable' ? (
                 <Button variant="primary" onClick={() => setShowCreateModal(true)}>
                   + Agendar Partida
                 </Button>
@@ -308,7 +326,7 @@ export default function MatchesPage() {
               onDetails={(m) => router.push(`/matches/${m.id}`)}
               onStart={handleStart}
               onReportEA={(m) => setEaReportMatch(m)}
-              onReportManual={(m) => setShowResultDrawer(m)}
+              onReportManual={(m) => setReportingManualMatch(m)}
               onContest={handleContest}
             />
           ))}
@@ -332,23 +350,13 @@ export default function MatchesPage() {
         />
       </Modal>
 
-      {/* Result Drawer (reporte manual — apenas IN_PROGRESS) */}
-      {showResultDrawer && (
-        <Drawer
-          isOpen={!!showResultDrawer}
-          onClose={() => setShowResultDrawer(null)}
-          title="Registrar Resultado"
-          subtitle={`${showResultDrawer.home_team.name} vs ${showResultDrawer.away_team.name}`}
-          width="md"
-        >
-          <ResultForm
-            match={showResultDrawer}
-            onSubmit={(data) =>
-              finishMutation.mutate({ id: showResultDrawer.id, data })
-            }
-            isLoading={finishMutation.isPending}
-          />
-        </Drawer>
+      {/* Reporte manual (súmula com placar + screenshot) */}
+      {reportingManualMatch && (
+        <MatchReportModal
+          match={reportingManualMatch}
+          isOpen={!!reportingManualMatch}
+          onClose={() => setReportingManualMatch(null)}
+        />
       )}
 
       {/* EA Report Modal */}
@@ -505,81 +513,5 @@ function MatchForm({
         </Button>
       </div>
     </form>
-  );
-}
-
-// ─── ResultForm ───────────────────────────────────────────────────────────────
-
-interface ResultFormProps {
-  match: Match;
-  onSubmit: (data: any) => void;
-  isLoading: boolean;
-}
-
-function ResultForm({ match, onSubmit, isLoading }: ResultFormProps) {
-  const [homeScore, setHomeScore] = useState('0');
-  const [awayScore, setAwayScore] = useState('0');
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit({
-      home_score: parseInt(homeScore),
-      away_score: parseInt(awayScore),
-    });
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Preview das equipes */}
-      <div className="p-5 bg-panel2 rounded-2xl border border-stroke">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-          <div className="text-center">
-            <p className="text-xs text-muted2 mb-1">Mandante</p>
-            <p className="font-bold text-text">{match.home_team.name}</p>
-            <p className="text-xs text-gold font-mono mt-0.5">
-              {match.home_team.abbreviation}
-            </p>
-          </div>
-          <span className="text-2xl font-bold text-muted2">vs</span>
-          <div className="text-center">
-            <p className="text-xs text-muted2 mb-1">Visitante</p>
-            <p className="font-bold text-text">{match.away_team.name}</p>
-            <p className="text-xs text-gold font-mono mt-0.5">
-              {match.away_team.abbreviation}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-2 gap-4">
-          <Input
-            label={`Gols — ${match.home_team.abbreviation}`}
-            type="number"
-            value={homeScore}
-            onChange={(e) => setHomeScore(e.target.value)}
-            min="0"
-            required
-          />
-          <Input
-            label={`Gols — ${match.away_team.abbreviation}`}
-            type="number"
-            value={awayScore}
-            onChange={(e) => setAwayScore(e.target.value)}
-            min="0"
-            required
-          />
-        </div>
-
-        <Button
-          type="submit"
-          variant="primary"
-          className="w-full"
-          loading={isLoading}
-        >
-          Confirmar Resultado
-        </Button>
-      </form>
-    </div>
   );
 }

@@ -91,3 +91,6 @@ nginx/certs/
 # Sync artifacts (blobs grandes)
 sync_artifacts/
 sync_backups/
+
+# Local dev override (não versionar)
+docker-compose.override.yml

@@ -1,14 +1,16 @@
 import type { ReactElement } from 'react';
-import { Award, Crown, Gem, Shield } from 'lucide-react';
+import { Award, Crown, Gem, Shield, Diamond, Sparkles } from 'lucide-react';
 import type { CompetitiveMyRankingPayload, PlayerTier } from '@/types';
 
-const flow: PlayerTier[] = ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM'];
+const flow: PlayerTier[] = ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'ELITE'];
 
 const tierLabel: Record<PlayerTier, string> = {
   BRONZE: 'Bronze',
   SILVER: 'Prata',
   GOLD: 'Ouro',
   PLATINUM: 'Platina',
+  DIAMOND: 'Diamante',
+  ELITE: 'Elite',
 };
 
 const tierIcon: Record<PlayerTier, ReactElement> = {
@@ -16,6 +18,18 @@ const tierIcon: Record<PlayerTier, ReactElement> = {
   SILVER: <Award className="h-4 w-4" />,
   GOLD: <Crown className="h-4 w-4" />,
   PLATINUM: <Gem className="h-4 w-4" />,
+  DIAMOND: <Diamond className="h-4 w-4" />,
+  ELITE: <Sparkles className="h-4 w-4" />,
+};
+
+// Largura da faixa de cada tier (próximo limiar − limiar atual), p/ progresso.
+const tierBandWidth: Record<PlayerTier, number> = {
+  BRONZE: 34,
+  SILVER: 14,
+  GOLD: 10,
+  PLATINUM: 10,
+  DIAMOND: 10,
+  ELITE: 0,
 };
 
 interface RoadToPlatinaProps {
@@ -23,14 +37,10 @@ interface RoadToPlatinaProps {
 }
 
 function calcProgress(me: CompetitiveMyRankingPayload): number {
-  if (me.isPromotionZone) return 100;
-  const tierIdx = flow.indexOf(me.currentTier);
-  const baseByTier = [10, 30, 50, 90][tierIdx] ?? 10;
-  const positions = me.positionsToPromotion ?? 0;
-  if (positions <= 0) return Math.min(100, baseByTier + 20);
-  if (positions <= 3) return Math.min(100, baseByTier + 18);
-  if (positions <= 8) return Math.min(100, baseByTier + 12);
-  return baseByTier;
+  if (me.currentTier === 'ELITE') return 100;
+  const band = tierBandWidth[me.currentTier] || 1;
+  const remaining = me.pointsToPromotion ?? band;
+  return Math.max(0, Math.min(100, Math.round(((band - remaining) / band) * 100)));
 }
 
 export function RoadToPlatina({ me }: RoadToPlatinaProps) {
@@ -41,15 +51,15 @@ export function RoadToPlatina({ me }: RoadToPlatinaProps) {
     <section className="rounded-2xl border border-stroke bg-panel p-5">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.18em] text-brand">Road to Platina</p>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-brand">Road to Elite</p>
           <h3 className="mt-1 text-lg font-bold text-text">Sua jornada competitiva</h3>
         </div>
         <span className="rounded-full border border-stroke bg-panel2/60 px-2.5 py-1 text-[11px] text-muted2">
-          Próximo: {me.nextTier ? tierLabel[me.nextTier] : 'Elite máxima'}
+          Próximo: {me.nextTier ? tierLabel[me.nextTier] : 'Rank máximo'}
         </span>
       </header>
 
-      <div className="mt-5 grid grid-cols-4 gap-2">
+      <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-6">
         {flow.map((tier, idx) => {
           const isCurrent = idx === currentIdx;
           const isPast = idx < currentIdx;
@@ -81,7 +91,7 @@ export function RoadToPlatina({ me }: RoadToPlatinaProps) {
 
       <div className="mt-5">
         <div className="flex items-center justify-between text-xs text-muted2">
-          <span>Progresso até a próxima promoção</span>
+          <span>Progresso até o próximo rank</span>
           <span className="font-mono text-text">{progress}%</span>
         </div>
         <div className="mt-1.5 h-2 overflow-hidden rounded-full border border-stroke bg-panel2/60">
@@ -91,9 +101,9 @@ export function RoadToPlatina({ me }: RoadToPlatinaProps) {
           />
         </div>
         <p className="mt-2 text-[11px] text-muted2">
-          {me.isPromotionZone
-            ? 'Você está na zona de promoção neste ciclo.'
-            : `Faltam ${me.positionsToPromotion ?? 0} posições e ${(me.pointsToPromotion ?? 0).toFixed(2)} pontos para entrar no Top 5.`}
+          {me.currentTier === 'ELITE'
+            ? 'Você está no rank máximo da plataforma.'
+            : `Faltam ${(me.pointsToPromotion ?? 0).toFixed(1)} pontos de Rank Score para ${me.nextTier ? tierLabel[me.nextTier] : 'o próximo rank'}.`}
         </p>
       </div>
     </section>

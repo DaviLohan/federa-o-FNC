@@ -497,6 +497,14 @@ class PlayerTierState(models.Model):
         SILVER = 'SILVER', 'Prata'
         GOLD = 'GOLD', 'Ouro'
         PLATINUM = 'PLATINUM', 'Platina'
+        DIAMOND = 'DIAMOND', 'Diamante'
+        ELITE = 'ELITE', 'Elite'
+
+    class PositionGroup(models.TextChoices):
+        GK = 'GK', 'Goleiro'
+        DEF = 'DEF', 'Defesa'
+        MID = 'MID', 'Meio'
+        ATT = 'ATT', 'Ataque'
 
     cycle = models.ForeignKey(
         RankingCycle,
@@ -519,6 +527,9 @@ class PlayerTierState(models.Model):
         verbose_name='time atual',
     )
     tier = models.CharField('rank', max_length=10, choices=Tier.choices, default=Tier.BRONZE)
+    position_group = models.CharField('grupo de posição', max_length=3, choices=PositionGroup.choices, blank=True)
+    is_provisional = models.BooleanField('provisório', default=False)
+    score_breakdown = models.JSONField('detalhamento do score', default=dict, blank=True)
     score = models.DecimalField('pontuação final', max_digits=7, decimal_places=2, default=0)
     average_rating = models.DecimalField('nota média', max_digits=5, decimal_places=2, default=0)
     goals = models.PositiveIntegerField('gols', default=0)

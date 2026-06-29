@@ -120,10 +120,10 @@ export default function StatisticsPage() {
               value={kpis.current.total_players} delta={kpis.deltas?.total_players ?? null} />
             <KpiTrendCard index={1} icon={<BarChart3 />} accent="green" label="Partidas analisadas"
               value={kpis.current.total_matches} delta={kpis.deltas?.total_matches ?? null} />
-            <KpiTrendCard index={2} icon={<Activity />} accent="brand" label="Score médio"
-              value={kpis.current.avg_score.toFixed(2)} delta={kpis.deltas?.avg_score ?? null} />
-            <KpiTrendCard index={3} icon={<Crown />} accent="gold" label="Maior pontuação"
-              value={kpis.current.top_score.toFixed(2)} delta={kpis.deltas?.top_score ?? null} />
+            <KpiTrendCard index={2} icon={<Activity />} accent="brand" label="Rank Score médio"
+              value={kpis.current.avg_score.toFixed(1)} delta={kpis.deltas?.avg_score ?? null} />
+            <KpiTrendCard index={3} icon={<Crown />} accent="gold" label="Maior Rank Score"
+              value={kpis.current.top_score.toFixed(1)} delta={kpis.deltas?.top_score ?? null} />
             <KpiTrendCard index={4} icon={<ShieldCheck />} accent="warning" label="Elegíveis p/ promoção"
               value={kpis.current.eligible} delta={kpis.deltas?.eligible ?? null} />
           </section>
@@ -140,14 +140,16 @@ export default function StatisticsPage() {
       {hasData && tab === 'tiers' && (
         <div className="space-y-3">
           <header className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-            <h2 className="text-base font-bold text-text md:text-lg">Top 10 jogadores por rank</h2>
-            <p className="text-xs text-muted2">Os 5 melhores elegíveis de cada rank ficam em zona de promoção.</p>
+            <h2 className="text-base font-bold text-text md:text-lg">Jogadores por rank</h2>
+            <p className="text-xs text-muted2">O rank é definido pela faixa de Rank Score (0–100). Sobe e desce conforme o desempenho.</p>
           </header>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <TierRankingCard title="Bronze" tier="BRONZE" rows={data.tiers.bronze} />
-            <TierRankingCard title="Prata" tier="SILVER" rows={data.tiers.prata} />
-            <TierRankingCard title="Ouro" tier="GOLD" rows={data.tiers.ouro} />
+            <TierRankingCard title="Elite" tier="ELITE" rows={data.tiers.elite} />
+            <TierRankingCard title="Diamante" tier="DIAMOND" rows={data.tiers.diamante} />
             <TierRankingCard title="Platina" tier="PLATINUM" rows={data.tiers.platina} />
+            <TierRankingCard title="Ouro" tier="GOLD" rows={data.tiers.ouro} />
+            <TierRankingCard title="Prata" tier="SILVER" rows={data.tiers.prata} />
+            <TierRankingCard title="Bronze" tier="BRONZE" rows={data.tiers.bronze} />
           </div>
         </div>
       )}

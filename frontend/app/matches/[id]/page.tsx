@@ -11,6 +11,8 @@ import { MatchScorecard } from '@/components/matches/MatchScorecard';
 import { ReportStatusBar } from '@/components/matches/ReportStatusBar';
 import { formatDateTimeLong } from '@/lib/utils/date';
 import { EAReportModal } from '@/components/championships/modals';
+import { MatchReportModal } from '@/components/championships/modals/MatchReportModal';
+import { ContestationModal } from '@/components/championships/modals/ContestationModal';
 import { usePermissions } from '@/lib/hooks';
 import type { TeamPerformancePlayer } from '@/types';
 import { ArrowLeft, SearchX, Handshake, BarChart3 } from 'lucide-react';
@@ -127,8 +129,10 @@ export default function MatchDetailsPage() {
     enabled: !!matchId,
   });
 
-  const { canReportMatch, canContestMatch } = usePermissions();
+  const { user, canReportMatch, canContestMatch } = usePermissions();
   const [eaReportingMatch, setEaReportingMatch] = useState(false);
+  const [manualReportingMatch, setManualReportingMatch] = useState(false);
+  const [contestingMatch, setContestingMatch] = useState(false);
 
   const isReported = Boolean(match?.report);
 
@@ -221,8 +225,8 @@ export default function MatchDetailsPage() {
           canReport={canReportMatch(match)}
           canContest={canContestMatch(match)}
           onReportEA={() => setEaReportingMatch(true)}
-          onReportManual={() => {}}
-          onContest={() => {}}
+          onReportManual={() => setManualReportingMatch(true)}
+          onContest={() => setContestingMatch(true)}
         />
       </MatchScorecard>
 
@@ -380,6 +384,27 @@ export default function MatchDetailsPage() {
           match={match}
           isOpen={true}
           onClose={() => setEaReportingMatch(false)}
+        />
+      )}
+
+      {/* Reporte manual (súmula com placar + screenshot) */}
+      {match && manualReportingMatch && (
+        <MatchReportModal
+          match={match}
+          isOpen={true}
+          onClose={() => setManualReportingMatch(false)}
+        />
+      )}
+
+      {/* Contestação de resultado */}
+      {match && contestingMatch && (
+        <ContestationModal
+          match={match}
+          teamId={
+            user && match.away_team.owner.id === user.id ? match.away_team.id : match.home_team.id
+          }
+          isOpen={true}
+          onClose={() => setContestingMatch(false)}
         />
       )}
     </div>

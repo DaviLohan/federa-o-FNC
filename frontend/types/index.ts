@@ -213,6 +213,12 @@ export interface PlayerCareerStats {
   tackle_accuracy: number | null;
   saves: number | null;
   has_advanced_data: boolean;
+  // Card (overall/tier) — derivado do Rank Score por posição (all-time).
+  overall?: number | null;
+  tier?: PlayerTier | null;
+  tier_label?: string | null;
+  position_group?: PlayerPositionGroup | null;
+  position_abbr?: string | null;
 }
 
 export interface PlayerChampionshipStat {
@@ -316,6 +322,12 @@ export interface PlayerLeaderboardRow {
   tackle_accuracy: number | null;
   saves: number | null;
   has_advanced_data: boolean;
+  // Card (overall/tier) — derivado do Rank Score por posição (all-time).
+  overall?: number | null;
+  tier?: PlayerTier | null;
+  tier_label?: string | null;
+  position_group?: PlayerPositionGroup | null;
+  position_abbr?: string | null;
 }
 
 export interface PlayerLeaderboardPayload {
@@ -901,7 +913,20 @@ export interface GlobalTeamRankingRow {
   updated_at: string;
 }
 
-export type PlayerTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
+export type PlayerTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND' | 'ELITE';
+
+export type PositionGroup = 'GK' | 'DEF' | 'MID' | 'ATT';
+
+/** Detalhamento do Rank Score (0–100) — alimenta o explicador "como é calculado". */
+export interface ScoreBreakdown {
+  positionGroup?: PositionGroup;
+  components?: { rating?: number; attack?: number; creation?: number; defense?: number; gk?: number; result?: number };
+  weights?: { rating?: number; attack?: number; creation?: number; defense?: number; gk?: number; result?: number };
+  discipline?: number;
+  reliability?: number;
+  hasAdvancedData?: boolean;
+  base?: number;
+}
 
 export interface CompetitiveRankingPlayerRow {
   position: number;
@@ -912,6 +937,9 @@ export interface CompetitiveRankingPlayerRow {
   avatar: string | null;
   tier: PlayerTier;
   tierDisplay: string;
+  positionGroup?: PositionGroup | null;
+  isProvisional?: boolean;
+  scoreBreakdown?: ScoreBreakdown;
   score: number;
   averageRating: number;
   goals: number;
@@ -920,6 +948,7 @@ export interface CompetitiveRankingPlayerRow {
   isPromotionZone: boolean;
   nextTier: PlayerTier | null;
   isPromotionEligible: boolean;
+  pointsToPromotion?: number | null;
   // Movimento vs. ciclo anterior (read-only, aditivo). positionDelta = anterior − atual.
   previousPosition?: number | null;
   positionDelta?: number | null;
@@ -941,6 +970,8 @@ export interface CompetitiveRankingPayload {
     prata: CompetitiveRankingPlayerRow[];
     ouro: CompetitiveRankingPlayerRow[];
     platina: CompetitiveRankingPlayerRow[];
+    diamante: CompetitiveRankingPlayerRow[];
+    elite: CompetitiveRankingPlayerRow[];
   };
   total_players: number;
   me?: CompetitiveMyRankingPayload | null;
@@ -997,6 +1028,9 @@ export interface CompetitiveMyRankingPayload {
   goals: number;
   assists: number;
   matchesPlayed: number;
+  positionGroup?: PositionGroup | null;
+  isProvisional?: boolean;
+  scoreBreakdown?: ScoreBreakdown;
   isPromotionZone: boolean;
   positionsToPromotion: number | null;
   pointsToPromotion: number | null;

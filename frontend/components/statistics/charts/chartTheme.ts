@@ -6,6 +6,8 @@ export const TIER_COLORS: Record<PlayerTier, string> = {
   SILVER: '#CBD5E1',
   GOLD: '#F3D36B',
   PLATINUM: '#67E8F9',
+  DIAMOND: '#93C5FD',
+  ELITE: '#C4B5FD',
 };
 
 export const TIER_LABELS: Record<PlayerTier, string> = {
@@ -13,9 +15,11 @@ export const TIER_LABELS: Record<PlayerTier, string> = {
   SILVER: 'Prata',
   GOLD: 'Ouro',
   PLATINUM: 'Platina',
+  DIAMOND: 'Diamante',
+  ELITE: 'Elite',
 };
 
-export const TIER_ORDER: PlayerTier[] = ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM'];
+export const TIER_ORDER: PlayerTier[] = ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'ELITE'];
 
 // Cores semânticas (espelham os tokens de globals.css).
 export const CHART = {

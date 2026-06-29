@@ -34,7 +34,7 @@ export function MyRankCard({ myRank, loading }: { myRank?: CompetitiveMyRankingP
             </span>
           </div>
 
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
               ['Score', myRank.score.toFixed(1)],
               ['Nota', myRank.averageRating ? myRank.averageRating.toFixed(1) : '—'],

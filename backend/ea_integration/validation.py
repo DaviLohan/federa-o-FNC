@@ -30,13 +30,11 @@ from fnc_teams.models import Team, TeamMembership
 from users.models import User, PlayerProfile
 
 from .models import EAClub, EAMatch, EAPlayerMatchStats, MatchValidationLog
+from .matching import normalize_gamertag, name_similarity, NAME_SIMILARITY_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
 # ─── Configurações de validação ────────────────────────────────────────────────
-
-# Similaridade mínima para considerar nomes "compatíveis" (0-1)
-NAME_SIMILARITY_THRESHOLD = 0.80
 
 # Janela de tempo para buscar Match interno correspondente (horas antes/depois).
 # Alinhada à janela do report manual (EA_MATCH_TIME_WINDOW_HOURS) para não perder
@@ -911,40 +909,13 @@ class MatchValidationService:
 
     @staticmethod
     def _normalize_name(name: str) -> str:
-        """
-        Normaliza um nome para comparação:
-        - Lowercase
-        - Remove acentos
-        - Remove caracteres especiais (mantém alfanuméricos e espaços)
-        - Strip whitespace
-        """
-        if not name:
-            return ''
-        # Lowercase
-        name = name.lower().strip()
-        # Remover acentos (NFD decomposition + filtrar combining characters)
-        name = unicodedata.normalize('NFD', name)
-        name = ''.join(c for c in name if unicodedata.category(c) != 'Mn')
-        # Remover caracteres especiais, manter alfanuméricos e espaços
-        name = re.sub(r'[^a-z0-9\s]', '', name)
-        # Colapsar espaços múltiplos
-        name = re.sub(r'\s+', ' ', name).strip()
-        return name
+        """Delega para a normalização compartilhada (ea_integration.matching)."""
+        return normalize_gamertag(name)
 
     @staticmethod
     def _name_similarity(name1: str, name2: str) -> float:
-        """
-        Calcula similaridade entre dois nomes usando SequenceMatcher.
-        Retorna valor entre 0 e 1.
-        """
-        if not name1 or not name2:
-            return 0.0
-        # Normalizar antes de comparar
-        n1 = MatchValidationService._normalize_name(name1)
-        n2 = MatchValidationService._normalize_name(name2)
-        if n1 == n2:
-            return 1.0
-        return SequenceMatcher(None, n1, n2).ratio()
+        """Delega para a similaridade compartilhada (ea_integration.matching)."""
+        return name_similarity(name1, name2)
 
     @staticmethod
     def _map_issue_to_reason(issue: 'ValidationIssue | None') -> str:

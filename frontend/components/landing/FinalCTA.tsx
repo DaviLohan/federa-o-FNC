@@ -42,7 +42,7 @@ export function FinalCTA() {
                 </p>
               </div>
 
-              <RegisterForm />
+              <RegisterForm autoFocus={false} />
             </div>
           </div>
         </motion.div>

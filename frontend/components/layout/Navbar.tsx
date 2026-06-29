@@ -78,7 +78,9 @@ export function Navbar() {
   const handleLogout = () => {
     logout();
     queryClient.clear();
-    router.push('/');
+    // Hard redirect para a página inicial: garante saída limpa e evita corrida
+    // com o useRequireAuth da página atual (que tentaria empurrar para /login).
+    window.location.href = '/';
   };
 
   if (!user) return null;

@@ -9,10 +9,12 @@ interface TierRankingCardProps {
 }
 
 const tierDescription: Record<PlayerTier, string> = {
-  BRONZE: 'Jogadores em formação. Top 5 sobem para Prata.',
-  SILVER: 'Desempenho intermediário. Top 5 sobem para Ouro.',
-  GOLD: 'Alto desempenho. Top 5 sobem para Platina.',
-  PLATINUM: 'Elite competitiva da plataforma.',
+  BRONZE: 'Faixa de entrada (0–33 pts).',
+  SILVER: 'Em evolução (34–47 pts).',
+  GOLD: 'Bom desempenho (48–57 pts).',
+  PLATINUM: 'Alto nível (58–67 pts).',
+  DIAMOND: 'Elite competitiva (68–77 pts).',
+  ELITE: 'Topo da plataforma (78+ pts).',
 };
 
 export function TierRankingCard({ tier, rows }: TierRankingCardProps) {

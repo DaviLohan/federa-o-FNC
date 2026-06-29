@@ -8,6 +8,8 @@ import { statisticsAPI } from '@/lib/api';
 import { SkeletonGrid } from '@/components/shared/ui';
 import { RankingErrorState } from '@/components/statistics/RankingErrorState';
 import { PlayerProfileHeader } from '@/components/players/PlayerProfileHeader';
+import { PlayerCard } from '@/components/players/PlayerCard';
+import { playerCardRowFromProfile } from '@/lib/utils/playerCard';
 import { PlayerCareerStats } from '@/components/players/PlayerCareerStats';
 import { PlayerEvolutionChart } from '@/components/players/PlayerEvolutionChart';
 import { PlayerMatchHistory } from '@/components/players/PlayerMatchHistory';
@@ -29,7 +31,7 @@ export default function PlayerProfilePage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6">
       <Link
-        href="/players"
+        href="/statistics"
         className="inline-flex items-center gap-1.5 text-sm text-muted2 transition-colors hover:text-gold"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -42,7 +44,12 @@ export default function PlayerProfilePage() {
         <RankingErrorState onRetry={() => query.refetch()} />
       ) : (
         <>
-          <PlayerProfileHeader player={query.data.player} />
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,220px)_1fr] lg:items-start">
+            <div className="mx-auto w-full max-w-[220px] lg:mx-0">
+              <PlayerCard row={playerCardRowFromProfile(query.data)} disableLink />
+            </div>
+            <PlayerProfileHeader player={query.data.player} />
+          </div>
 
           <PlayerCareerStats career={query.data.career} isGoalkeeper={query.data.player.is_goalkeeper} />
 

@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, Badge, Button, Input, DatePickerInput, Select, ImageUpload, useToast, PageHeader } from '@/components/shared/ui';
 import { useAuthStore } from '@/lib/auth-store';
-import { usersAPI, playerProfilesAPI } from '@/lib/api';
+import { usersAPI, playerProfilesAPI, statisticsAPI } from '@/lib/api';
+import { PlayerCard } from '@/components/players/PlayerCard';
+import { playerCardRowFromProfile } from '@/lib/utils/playerCard';
 import { User, AlertTriangle } from 'lucide-react';
 import { Z_INDEX } from '@/lib/ui/z-index';
 
@@ -44,6 +46,16 @@ export default function ProfilePage() {
   });
   const shouldShowMissingPlayerProfileState =
     !user?.player_profile && (user?.user_type === 'PLAYER' || user?.user_type === 'TEAM_OWNER');
+
+  // Card do jogador (overall/tier/stats) — o auth store não traz esses campos,
+  // então buscamos o perfil completo. Hook no topo para preservar a ordem dos hooks.
+  const playerProfileId = user?.player_profile?.id;
+  const cardQuery = useQuery({
+    queryKey: ['my-player-card', playerProfileId],
+    queryFn: () => statisticsAPI.getPlayerProfile(playerProfileId!),
+    enabled: !!playerProfileId,
+    staleTime: 30_000,
+  });
 
   // Update account mutation
   const updateAccountMutation = useMutation({
@@ -242,8 +254,8 @@ export default function ProfilePage() {
       {/* Player ID Card (only for users with player profile) */}
       {user.player_profile && (
         <div className="gradient-border reveal-fade-delay-1">
-          <div className="bg-surface1 rounded-3xl p-8">
-            <div className="flex items-center gap-8">
+          <div className="bg-surface1 rounded-3xl p-5 sm:p-8">
+            <div className="flex items-center gap-4 sm:gap-8">
               <div className="text-9xl animate-floaty hidden md:block">🆔</div>
               <div className="flex-1">
                 <label className="text-sm text-muted block mb-3 uppercase tracking-wide font-semibold">
@@ -272,6 +284,30 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Card do jogador (estilo FUT) — derivado do desempenho */}
+      {user.player_profile && (
+        <Card title="Seu Card">
+          <div className="flex flex-col items-center gap-3">
+            {cardQuery.isLoading ? (
+              <div className="aspect-[0.72] w-full max-w-[240px] animate-pulse rounded-2xl border border-stroke bg-surface2" />
+            ) : cardQuery.data ? (
+              <>
+                <div className="w-full max-w-[240px]">
+                  <PlayerCard row={playerCardRowFromProfile(cardQuery.data)} disableLink />
+                </div>
+                {cardQuery.data.career.matches === 0 && (
+                  <p className="text-center text-sm text-muted">
+                    Jogue partidas para evoluir seu card.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-center text-sm text-muted">Não foi possível carregar seu card.</p>
+            )}
+          </div>
+        </Card>
       )}
 
       {shouldShowMissingPlayerProfileState && (

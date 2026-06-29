@@ -9,8 +9,8 @@ interface MyRankingStatusProps {
 
 export function MyRankingStatus({ me }: MyRankingStatusProps) {
   const isInZone = me.isPromotionZone;
-  const positions = me.positionsToPromotion ?? 0;
   const points = me.pointsToPromotion ?? 0;
+  const atMax = me.currentTier === 'ELITE';
 
   return (
     <section className="relative overflow-hidden rounded-2xl border border-stroke bg-gradient-to-br from-panel2/60 via-panel to-panel p-5">
@@ -29,7 +29,7 @@ export function MyRankingStatus({ me }: MyRankingStatusProps) {
       </header>
 
       <div className="relative mt-5 grid grid-cols-2 gap-2 md:grid-cols-4">
-        <Metric label="Score" value={me.score.toFixed(2)} accent="text-gold" />
+        <Metric label="Rank Score" value={me.score.toFixed(1)} accent="text-gold" />
         <Metric label="Pos. geral" value={me.generalPosition ?? '—'} />
         <Metric label="Pos. no rank" value={me.tierPosition ?? '—'} />
         <Metric label="Nota média" value={me.averageRating.toFixed(2)} />
@@ -58,13 +58,18 @@ export function MyRankingStatus({ me }: MyRankingStatusProps) {
               <ArrowUpRight className="h-4 w-4" />
             </span>
             <div>
-              <p className="text-sm font-semibold text-text">
-                Faltam <span className="font-mono text-text">{positions}</span> posições e{' '}
-                <span className="font-mono text-text">{points.toFixed(2)}</span> pontos para entrar no Top 5.
-              </p>
-              <p className="text-xs text-muted2">
-                Continue jogando para alcançar a zona de promoção {me.nextTier ? `rumo a ${me.nextTier}` : ''}.
-              </p>
+              {atMax ? (
+                <p className="text-sm font-semibold text-text">Você está no rank máximo da plataforma.</p>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-text">
+                    Faltam <span className="font-mono text-text">{points.toFixed(1)}</span> pontos de Rank Score para {me.nextTier ?? 'o próximo rank'}.
+                  </p>
+                  <p className="text-xs text-muted2">
+                    Suba seu Rank Score com boas atuações para alcançar {me.nextTier ?? 'o próximo rank'}.
+                  </p>
+                </>
+              )}
             </div>
           </div>
         )}

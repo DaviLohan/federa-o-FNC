@@ -78,7 +78,7 @@ export function PodiumCard({ player, emphasis }: PodiumCardProps) {
         >
           {player.score.toFixed(2)}
         </span>
-        <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted2">Score</span>
+        <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted2">Rank Score</span>
       </div>
 
       {/* badge divisão */}

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Modal, Button, Input, ImageUpload, useToast } from '@/components/shared/ui';
+import { MatchSummaryHeader } from '@/components/matches/MatchSummaryHeader';
 import { matchesAPI } from '@/lib/api';
 import type { Match } from '@/types';
 import { AlertCircle, Upload } from 'lucide-react';
@@ -150,43 +151,8 @@ export function MatchReportModal({ match, isOpen, onClose }: MatchReportModalPro
       size="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Match Info */}
-        <div className="bg-panel2 rounded-xl p-4">
-          <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center">
-             {/* Home Team */}
-             <div className="flex items-center justify-end gap-3">
-               <div className="text-right">
-                 <h3 className="font-bold text-text truncate">{match.home_team.name}</h3>
-                 <p className="text-sm text-muted2">{match.home_team.abbreviation}</p>
-               </div>
-               {match.home_team.logo && (
-                 <img
-                   src={match.home_team.logo}
-                   alt={match.home_team.name}
-                   className="w-12 h-12 rounded-lg object-cover"
-                 />
-               )}
-             </div>
-
-             {/* VS */}
-             <span className="text-xl font-bold text-muted2">×</span>
-
-             {/* Away Team */}
-             <div className="flex items-center justify-start gap-3">
-               {match.away_team.logo && (
-                 <img
-                   src={match.away_team.logo}
-                   alt={match.away_team.name}
-                   className="w-12 h-12 rounded-lg object-cover"
-                 />
-               )}
-               <div className="text-left">
-                 <h3 className="font-bold text-text truncate">{match.away_team.name}</h3>
-                 <p className="text-sm text-muted2">{match.away_team.abbreviation}</p>
-               </div>
-             </div>
-          </div>
-        </div>
+        {/* Resumo da partida (times × times, campeonato, rodada, data, status) */}
+        <MatchSummaryHeader match={match} />
 
         {/* Score Input */}
         <div className="space-y-4">

@@ -11,6 +11,7 @@ import { usePermissions } from '@/lib/hooks';
 import { TEAM_MAX_PLAYERS } from '@/lib/team-constants';
 import { Button, Card, Badge, Input, ImageUpload, Modal, useToast, TermsModal } from '@/components/shared/ui';
 import { MembersTab } from '@/components/teams/MembersTab';
+import { TeamSquadCards } from '@/components/teams/TeamSquadCards';
 import { InvitePlayerTab } from '@/components/teams/InvitePlayerTab';
 import { TeamMatchesTab } from '@/components/teams/tabs/TeamMatchesTab';
 import { TeamPerformanceTab } from '@/components/teams/tabs/TeamPerformanceTab';
@@ -31,6 +32,7 @@ import {
     FileText,
     BarChart3,
     Pencil,
+    LayoutGrid,
 } from 'lucide-react';
 import { statisticsAPI } from '@/lib/api';
 
@@ -57,7 +59,7 @@ interface TeamOverallStats {
   current_form: ('W' | 'D' | 'L')[];
 }
 
-type TabId = 'members' | 'tactical' | 'stats' | 'matches' | 'performance';
+type TabId = 'members' | 'squad' | 'tactical' | 'stats' | 'matches' | 'performance';
 
 // ─── Framer Motion variants ───────────────────────────────────────────────────
 
@@ -681,6 +683,7 @@ export default function TeamDetailPage() {
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     { id: 'members',  label: 'Membros',       icon: <Users      className="w-4 h-4" /> },
+    { id: 'squad',    label: 'Elenco',        icon: <LayoutGrid className="w-4 h-4" /> },
     { id: 'tactical', label: 'Campo Tático',  icon: <Crosshair  className="w-4 h-4" /> },
     { id: 'stats',    label: 'Estatísticas',  icon: <Trophy     className="w-4 h-4" /> },
     { id: 'performance', label: 'Desempenho', icon: <BarChart3  className="w-4 h-4" /> },
@@ -1071,6 +1074,11 @@ export default function TeamDetailPage() {
                       />
                     )}
                   </div>
+                )}
+
+                {/* Elenco (cards) */}
+                {activeTab === 'squad' && (
+                  <TeamSquadCards teamId={teamId} members={members} />
                 )}
 
                 {/* Campo Tático */}

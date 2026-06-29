@@ -24,6 +24,7 @@ from users.models import User, PlayerProfile
 
 from .ea_client import EAProClubsClient, EAApiError
 from .date_utils import ensure_aware_utc, format_dt_pair
+from .matching import normalize_gamertag, match_player
 from .models import EAClub, EAClubAlias, EAMatch, EAPlayerMatchStats
 from .services import MatchSyncService
 from .validation import (
@@ -198,6 +199,16 @@ class MatchReportEAService:
         ea_match = self._get_ea_match(ea_match_id, match)
         warnings = self._build_warnings(ea_match)
         side_map = self._get_side_mapping(ea_match, match)
+
+        # Não confiar na ordem crua da EA quando o vínculo clube↔time não resolve:
+        # bloquear antes de gravar para evitar placar invertido (vale inclusive para
+        # o fluxo excepcional/irregular).
+        if not side_map.get('resolved', True):
+            raise MatchReportEAError(
+                'Não foi possível associar os clubes da EA aos times desta partida. '
+                'Verifique o vínculo do clube/aliases antes de confirmar.'
+            )
+
         winner_team = self._get_winner_team(match, side_map)
 
         confirming_team = None
@@ -281,11 +292,15 @@ class MatchReportEAService:
         return match
 
     def _reset_match_events(self, match: Match) -> None:
-        """Remove eventos existentes da partida para evitar duplicação."""
-        goals_deleted, _ = Goal.objects.filter(match=match).delete()
-        cards_deleted, _ = Card.objects.filter(match=match).delete()
+        """
+        Remove eventos da partida para evitar duplicação no reprocesso.
+        Apaga somente eventos de origem EA — eventos lançados manualmente
+        (source=MANUAL) são preservados.
+        """
+        goals_deleted, _ = Goal.objects.filter(match=match, source='EA').delete()
+        cards_deleted, _ = Card.objects.filter(match=match, source='EA').delete()
         logger.info(
-            'Reset de eventos da partida PK=%d antes de recriar via EA: goals=%d cards=%d',
+            'Reset de eventos EA da partida PK=%d antes de recriar: goals=%d cards=%d',
             match.pk,
             goals_deleted,
             cards_deleted,
@@ -591,7 +606,7 @@ class MatchReportEAService:
             ea_match=ea_match,
             ea_club=ea_club,
         ).values_list('player_name', flat=True)
-        return sum(1 for player_name in player_names if player_name and player_name.lower().strip() in roster)
+        return sum(1 for player_name in player_names if player_name and normalize_gamertag(player_name) in roster)
 
     def _search_from_club(
         self,
@@ -780,6 +795,19 @@ class MatchReportEAService:
 
         # Montar warnings
         warnings = self._build_warnings(ea_match)
+
+        # Se não foi possível associar os clubes da EA aos times da partida,
+        # adicionar warning crítico (bloqueia confirmação e evita placar invertido).
+        if not side_map.get('resolved', True):
+            warnings.append({
+                'type': 'side_mapping_unresolved',
+                'severity': 'critical',
+                'message': (
+                    'Não foi possível associar os clubes da EA aos times desta partida. '
+                    'Verifique o vínculo do clube/aliases antes de confirmar — o placar pode '
+                    'estar invertido.'
+                ),
+            })
 
         # Determinar se pode confirmar (sem erros críticos)
         has_critical_errors = any(
@@ -1005,6 +1033,7 @@ class MatchReportEAService:
                 'ea_home_club_name': ea_match.home_club_name,
                 'ea_away_club_name': ea_match.away_club_name,
                 'inverted': False,
+                'resolved': True,
             }
         elif match.home_team == ea_away_team and match.away_team == ea_home_team:
             # Ordem invertida
@@ -1016,11 +1045,14 @@ class MatchReportEAService:
                 'ea_home_club_name': ea_match.away_club_name,
                 'ea_away_club_name': ea_match.home_club_name,
                 'inverted': True,
+                'resolved': True,
             }
         else:
-            # Fallback — não deveria acontecer, mas usar ordem da EA
+            # Não foi possível associar os clubes da EA aos times da partida.
+            # NÃO confiar na ordem crua da EA (risco de gravar placar invertido):
+            # marcamos resolved=False e o fluxo de confirmação/preview bloqueia.
             logger.warning(
-                'Side mapping ambíguo: EA [%s vs %s] → Match [%s vs %s]',
+                'Side mapping não resolvido: EA [%s vs %s] → Match [%s vs %s]',
                 ea_home_team, ea_away_team,
                 match.home_team, match.away_team,
             )
@@ -1032,6 +1064,7 @@ class MatchReportEAService:
                 'ea_home_club_name': ea_match.home_club_name,
                 'ea_away_club_name': ea_match.away_club_name,
                 'inverted': False,
+                'resolved': False,
             }
 
     def _resolve_team_for_ea_club(self, ea_club: EAClub | None):
@@ -1072,8 +1105,11 @@ class MatchReportEAService:
         for m in memberships:
             gamer_tag = m.player.gamer_tag
             if gamer_tag:
-                key = gamer_tag.lower().strip()
-                roster[key] = m.player
+                # Chave normalizada (mesma lógica da validação/W.O.) — evita
+                # divergência entre detecção de cadastro, preview e gravação.
+                key = normalize_gamertag(gamer_tag)
+                if key:
+                    roster[key] = m.player
         return roster
 
     def _build_players_list(
@@ -1093,12 +1129,10 @@ class MatchReportEAService:
 
         players = []
         for ps in player_stats:
-            # Tentar fazer match com roster
-            matched_player = None
-            gamertag_lower = ps.player_name.lower().strip()
-
-            if gamertag_lower in roster:
-                matched_player = roster[gamertag_lower]
+            # Match com roster usando a MESMA lógica da validação (exato normalizado
+            # ou similaridade >= 0.80) — para o preview refletir corretamente quem é
+            # cadastrado e não gerar acusação de W.O. injusta.
+            matched_player, _match_kind = match_player(ps.player_name, roster)
 
             # Detectar jogador desconectado
             is_disconnected = (
@@ -1211,8 +1245,7 @@ class MatchReportEAService:
             players_with_assists = []
 
             for ps in player_stats:
-                gamertag_lower = ps.player_name.lower().strip()
-                matched_player = roster.get(gamertag_lower)
+                matched_player, _kind = match_player(ps.player_name, roster)
 
                 if not matched_player:
                     continue
@@ -1225,6 +1258,7 @@ class MatchReportEAService:
                         team=team,
                         minute=None,
                         goal_type=Goal.GoalType.REGULAR,
+                        source='EA',
                     )
 
                 # Guardar info de assists para vincular depois
@@ -1293,8 +1327,7 @@ class MatchReportEAService:
                 if ps.red_cards <= 0:
                     continue
 
-                gamertag_lower = ps.player_name.lower().strip()
-                matched_player = roster.get(gamertag_lower)
+                matched_player, _kind = match_player(ps.player_name, roster)
 
                 if not matched_player:
                     continue
@@ -1307,6 +1340,7 @@ class MatchReportEAService:
                         card_type=Card.CardType.RED,
                         minute=None,
                         reason='Cartão vermelho registrado automaticamente via EA API.',
+                        source='EA',
                     )
 
     def _update_statistics(self, match: Match) -> None:
